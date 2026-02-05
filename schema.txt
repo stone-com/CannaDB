@@ -1,0 +1,64 @@
+MongoDB-style schema (concise)
+
+companies
+- _id
+- name (unique)
+
+locations
+- _id
+- companyId
+- nickname
+- address
+
+rooms
+- _id
+- locationId
+- name
+- type (Grow | Production | Inventory | Packaging | Storage)
+
+strains
+- _id
+- name (unique)
+- type (indica | sativa | hybrid)
+
+batches
+- _id
+- batchNumber (unique)
+- cloneDate
+- harvestDate
+- plants: [ { strainId, count } ]
+
+cloneRooms
+- _id
+- locationId
+- batchId
+- plants: [ { strainId, count } ]
+
+vegRooms
+- _id
+- locationId
+- batchId
+- plants: [ { strainId, count } ]
+
+flowerRooms
+- _id
+- locationId
+- batchId
+- plants: [ { strainId, count } ]
+
+flowerInventory
+- _id
+- roomId
+- strainId
+- weight_g
+- batchCode
+- notes
+
+preRollInventory
+- _id
+- roomId
+- strainId
+- count
+- size_g
+- batchCode
+- notes
