@@ -57,14 +57,14 @@ harvestSchema.statics.createFromBatch = async function(batchId) {
   }
 
   // Auto-populate strainIds from batch.plants
-  const strainHarvests = batch.plants.map(plant => ({
+  const strains = batch.plants.map(plant => ({
     strainId: plant.strainId,
     totes: []
   }));
 
   return this.create({
     batchId,
-    strainHarvests
+    strains
   });
 };
 

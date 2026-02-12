@@ -19,7 +19,11 @@ mongoose.connect(MONGODB_URI)
 
 // Routes
 app.use('/api/strains', require('./routes/strains'));
-app.use('/api/lots', require('./routes/lots'));
+app.use('/api/batches', require('./routes/batches'));
+app.use('/api/companies', require('./routes/companies'));
+app.use('/api/locations', require('./routes/locations'));
+app.use('/api/rooms', require('./routes/rooms'));
+app.use('/api/harvests', require('./routes/harvests'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

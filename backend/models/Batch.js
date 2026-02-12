@@ -1,11 +1,6 @@
 const mongoose = require('mongoose');
 
 const batchSchema = new mongoose.Schema({
-  lotId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Lot',
-    required: true
-  },
   batchNumber: {
     type: String,
     required: true,
