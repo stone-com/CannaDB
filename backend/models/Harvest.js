@@ -1,12 +1,59 @@
 const mongoose = require("mongoose");
 const { applyHarvestCalculations } = require("../utils/harvestCalculations");
+const Room = require("./Room");
+
+// Harvest numbers are stored as HRV-0001, HRV-0002, etc.
+const HARVEST_NUMBER_PREFIX = "HRV-";
+const HARVEST_NUMBER_REGEX = /^HRV-(\d+)$/;
+
+const formatHarvestNumber = (numberValue) =>
+  `${HARVEST_NUMBER_PREFIX}${String(numberValue).padStart(4, "0")}`;
+
+// Reads existing harvest numbers and returns the next available value.
+const getNextHarvestNumber = async (HarvestModel) => {
+  const docs = await HarvestModel.find({
+    harvestNumber: { $regex: `^${HARVEST_NUMBER_PREFIX}` },
+  })
+    .select("harvestNumber")
+    .lean();
+
+  const maxValue = docs.reduce((maxSoFar, doc) => {
+    const match = HARVEST_NUMBER_REGEX.exec(doc?.harvestNumber || "");
+    if (!match) {
+      return maxSoFar;
+    }
+
+    const numericValue = Number(match[1]);
+    if (!Number.isFinite(numericValue)) {
+      return maxSoFar;
+    }
+
+    return Math.max(maxSoFar, numericValue);
+  }, 0);
+
+  return formatHarvestNumber(maxValue + 1);
+};
 
 // This schema stores a single harvest "record".
 // Think of it as: one batch + one or more rooms + strain metrics for each room.
 const harvestSchema = new mongoose.Schema({
+  // Human-readable unique harvest number for operations/reporting.
+  harvestNumber: {
+    type: String,
+    required: true,
+    unique: true,
+    sparse: true,
+    trim: true,
+  },
   batchId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Batch",
+    required: true,
+  },
+  // Direct link to the location where this harvest happened.
+  locationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Location",
     required: true,
   },
   // `rooms` is an array because a harvest can span multiple rooms.
@@ -111,15 +158,27 @@ const harvestSchema = new mongoose.Schema({
 
 // Mongoose hook: runs before validation on .save().
 // We use it so derived fields always stay in sync with the raw inputs.
-harvestSchema.pre("validate", async function (next) {
-  try {
-    // `this` is the current document instance being saved.
-    await applyHarvestCalculations(this);
-    next();
-  } catch (error) {
-    // Passing an error to next(...) aborts the save and returns an error response upstream.
-    next(error);
+harvestSchema.pre("validate", async function () {
+  // `this` is the current document instance being saved.
+  if (!this.harvestNumber) {
+    this.harvestNumber = await getNextHarvestNumber(this.constructor);
   }
+
+  // If locationId was not explicitly provided, try to derive it from the first room.
+  if (!this.locationId) {
+    const firstRoomId = Array.isArray(this.rooms)
+      ? this.rooms[0]?.roomId
+      : undefined;
+
+    if (firstRoomId) {
+      const roomDoc = await Room.findById(firstRoomId).select("locationId");
+      if (roomDoc?.locationId) {
+        this.locationId = roomDoc.locationId;
+      }
+    }
+  }
+
+  await applyHarvestCalculations(this);
 });
 
 module.exports = mongoose.model("Harvest", harvestSchema);

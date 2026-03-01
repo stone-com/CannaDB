@@ -4,6 +4,7 @@ import CompanyForm from "./components/CompanyForm";
 import LocationForm from "./components/LocationForm";
 import RoomForm from "./components/RoomForm";
 import HarvestForm from "./components/HarvestForm";
+import HarvestReportPage from "./components/HarvestReportPage";
 
 // In React, it's common to keep UI config in arrays/objects like this.
 // We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
@@ -15,6 +16,7 @@ const VIEW_OPTIONS = [
   { key: "locations", label: "Locations" },
   { key: "rooms", label: "Rooms" },
   { key: "harvests", label: "Harvests" },
+  { key: "harvestReport", label: "Harvest Report" },
 ];
 
 function App() {
@@ -35,6 +37,7 @@ function App() {
     locations: false,
     rooms: false,
     harvests: false,
+    harvestReport: false,
   });
   // Local state object for the top "Add Strain" form.
   // This is a controlled form: input values always come from React state.
@@ -390,6 +393,13 @@ function App() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {selectedViews.harvestReport && (
+              <div className="data-section">
+                {/* Dedicated report view: dropdown + expandable table */}
+                <HarvestReportPage harvests={harvests} />
               </div>
             )}
           </div>

@@ -8,7 +8,7 @@ const Harvest = require("../models/Harvest");
 // Create a new harvest
 router.post("/", async (req, res) => {
   try {
-    const { batchId, rooms, harvestDate } = req.body;
+    const { batchId, locationId, harvestNumber, rooms, harvestDate } = req.body;
 
     if (!batchId) {
       return res.status(400).json({ error: "batchId is required" });
@@ -17,6 +17,8 @@ router.post("/", async (req, res) => {
     // Create a Harvest document instance.
     const harvest = new Harvest({
       batchId,
+      locationId,
+      harvestNumber,
       rooms: rooms || [],
       harvestDate: harvestDate || Date.now(),
     });
@@ -25,6 +27,7 @@ router.post("/", async (req, res) => {
     // Nested populate path syntax:
     // 'rooms.strains.strainId' means each room item -> each strain item -> strainId ref.
     const populatedHarvest = await savedHarvest.populate([
+      "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",
@@ -39,6 +42,7 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const harvests = await Harvest.find().populate([
+      "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",
@@ -53,6 +57,7 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const harvest = await Harvest.findById(req.params.id).populate([
+      "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",
@@ -70,7 +75,7 @@ router.get("/:id", async (req, res) => {
 // PATCH updates only fields sent by the client (unlike PUT, which typically replaces all).
 router.patch("/:id", async (req, res) => {
   try {
-    const { rooms, harvestDate } = req.body;
+    const { locationId, harvestNumber, rooms, harvestDate } = req.body;
 
     const harvest = await Harvest.findById(req.params.id);
     if (!harvest) {
@@ -78,11 +83,14 @@ router.patch("/:id", async (req, res) => {
     }
 
     // Only overwrite fields included in the request body.
+    if (locationId !== undefined) harvest.locationId = locationId;
+    if (harvestNumber !== undefined) harvest.harvestNumber = harvestNumber;
     if (rooms !== undefined) harvest.rooms = rooms;
     if (harvestDate !== undefined) harvest.harvestDate = harvestDate;
 
     const updatedHarvest = await harvest.save();
     const populatedHarvest = await updatedHarvest.populate([
+      "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",

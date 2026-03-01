@@ -31,10 +31,6 @@ app.use("/api/companies", require("./routes/companies"));
 app.use("/api/locations", require("./routes/locations"));
 app.use("/api/rooms", require("./routes/rooms"));
 app.use("/api/harvests", require("./routes/harvests"));
-app.use("/api/harvest-data", require("./routes/harvestData"));
-app.use("/api/dry-room-data", require("./routes/dryRoomData"));
-app.use("/api/plant-room-data", require("./routes/plantRoomData"));
-app.use("/api/strain-data", require("./routes/strainData"));
 
 // Simple endpoint useful for checking whether the API process is alive.
 app.get("/api/health", (req, res) => {

@@ -111,6 +111,67 @@
   margin-bottom: 0.5rem;
 }
 
+/* Harvest report layout */
+.harvest-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.harvest-table-wrap {
+  overflow-x: auto;
+}
+
+.harvest-room-section {
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+  border: 1px solid #444;
+  border-radius: 6px;
+}
+
+.harvest-room-section h3 {
+  margin: 0 0 0.4rem 0;
+}
+
+.harvest-room-section p {
+  margin: 0 0 0.7rem 0;
+}
+
+.harvest-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #444;
+}
+
+.harvest-table th,
+.harvest-table td {
+  padding: 0.6rem;
+  border: 1px solid #444;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table-toggle-button {
+  min-width: 2rem;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+}
+
+.harvest-detail-row td {
+  background: #1a1a1a;
+}
+
+.harvest-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+}
+
+.harvest-detail-grid p {
+  margin: 0.15rem 0;
+}
+
 @media (max-width: 1000px) {
   .page-layout {
     grid-template-columns: 1fr;
