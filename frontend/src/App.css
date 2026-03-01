@@ -1,42 +1,118 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
+/* Main page layout */
+.container {
   padding: 2rem;
-  text-align: center;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.page-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 460px) 1fr;
+  gap: 1.5rem;
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.left-column,
+.right-column {
+  min-width: 0;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+/* Shared form wrapper styling */
+.form-container {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #444;
+  border-radius: 8px;
 }
 
-.card {
-  padding: 2em;
+.form-field {
+  margin-bottom: 1rem;
 }
 
-.read-the-docs {
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.form-input,
+.form-select {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.submit-button {
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+}
+
+/* Strain card list */
+.strains-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.strain-card {
+  padding: 1rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1a1a1a;
+}
+
+.strain-card h3 {
+  margin: 0 0 0.5rem 0;
+}
+
+.strain-card p {
+  margin: 0.25rem 0;
+}
+
+.strain-timestamp {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
   color: #888;
+}
+
+/* Additional forms section */
+.forms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.status-message {
+  margin-top: 0.75rem;
+}
+
+.viewer-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.viewer-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.data-sections {
+  display: grid;
+  gap: 1rem;
+}
+
+.data-section {
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 1000px) {
+  .page-layout {
+    grid-template-columns: 1fr;
+  }
 }

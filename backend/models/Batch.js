@@ -1,42 +1,45 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
+// Batch = one production unit tracked over time.
 const batchSchema = new mongoose.Schema({
   batchNumber: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
   },
+  // Optional link to a Harvest document once the batch is harvested.
   harvestId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Harvest',
-    default: null
+    ref: "Harvest",
+    default: null,
   },
   cloneDate: {
     type: Date,
-    required: true
+    required: true,
   },
   harvestDate: {
     type: Date,
-    default: null
+    default: null,
   },
+  // Nested array where each item stores one strain + plant count.
   plants: [
     {
       strainId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Strain',
-        required: true
+        ref: "Strain",
+        required: true,
       },
       count: {
         type: Number,
         required: true,
-        default: 0
-      }
-    }
+        default: 0,
+      },
+    },
   ],
   createdAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model('Batch', batchSchema);
+module.exports = mongoose.model("Batch", batchSchema);

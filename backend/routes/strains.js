@@ -1,34 +1,41 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const Strain = require('../models/Strain');
+const Strain = require("../models/Strain");
+
+// Strain CRUD endpoints.
+// Pattern used in all routes:
+// 1) Validate input
+// 2) Run DB query
+// 3) Return JSON or error status
 
 // Create a new strain
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
-    const { name, type } = req.body;
+    const { name, type, status } = req.body;
 
     if (!name) {
-      return res.status(400).json({ error: 'Strain name is required' });
+      return res.status(400).json({ error: "Strain name is required" });
     }
 
     const strain = new Strain({
       name,
-      type: type || null
+      type: type || null,
+      status: status || null,
     });
 
     const savedStrain = await strain.save();
     res.status(201).json(savedStrain);
   } catch (error) {
     if (error.code === 11000) {
-      res.status(400).json({ error: 'Strain name must be unique' });
+      res.status(400).json({ error: "Strain name must be unique" });
     } else {
       res.status(500).json({ error: error.message });
     }
   }
 });
 
-// Get all strains
-router.get('/', async (req, res) => {
+// Return all strains.
+router.get("/", async (req, res) => {
   try {
     const strains = await Strain.find();
     res.json(strains);
@@ -37,12 +44,12 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get a specific strain by ID
-router.get('/:id', async (req, res) => {
+// Return one strain by ID.
+router.get("/:id", async (req, res) => {
   try {
     const strain = await Strain.findById(req.params.id);
     if (!strain) {
-      return res.status(404).json({ error: 'Strain not found' });
+      return res.status(404).json({ error: "Strain not found" });
     }
     res.json(strain);
   } catch (error) {

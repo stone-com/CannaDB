@@ -1,23 +1,25 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
+// Location = physical site linked to a company.
 const locationSchema = new mongoose.Schema({
+  // ObjectId reference to Company collection.
   companyId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Company',
-    required: true
+    ref: "Company",
+    required: true,
   },
   nickname: {
     type: String,
-    required: true
+    required: true,
   },
   address: {
     type: String,
-    default: null
+    default: null,
   },
   createdAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model('Location', locationSchema);
+module.exports = mongoose.model("Location", locationSchema);
