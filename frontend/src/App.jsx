@@ -5,6 +5,7 @@ import LocationForm from "./components/LocationForm";
 import RoomForm from "./components/RoomForm";
 import HarvestForm from "./components/HarvestForm";
 import HarvestReportPage from "./components/HarvestReportPage";
+import StrainDataViewer from "./components/StrainDataViewer";
 
 // In React, it's common to keep UI config in arrays/objects like this.
 // We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
@@ -266,23 +267,8 @@ function App() {
             {selectedViews.strains && (
               <div className="data-section">
                 <h2>Strains ({strains.length})</h2>
-                {strains.length === 0 ? (
-                  <p>No strains yet.</p>
-                ) : (
-                  <div className="strains-grid">
-                    {strains.map((strain) => (
-                      <div key={strain._id} className="strain-card">
-                        <h3>{strain.name}</h3>
-                        <p>
-                          <strong>Type:</strong> {strain.type || "N/A"}
-                        </p>
-                        <p>
-                          <strong>Status:</strong> {strain.status || "N/A"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Dedicated table view with expandable details for plants + inventory sections. */}
+                <StrainDataViewer strains={strains} rooms={rooms} />
               </div>
             )}
 

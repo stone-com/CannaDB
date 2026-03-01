@@ -31,6 +31,13 @@ const roomSchema = new mongoose.Schema({
     type: Number,
     default: null,
   },
+  // Optional current batch assigned to this room.
+  // This is used to answer: "What strains are in this room right now?"
+  batchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Batch",
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -66,9 +66,10 @@ const getTotalRoomSquareFeet = async (rooms) => {
   );
 };
 
-// Main orchestrator:
+// Main function to apply all harvest calculations and update the document accordingly
 // Recalculates every derived field on a Harvest document.
 // This function mutates the incoming Mongoose document directly.
+// Imported into the harvest Model and called in a pre-validation hook to ensure all calculations run before saving.
 const applyHarvestCalculations = async (harvestDoc) => {
   // 1) Get total square footage from all referenced rooms.
   const rooms = Array.isArray(harvestDoc.rooms) ? harvestDoc.rooms : [];
@@ -95,7 +96,7 @@ const applyHarvestCalculations = async (harvestDoc) => {
       : [];
 
     roomStrains.forEach((strain) => {
-      // Safely parse raw input values.
+      // Parse raw input values.
       const plantCount = toNumber(strain.plantCount, 0);
       const wetWeight = Array.isArray(strain.totes)
         ? strain.totes.reduce(
@@ -105,7 +106,7 @@ const applyHarvestCalculations = async (harvestDoc) => {
         : 0;
       const dryWeight = toNumber(strain.totalDryWeightGrams, 0);
 
-      // Set per-strain rollups and formulas.
+      // Set per-strain formulas.
       strain.totalWetWeightGrams = wetWeight;
       strain.totalDryWeightGrams = dryWeight;
       strain.wetPlantAvgWeightGrams = averagePerPlant(wetWeight, plantCount);

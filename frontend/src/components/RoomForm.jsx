@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Constant arrays are useful for dropdown options that don't change.
 const ROOM_TYPES = [
@@ -16,13 +16,20 @@ const ROOM_TYPES = [
 function RoomForm() {
   // State for dropdown data and form values.
   const [locations, setLocations] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [formData, setFormData] = useState({
     locationId: "",
     name: "",
     type: "",
     sqFoot: "",
   });
+  const [assignmentData, setAssignmentData] = useState({
+    roomId: "",
+    batchId: "",
+  });
   const [message, setMessage] = useState("");
+  const [assignmentMessage, setAssignmentMessage] = useState("");
 
   // Loads location options for the room form dropdown.
   const fetchLocations = async () => {
@@ -35,20 +42,94 @@ function RoomForm() {
     }
   };
 
+  // Loads rooms so the assignment dropdown can target a room record.
+  const fetchRooms = async () => {
+    try {
+      const res = await fetch("/api/rooms");
+      const data = await res.json();
+      setRooms(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching rooms:", error);
+    }
+  };
+
+  // Loads batches used by room assignment section.
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch("/api/batches");
+      const data = await res.json();
+      setBatches(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching batches:", error);
+    }
+  };
+
+  // Date formatting helper for readable batch labels.
+  const formatDate = (value) => {
+    if (!value) {
+      return "N/A";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "N/A";
+    }
+
+    return date.toLocaleDateString();
+  };
+
+  // Show active/upcoming batches first for assignment workflow.
+  // Active logic: harvest date is today or in the future.
+  const selectableBatches = useMemo(() => {
+    const now = new Date();
+
+    return [...batches]
+      .filter((batch) => {
+        if (!batch?.harvestDate) {
+          return true;
+        }
+
+        const harvestDate = new Date(batch.harvestDate);
+        if (Number.isNaN(harvestDate.getTime())) {
+          return true;
+        }
+
+        return harvestDate >= now;
+      })
+      .sort((a, b) => {
+        const aDate = a?.harvestDate ? new Date(a.harvestDate).getTime() : 0;
+        const bDate = b?.harvestDate ? new Date(b.harvestDate).getTime() : 0;
+        return aDate - bDate;
+      });
+  }, [batches]);
+
   useEffect(() => {
     // Effect for initial load + event subscription.
     // Initial location dropdown load.
     fetchLocations();
+    fetchRooms();
+    fetchBatches();
 
     // Listen for location creation events to keep dropdown options current.
     const handleLocationCreated = () => {
       fetchLocations();
+      fetchRooms();
+      fetchBatches();
+    };
+
+    const handleRoomOrBatchUpdated = () => {
+      fetchRooms();
+      fetchBatches();
     };
 
     window.addEventListener("location:created", handleLocationCreated);
+    window.addEventListener("room:created", handleRoomOrBatchUpdated);
+    window.addEventListener("batch:created", handleRoomOrBatchUpdated);
 
     return () => {
       window.removeEventListener("location:created", handleLocationCreated);
+      window.removeEventListener("room:created", handleRoomOrBatchUpdated);
+      window.removeEventListener("batch:created", handleRoomOrBatchUpdated);
     };
   }, []);
 
@@ -86,8 +167,51 @@ function RoomForm() {
 
       setFormData({ locationId: "", name: "", type: "", sqFoot: "" });
       setMessage("Room added successfully.");
+      fetchRooms();
     } catch (error) {
       setMessage(`Error: ${error.message}`);
+    }
+  };
+
+  // Updates a room's current batch assignment.
+  const handleAssignmentSubmit = async (e) => {
+    e.preventDefault();
+    setAssignmentMessage("");
+
+    try {
+      if (!assignmentData.roomId) {
+        throw new Error("Please select a room");
+      }
+
+      // Empty string means "unassign" => send null.
+      const payload = {
+        batchId: assignmentData.batchId || null,
+      };
+
+      const res = await fetch(`/api/rooms/${assignmentData.roomId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to assign batch to room");
+      }
+
+      const updatedRoom = await res.json();
+
+      // Reuse existing app-wide room refresh event.
+      window.dispatchEvent(
+        new CustomEvent("room:created", {
+          detail: updatedRoom,
+        }),
+      );
+
+      setAssignmentMessage("Room batch assignment saved.");
+      fetchRooms();
+    } catch (error) {
+      setAssignmentMessage(`Error: ${error.message}`);
     }
   };
 
@@ -172,6 +296,64 @@ function RoomForm() {
         </button>
       </form>
       {message && <p className="status-message">{message}</p>}
+
+      <hr />
+
+      <h2>Assign Batch To Room</h2>
+      <form onSubmit={handleAssignmentSubmit}>
+        <div className="form-field">
+          <label className="form-label">
+            Room (required):
+            <select
+              className="form-select"
+              value={assignmentData.roomId}
+              onChange={(e) =>
+                setAssignmentData({ ...assignmentData, roomId: e.target.value })
+              }
+              required
+            >
+              <option value="">-- Select Room --</option>
+              {rooms.map((room) => (
+                <option key={room._id} value={room._id}>
+                  {room.locationId?.nickname || "Unknown Location"} -{" "}
+                  {room.name} ({room.type})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">
+            Batch:
+            <select
+              className="form-select"
+              value={assignmentData.batchId}
+              onChange={(e) =>
+                setAssignmentData({
+                  ...assignmentData,
+                  batchId: e.target.value,
+                })
+              }
+            >
+              <option value="">-- No Batch (Unassign) --</option>
+              {selectableBatches.map((batch) => (
+                <option key={batch._id} value={batch._id}>
+                  {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
+                  Harvest: {formatDate(batch.harvestDate)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button className="submit-button" type="submit">
+          Save Assignment
+        </button>
+      </form>
+      {assignmentMessage && (
+        <p className="status-message">{assignmentMessage}</p>
+      )}
     </div>
   );
 }
