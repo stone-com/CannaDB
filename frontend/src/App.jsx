@@ -32,7 +32,7 @@ function App() {
     strains: true,
     harvestReport: false,
   });
-// Jakes brand new comment cocksucker
+
   // Tracks which open windows are currently minimized to the taskbar.
   // When a key is true, that window's DraggableWindow renders null and a tab
   // appears in the taskbar at the bottom of the screen instead.
