@@ -32,7 +32,7 @@ function App() {
     strains: true,
     harvestReport: false,
   });
-  // This is Jake's comment
+  // This is Jake's comment part 2 electric boogaloo
   // Tracks which open windows are currently minimized to the taskbar.
   // When a key is true, that window's DraggableWindow renders null and a tab
   // appears in the taskbar at the bottom of the screen instead.
