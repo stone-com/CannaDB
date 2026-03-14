@@ -62,7 +62,7 @@ function HarvestReportPage({ harvests }) {
   // useMemo memoizes derived data so we only recompute when dependencies change.
   // Dependency array: [harvests] means this block reruns only when `harvests` changes.
   const sortedHarvests = useMemo(() => {
-    // Defensive check: the API should return an array, but we still protect against bad data.
+    //the API should return an array, but we still protect against bad data.
     if (!Array.isArray(harvests)) {
       return [];
     }
@@ -75,7 +75,6 @@ function HarvestReportPage({ harvests }) {
     );
   }, [harvests]);
 
-  // Derive a safe selected ID without needing an effect.
   // Priority: user-selected ID (if still valid) -> first available harvest -> empty string.
   const effectiveSelectedHarvestId = useMemo(() => {
     // No options available, so selection must be empty.
@@ -254,6 +253,16 @@ function HarvestReportPage({ harvests }) {
             <div className="strain-card">
               <h3>Rooms</h3>
               <p>{roomNamesSummary}</p>
+            </div>
+            <div className="strain-card">
+              <h3>Total Strains</h3>
+              {/* Sum the number of strain rows across every room section. */}
+              <p>
+                {roomSections.reduce(
+                  (total, section) => total + section.strainRows.length,
+                  0,
+                )}
+              </p>
             </div>
             <div className="strain-card">
               <h3>Total Plants</h3>

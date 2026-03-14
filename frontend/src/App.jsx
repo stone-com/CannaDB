@@ -6,6 +6,8 @@ import RoomForm from "./components/RoomForm";
 import HarvestForm from "./components/HarvestForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
+import DraggableWindow from "./components/DraggableWindow";
+import Taskbar from "./components/Taskbar";
 
 // In React, it's common to keep UI config in arrays/objects like this.
 // We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
@@ -13,10 +15,6 @@ import StrainDataViewer from "./components/StrainDataViewer";
 // Each object has a unique `key` and a display label.
 const VIEW_OPTIONS = [
   { key: "strains", label: "Strains" },
-  { key: "companies", label: "Companies" },
-  { key: "locations", label: "Locations" },
-  { key: "rooms", label: "Rooms" },
-  { key: "harvests", label: "Harvests" },
   { key: "harvestReport", label: "Harvest Report" },
 ];
 
@@ -27,17 +25,19 @@ function App() {
   // React state: each call creates [currentValue, setterFunction].
   // Example: strains = current value, setStrains = function to update it.
   const [strains, setStrains] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedViews, setSelectedViews] = useState({
     strains: true,
-    companies: false,
-    locations: false,
-    rooms: false,
-    harvests: false,
+    harvestReport: false,
+  });
+
+  // Tracks which open windows are currently minimized to the taskbar.
+  // When a key is true, that window's DraggableWindow renders null and a tab
+  // appears in the taskbar at the bottom of the screen instead.
+  const [minimizedWindows, setMinimizedWindows] = useState({
+    strains: false,
     harvestReport: false,
   });
   // Local state object for the top "Add Strain" form.
@@ -72,8 +72,6 @@ function App() {
     setLoadingData(true);
     await Promise.all([
       fetchCollection("/api/strains", setStrains),
-      fetchCollection("/api/companies", setCompanies),
-      fetchCollection("/api/locations", setLocations),
       fetchCollection("/api/rooms", setRooms),
       fetchCollection("/api/harvests", setHarvests),
     ]);
@@ -118,6 +116,13 @@ function App() {
       ...prev,
       [key]: !prev[key],
     }));
+    // Also clear any minimized state when closing a window entirely.
+    setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
+  };
+
+  // Sends a window to the taskbar (minimize) or restores it (if already minimized).
+  const toggleMinimize = (key) => {
+    setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSubmit = async (e) => {
@@ -236,7 +241,7 @@ function App() {
       <div className="right-column">
         <div className="form-container">
           <h2>Data Viewer</h2>
-          <p>Choose what data to display:</p>
+          <p>Check a panel to open it as a floating window:</p>
           <div className="viewer-options">
             {/* `map` turns data arrays into JSX lists. */}
             {VIEW_OPTIONS.map((option) => (
@@ -252,145 +257,64 @@ function App() {
             ))}
           </div>
         </div>
-
-        {/* Ternary rendering: condition ? showA : showB */}
-        {loadingData ? (
-          <p>Loading...</p>
-        ) : (
-          <div className="data-sections">
-            {/* .some(Boolean) means "is at least one checkbox selected?" */}
-            {!Object.values(selectedViews).some(Boolean) && (
-              <p>Select at least one dataset to display.</p>
-            )}
-
-            {/* `&&` conditional rendering means "render right side only when left side is true" */}
-            {selectedViews.strains && (
-              <div className="data-section">
-                <h2>Strains ({strains.length})</h2>
-                {/* Dedicated table view with expandable details for plants + inventory sections. */}
-                <StrainDataViewer strains={strains} rooms={rooms} />
-              </div>
-            )}
-
-            {selectedViews.companies && (
-              <div className="data-section">
-                <h2>Companies ({companies.length})</h2>
-                {companies.length === 0 ? (
-                  <p>No companies yet.</p>
-                ) : (
-                  <div className="strains-grid">
-                    {companies.map((company) => (
-                      <div key={company._id} className="strain-card">
-                        <h3>{company.name}</h3>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedViews.locations && (
-              <div className="data-section">
-                <h2>Locations ({locations.length})</h2>
-                {locations.length === 0 ? (
-                  <p>No locations yet.</p>
-                ) : (
-                  <div className="strains-grid">
-                    {locations.map((location) => (
-                      <div key={location._id} className="strain-card">
-                        <h3>{location.nickname}</h3>
-                        <p>
-                          {/* Optional chaining (?.) prevents crashes when nested data is missing. */}
-                          <strong>Company:</strong>{" "}
-                          {location.companyId?.name || "N/A"}
-                        </p>
-                        <p>
-                          <strong>Address:</strong> {location.address || "N/A"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedViews.rooms && (
-              <div className="data-section">
-                <h2>Rooms ({rooms.length})</h2>
-                {rooms.length === 0 ? (
-                  <p>No rooms yet.</p>
-                ) : (
-                  <div className="strains-grid">
-                    {rooms.map((room) => (
-                      <div key={room._id} className="strain-card">
-                        <h3>{room.name}</h3>
-                        <p>
-                          <strong>Type:</strong> {room.type}
-                        </p>
-                        <p>
-                          <strong>Location:</strong>{" "}
-                          {room.locationId?.nickname || "N/A"}
-                        </p>
-                        <p>
-                          <strong>Sq Ft:</strong> {room.sqFoot ?? "N/A"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedViews.harvests && (
-              <div className="data-section">
-                <h2>Harvests ({harvests.length})</h2>
-                {harvests.length === 0 ? (
-                  <p>No harvests yet.</p>
-                ) : (
-                  <div className="strains-grid">
-                    {harvests.map((harvest) => (
-                      <div key={harvest._id} className="strain-card">
-                        <h3>Harvest</h3>
-                        <p>
-                          <strong>Batch:</strong>{" "}
-                          {harvest.batchId?.batchNumber || "N/A"}
-                        </p>
-                        <p>
-                          <strong>Rooms:</strong>{" "}
-                          {Array.isArray(harvest.rooms)
-                            ? harvest.rooms.length
-                            : 0}
-                        </p>
-                        <p>
-                          <strong>Strains:</strong>{" "}
-                          {/* reduce(...) accumulates a total across all rooms. */}
-                          {Array.isArray(harvest.rooms)
-                            ? harvest.rooms.reduce(
-                                (total, roomEntry) =>
-                                  total +
-                                  (Array.isArray(roomEntry?.strains)
-                                    ? roomEntry.strains.length
-                                    : 0),
-                                0,
-                              )
-                            : 0}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedViews.harvestReport && (
-              <div className="data-section">
-                {/* Dedicated report view: dropdown + expandable table */}
-                <HarvestReportPage harvests={harvests} />
-              </div>
-            )}
-          </div>
-        )}
+        {loadingData && <p>Loading data...</p>}
       </div>
+
+      {/* ── Floating data windows ── */}
+      {!loadingData && (
+        <>
+          {selectedViews.strains && (
+            <DraggableWindow
+              title={`Strains (${strains.length})`}
+              onClose={() => toggleView("strains")}
+              isMinimized={minimizedWindows.strains}
+              onMinimize={() => toggleMinimize("strains")}
+              defaultX={480}
+              defaultY={80}
+              defaultW={1000}
+              defaultH={520}
+            >
+              <StrainDataViewer strains={strains} rooms={rooms} />
+            </DraggableWindow>
+          )}
+
+          {selectedViews.harvestReport && (
+            <DraggableWindow
+              title="Harvest Report"
+              onClose={() => toggleView("harvestReport")}
+              isMinimized={minimizedWindows.harvestReport}
+              onMinimize={() => toggleMinimize("harvestReport")}
+              defaultX={630}
+              defaultY={230}
+              defaultW={800}
+              defaultH={520}
+            >
+              <HarvestReportPage harvests={harvests} />
+            </DraggableWindow>
+          )}
+        </>
+      )}
+
+      {/* ── Taskbar — minimized windows appear here as tabs ────────────────────── */}
+      {/* Each tab object has: key, label, visible (bool), and onClick.     */}
+      {/* Taskbar renders nothing when all tabs are hidden.                  */}
+      <Taskbar
+        tabs={[
+          {
+            key: "strains",
+            label: `Strains (${strains.length})`,
+            visible: selectedViews.strains && minimizedWindows.strains,
+            onClick: () => toggleMinimize("strains"),
+          },
+          {
+            key: "harvestReport",
+            label: "Harvest Report",
+            visible:
+              selectedViews.harvestReport && minimizedWindows.harvestReport,
+            onClick: () => toggleMinimize("harvestReport"),
+          },
+        ]}
+      />
     </div>
   );
 }

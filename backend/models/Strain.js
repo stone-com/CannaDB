@@ -23,6 +23,10 @@ const strainSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  avgWeightPerPlant: {
+    type: Number,
+    default: null,
+  },
 });
 
 module.exports = mongoose.model("Strain", strainSchema);
