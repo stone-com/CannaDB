@@ -243,7 +243,6 @@ function App() {
           },
         ]}
       />
-      <New />
     </div>
   );
 }

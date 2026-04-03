@@ -413,15 +413,7 @@ POST /api/harvests
    - Strains window shows live plant totals by strain based on room-assigned batches.
    - Harvest Report window shows harvest summary and detailed room/strain metrics.
 
-## 8) Current Gotcha to Be Aware Of
-
-In `frontend/src/App.jsx`, there is a `<New />` component rendered at the bottom, but no `New` import/definition was found in the frontend source.
-
-That likely causes a runtime/render error unless this component exists elsewhere and was omitted.
-
-## 9) If You Are Brand New to Coding
-
-When reading this codebase, focus on this order:
+## 8) Extras
 
 1. `backend/server.js` (how API is wired)
 2. One route file (for example `routes/rooms.js`)
