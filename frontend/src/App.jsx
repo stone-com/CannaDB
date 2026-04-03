@@ -51,9 +51,9 @@ function App() {
     harvestReport: false,
   });
 
-  // minimizedWindows tracks which windows are minimized to the taskbar.
-  // A window can be open (selectedViews.x = true) AND minimized at the same time.
-  // Think of it like Windows minimize — the window still exists, just hidden from view.
+  // Tracks which open windows are currently minimized to the taskbar.
+  // When a key is true, that window's DraggableWindow renders null and a tab
+  // appears in the taskbar at the bottom of the screen instead.
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
