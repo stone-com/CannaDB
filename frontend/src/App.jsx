@@ -1,9 +1,12 @@
+// React hooks we use in this file:
+//   useState    – stores values that can change over time (triggers re-render when updated)
+//   useEffect   – runs code after the component renders (great for fetching data, subscriptions)
+//   useCallback – wraps a function so React doesn't recreate it on every render
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
-import CompanyForm from "./components/CompanyForm";
-import LocationForm from "./components/LocationForm";
-import RoomForm from "./components/RoomForm";
-import HarvestForm from "./components/HarvestForm";
+// These are the other components used in this file. React apps are built by
+// composing small reusable pieces like these together.
+import AdminPanel from "./components/AdminPanel";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
 import DraggableWindow from "./components/DraggableWindow";
@@ -24,28 +27,36 @@ function App() {
 
   // React state: each call creates [currentValue, setterFunction].
   // Example: strains = current value, setStrains = function to update it.
+  // useState([]) creates a state variable initialized to an empty array.
+  // The two values you get back are: [currentValue, setterFunction]
+  // Calling the setter (e.g. setStrains([...])) updates the value and re-renders the component.
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [harvests, setHarvests] = useState([]);
+
+  // loadingData starts as true so the UI can show a loading message.
+  // Once all data fetches are done, we set it to false to reveal the content.
   const [loadingData, setLoadingData] = useState(true);
+
+  // activePage controls which "page" is showing — either "dashboard" or "admin".
+  // This is how we switch between pages without a router library.
+  const [activePage, setActivePage] = useState("dashboard");
+
+  // selectedViews is an object that tracks which floating windows are open.
+  // { strains: true } means the Strains window is open.
+  // { harvestReport: false } means the Harvest Report window is closed.
+  // Using an object lets us manage all window visibility in one state variable.
   const [selectedViews, setSelectedViews] = useState({
     strains: true,
     harvestReport: false,
   });
 
-  // Tracks which open windows are currently minimized to the taskbar.
-  // When a key is true, that window's DraggableWindow renders null and a tab
-  // appears in the taskbar at the bottom of the screen instead.
+  // minimizedWindows tracks which windows are minimized to the taskbar.
+  // A window can be open (selectedViews.x = true) AND minimized at the same time.
+  // Think of it like Windows minimize — the window still exists, just hidden from view.
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
-  });
-  // Local state object for the top "Add Strain" form.
-  // This is a controlled form: input values always come from React state.
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "",
-    status: "",
   });
 
   // Generic fetch helper so we can reuse the same logic for multiple endpoints.
@@ -110,13 +121,18 @@ function App() {
   }, [fetchAllData]);
 
   const toggleView = (key) => {
-    // Functional state update receives the previous state value.
-    // `...prev` (spread syntax) copies the old object, then we overwrite one key.
+    // Functional state update — pass a function instead of a value.
+    // React gives you the current state as the argument (called `prev` here).
+    // The spread syntax `...prev` copies all existing object keys into a new object.
+    // Then [key]: !prev[key] does two things:
+    //   [key]   – computed property name: uses the value of `key` as the property name
+    //   !prev[key] – flips true to false (and false to true)
     setSelectedViews((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
-    // Also clear any minimized state when closing a window entirely.
+    // Also clear minimized state when closing a window entirely.
+    // If you close a window that was minimized, it shouldn't show up again as minimized.
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
   };
 
@@ -125,127 +141,17 @@ function App() {
     setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleSubmit = async (e) => {
-    // preventDefault stops the browser from refreshing the page on form submit.
-    e.preventDefault();
-
-    try {
-      const res = await fetch("/api/strains", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          // JSON.stringify converts a JS object into JSON text for the request body.
-          name: formData.name,
-          type: formData.type || null,
-          status: formData.status || null,
-        }),
-      });
-
-      if (res.ok) {
-        // Reset form and refresh list so the new item is visible.
-        const savedStrain = await res.json();
-        // CustomEvent lets us broadcast "something changed" across sibling components.
-        window.dispatchEvent(
-          new CustomEvent("strain:created", {
-            detail: savedStrain,
-          }),
-        );
-        setFormData({ name: "", type: "", status: "" });
-        fetchAllData();
-      } else {
-        const error = await res.json();
-        alert("Error: " + error.error);
-      }
-    } catch (err) {
-      alert("Error adding strain: " + err.message);
-    }
-  };
-
   return (
-    // JSX looks like HTML, but this is still JavaScript under the hood.
-    <div className="page-layout">
-      <div className="left-column">
-        <h1>Inventory Manager</h1>
-
-        <div className="form-container">
-          <h2>Add New Strain</h2>
-          <form onSubmit={handleSubmit}>
-            {/* Controlled input example: value + onChange are both wired to state. */}
-            <div className="form-field">
-              <label className="form-label">
-                Name (required):
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) =>
-                    // `...formData` keeps all existing fields, then updates only `name`.
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  required
-                  className="form-input"
-                />
-              </label>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label">
-                Type:
-                <select
-                  value={formData.type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, type: e.target.value })
-                  }
-                  className="form-select"
-                >
-                  <option value="">-- Select Type --</option>
-                  <option value="indica">Indica</option>
-                  <option value="sativa">Sativa</option>
-                  <option value="hybrid">Hybrid</option>
-                  <option value="CBD">CBD</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label">
-                Status:
-                <select
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData({ ...formData, status: e.target.value })
-                  }
-                  className="form-select"
-                >
-                  <option value="">-- Select Status --</option>
-                  <option value="production">Production</option>
-                  <option value="bench">Bench</option>
-                  <option value="pheno">Pheno</option>
-                </select>
-              </label>
-            </div>
-
-            <button type="submit" className="submit-button">
-              Add Strain
-            </button>
-          </form>
-        </div>
-
-        <CompanyForm />
-        <LocationForm />
-        <RoomForm />
-        <HarvestForm />
-      </div>
-
-      <div className="right-column">
-        <div className="form-container">
-          <h2>Data Viewer</h2>
-          <p>Check a panel to open it as a floating window:</p>
+    <div className="app-root">
+      {/* Left sidebar — only visible on the dashboard page */}
+      {activePage === "dashboard" && (
+        <aside className="viewer-sidebar">
+          <h2 className="viewer-sidebar-title">Data Viewer</h2>
+          <p className="viewer-sidebar-hint">
+            Open a panel as a floating window:
+          </p>
           <div className="viewer-options">
-            {/* `map` turns data arrays into JSX lists. */}
             {VIEW_OPTIONS.map((option) => (
-              // `key` helps React track each list item efficiently.
               <label key={option.key} className="viewer-option">
                 <input
                   type="checkbox"
@@ -256,12 +162,31 @@ function App() {
               </label>
             ))}
           </div>
-        </div>
-        {loadingData && <p>Loading data...</p>}
+        </aside>
+      )}
+
+      <div
+        className={`main-content${activePage === "dashboard" ? " with-sidebar" : ""}`}
+      >
+        {/* Conditional rendering with && — only show content when on the matching page.
+           "activePage === 'dashboard'" evaluates to true or false.
+           If true → the dashboard div renders. If false → nothing renders. */}
+        {activePage === "dashboard" && (
+          <div className="dashboard-page">
+            <h1>Inventory Manager</h1>
+            {/* loadingData && <p>...</p> shows the loading message until data arrives */}
+            {loadingData && <p>Loading data...</p>}
+          </div>
+        )}
+
+        {/* AdminPanel is only rendered when the user is on the admin page */}
+        {activePage === "admin" && <AdminPanel />}
       </div>
 
-      {/* ── Floating data windows ── */}
-      {!loadingData && (
+      {/* Floating windows — only rendered on the dashboard page and after data has loaded.
+           !loadingData means "loading is finished"
+           Both conditions must be true for these windows to appear. */}
+      {!loadingData && activePage === "dashboard" && (
         <>
           {selectedViews.strains && (
             <DraggableWindow
@@ -277,7 +202,6 @@ function App() {
               <StrainDataViewer strains={strains} rooms={rooms} />
             </DraggableWindow>
           )}
-
           {selectedViews.harvestReport && (
             <DraggableWindow
               title="Harvest Report"
@@ -295,26 +219,31 @@ function App() {
         </>
       )}
 
-      {/* ── Taskbar — minimized windows appear here as tabs ────────────────────── */}
-      {/* Each tab object has: key, label, visible (bool), and onClick.     */}
-      {/* Taskbar renders nothing when all tabs are hidden.                  */}
+      {/* Taskbar is always shown, regardless of page.
+           We pass it the current page + a navigate function so it can switch pages.
+           tabs is an array of objects built right here — each object describes one
+           window tab including whether it's visible and whether it's minimized. */}
       <Taskbar
+        activePage={activePage}
+        onNavigate={setActivePage}
         tabs={[
           {
             key: "strains",
             label: `Strains (${strains.length})`,
-            visible: selectedViews.strains && minimizedWindows.strains,
+            visible: activePage === "dashboard" && selectedViews.strains,
+            minimized: minimizedWindows.strains,
             onClick: () => toggleMinimize("strains"),
           },
           {
             key: "harvestReport",
             label: "Harvest Report",
-            visible:
-              selectedViews.harvestReport && minimizedWindows.harvestReport,
+            visible: activePage === "dashboard" && selectedViews.harvestReport,
+            minimized: minimizedWindows.harvestReport,
             onClick: () => toggleMinimize("harvestReport"),
           },
         ]}
       />
+      <New />
     </div>
   );
 }

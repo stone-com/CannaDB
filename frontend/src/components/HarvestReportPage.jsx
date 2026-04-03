@@ -1,28 +1,35 @@
 import { Fragment, useMemo, useState } from "react";
 
-// Small helper to keep date display consistent in one place.
-// We keep it simple for beginners: convert to Date, then toLocaleDateString.
+// formatDate is a utility function defined outside the component so it can be
+// reused anywhere in this file without being recreated on each render.
 const formatDate = (value) => {
-  // Guard clause: if the input is empty/null/undefined, show a fallback.
-  // Guard clauses are early returns that keep functions easier to read.
+  // "Guard clause" — an early return that handles edge cases first.
+  // This pattern keeps the happy path un-nested and easier to read.
   if (!value) {
     return "N/A";
   }
 
   // new Date(...) converts strings like ISO timestamps into Date objects.
+  // new Date(value) converts an ISO timestamp string like "2024-03-15T00:00:00.000Z"
+  // into a JavaScript Date object that has handy methods like toLocaleDateString().
   const date = new Date(value);
-  // Number.isNaN(...) checks whether date parsing failed.
-  // getTime() returns a number timestamp, or NaN for invalid dates.
+  // Number.isNaN checks if a value is "Not a Number".
+  // date.getTime() returns the timestamp as a number, or NaN if the date was invalid.
   if (Number.isNaN(date.getTime())) {
     return "N/A";
   }
 
   // toLocaleDateString() gives a human-friendly date in the user's locale.
+  // toLocaleDateString() formats the date using the user's browser locale.
+  // In the US it might say "3/15/2024"; elsewhere it might say "15/3/2024".
   return date.toLocaleDateString();
 };
 
 // Builds a dropdown label so users can identify harvests quickly.
-// Format: date — harvest number — location — room list
+// buildHarvestOptionLabel creates a readable label for each dropdown option.
+// Having this as its own function keeps the JSX below cleaner and easier to read.
+// It combines date, harvest number, location, and rooms into one string:
+//   "3/15/2024 — Harvest 42 — Denver Facility — Room A, Room B"
 const buildHarvestOptionLabel = (harvest) => {
   if (!harvest) {
     return "N/A";
@@ -70,35 +77,40 @@ function HarvestReportPage({ harvests }) {
     // [...harvests] makes a shallow copy so we don't mutate original state.
     // sort(...) mutates arrays in place, so copying first is important.
     return [...harvests].sort(
-      // Newest first: larger timestamp comes before smaller timestamp.
+      // Comparing two Date objects with subtraction gives a number.
+      // Negative = a comes first, positive = b comes first, 0 = same.
+      // Newest first: we want the bigger (more recent) timestamp to come first.
       (a, b) => new Date(b.harvestDate) - new Date(a.harvestDate),
     );
   }, [harvests]);
 
   // Priority: user-selected ID (if still valid) -> first available harvest -> empty string.
+  // effectiveSelectedHarvestId figures out what should be showing in the dropdown.
+  // It's a derived value — it can always be computed from the other state,
+  // so we don't need a separate useState for it.
   const effectiveSelectedHarvestId = useMemo(() => {
-    // No options available, so selection must be empty.
     if (sortedHarvests.length === 0) {
       return "";
     }
 
-    // some(...) returns true if at least one item passes the condition.
-    // We use this to verify the currently selected ID still exists after refreshes.
+    // .some() loops through the array and returns true if at least one item
+    // passes the condition. Here we check if the selected ID still exists after
+    // a data refresh (in case a harvest was deleted while the app is open).
     const stillExists = sortedHarvests.some(
       (harvest) => harvest._id === selectedHarvestId,
     );
 
-    // Keep user selection if still valid.
+    // If the user already picked something valid, keep it.
     if (selectedHarvestId && stillExists) {
       return selectedHarvestId;
     }
 
-    // Default selection: first item in newest-first list.
+    // Auto-select the first harvest (most recent, since sorted newest-first).
     return sortedHarvests[0]._id;
   }, [selectedHarvestId, sortedHarvests]);
 
-  // Find the full selected harvest object so we can render details.
-  // find(...) returns first matching object, or undefined if none.
+  // .find() is like .filter() but stops at the first match and returns that one item.
+  // It returns undefined if nothing matches. Perfect for looking up one object by ID.
   const selectedHarvest = useMemo(
     () =>
       sortedHarvests.find(
@@ -256,7 +268,9 @@ function HarvestReportPage({ harvests }) {
             </div>
             <div className="strain-card">
               <h3>Total Strains</h3>
-              {/* Sum the number of strain rows across every room section. */}
+              {/* reduce() sums up values across an array.
+                    It starts at 0, then for each section adds that section's strain count.
+                    Like: total = 0; for each section: total += section.strainRows.length */}
               <p>
                 {roomSections.reduce(
                   (total, section) => total + section.strainRows.length,
@@ -266,7 +280,8 @@ function HarvestReportPage({ harvests }) {
             </div>
             <div className="strain-card">
               <h3>Total Plants</h3>
-              {/* Nullish coalescing keeps 0 as valid value, only falls back on null/undefined. */}
+              {/* ?? is "nullish coalescing" — it only falls back on null or undefined.
+                    Unlike ||, it won't replace a 0 with a fallback (0 is a valid plant count). */}
               <p>{selectedHarvest.totalPlantCount ?? 0}</p>
             </div>
             <div className="strain-card">

@@ -1,22 +1,137 @@
-/* Main page layout */
-.container {
+/* ── App shell ── */
+#root {
+  width: 100%;
+  min-height: 100vh;
+  align-self: stretch;
+}
+
+.app-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.main-content {
+  flex: 1;
+  padding-bottom: 44px; /* leave room for fixed taskbar */
+}
+
+.main-content.with-sidebar {
+  margin-left: 220px;
+}
+
+/* ── Viewer sidebar ── */
+.viewer-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 44px; /* sits above the taskbar */
+  width: 220px;
+  background: #1a1a1a;
+  border-right: 1px solid #444;
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.viewer-sidebar-title {
+  margin: 0 0 0.4rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.viewer-sidebar-hint {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.8rem;
+  color: #888;
+  line-height: 1.4;
+}
+
+/* ── Dashboard page ── */
+.dashboard-page {
   padding: 2rem;
-  max-width: 1400px;
+}
+
+.dashboard-page h1 {
+  margin-bottom: 1.5rem;
+}
+
+/* ── Admin panel page ── */
+.admin-panel {
+  padding: 2rem;
+  max-width: 900px;
   margin: 0 auto;
 }
 
-.page-layout {
-  display: grid;
-  grid-template-columns: minmax(360px, 460px) 1fr;
-  gap: 1.5rem;
-  padding: 2rem;
-  max-width: 1600px;
-  margin: 0 auto;
+.admin-panel > h1 {
+  margin: 0 0 0.25rem 0;
 }
 
-.left-column,
-.right-column {
-  min-width: 0;
+.admin-panel-subtitle {
+  margin: 0 0 1.75rem 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+/* Accordion list */
+.admin-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.accordion-item {
+  border: 1px solid #444;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  background: #1a1a1a;
+  border: none;
+  border-radius: 0;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.accordion-trigger:hover {
+  background: #222;
+}
+
+.accordion-trigger:focus-visible {
+  outline: 2px solid #646cff;
+  outline-offset: -2px;
+}
+
+.accordion-arrow {
+  font-size: 0.75rem;
+  color: #666;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.accordion-arrow.open {
+  transform: rotate(180deg);
+}
+
+.accordion-body {
+  border-top: 1px solid #444;
+  padding: 1.5rem;
+  background: #161616;
 }
 
 /* Shared form wrapper styling */
@@ -202,12 +317,6 @@
   margin: 0.2rem 0;
 }
 
-@media (max-width: 1000px) {
-  .page-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* ─────────────────────────────────────────────
    Taskbar — fixed strip at the bottom of the screen.
    Minimized windows appear here as clickable tabs,
@@ -228,23 +337,88 @@
   z-index: 9999;
 }
 
-.taskbar-tab {
+/* Nav buttons (Dashboard / Admin) */
+.taskbar-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: 0.5rem;
+}
+
+.taskbar-nav-btn {
   height: 32px;
-  padding: 0 1rem;
+  padding: 0 1.1rem;
   background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.taskbar-nav-btn:hover {
+  background: #3c3c3c;
+  color: #fff;
+}
+
+.taskbar-nav-btn.active {
+  background: #3a3aff22;
+  border-color: #646cff;
+  color: #8b8fff;
+}
+
+/* Window tabs — float just above the taskbar bar */
+.taskbar-tabs {
+  position: fixed;
+  bottom: 44px;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0.75rem;
+  gap: 0.25rem;
+  z-index: 9998;
+  pointer-events: none;
+}
+
+.taskbar-tab {
+  height: 28px;
+  padding: 0 1rem;
   border: 1px solid #555;
   border-bottom: none;
   border-radius: 4px 4px 0 0;
-  color: #e0e0e0;
   font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
+  pointer-events: all;
   transition:
     background 0.15s,
-    color 0.15s;
+    color 0.15s,
+    border-color 0.15s;
 }
 
-.taskbar-tab:hover {
+/* Window is open — subtle/dimmed tab */
+.taskbar-tab--open {
+  background: #222;
+  color: #888;
+  border-color: #444;
+}
+
+.taskbar-tab--open:hover {
+  background: #2a2a2a;
+  color: #bbb;
+}
+
+/* Window is minimized — bright/highlighted tab */
+.taskbar-tab--minimized {
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border-color: #646cff;
+}
+
+.taskbar-tab--minimized:hover {
   background: #3c3c3c;
   color: #fff;
 }
