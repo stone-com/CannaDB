@@ -8,7 +8,7 @@ const Batch = require("../models/Batch");
 // Create a new batch
 router.post("/", async (req, res) => {
   try {
-    const { batchNumber, harvestId, cloneDate, harvestDate, plants } = req.body;
+    const { batchNumber, cloneDate, harvestDate, plants } = req.body;
 
     if (!batchNumber || !cloneDate) {
       return res
@@ -19,7 +19,6 @@ router.post("/", async (req, res) => {
     // Build a new batch document from the request body.
     const batch = new Batch({
       batchNumber,
-      harvestId: harvestId || null,
       cloneDate,
       harvestDate: harvestDate || null,
       plants: plants || [],
@@ -27,10 +26,7 @@ router.post("/", async (req, res) => {
 
     const savedBatch = await batch.save();
     // Populate linked docs so frontend gets readable related data.
-    const populatedBatch = await savedBatch.populate([
-      "harvestId",
-      "plants.strainId",
-    ]);
+    const populatedBatch = await savedBatch.populate(["plants.strainId"]);
     res.status(201).json(populatedBatch);
   } catch (error) {
     if (error.code === 11000) {
@@ -44,10 +40,7 @@ router.post("/", async (req, res) => {
 // Return all batches with populated relations.
 router.get("/", async (req, res) => {
   try {
-    const batches = await Batch.find().populate([
-      "harvestId",
-      "plants.strainId",
-    ]);
+    const batches = await Batch.find().populate(["plants.strainId"]);
     res.json(batches);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -58,7 +51,6 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const batch = await Batch.findById(req.params.id).populate([
-      "harvestId",
       "plants.strainId",
     ]);
     if (!batch) {

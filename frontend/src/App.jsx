@@ -111,7 +111,6 @@ function App() {
     window.addEventListener("company:created", handleDataCreated);
     window.addEventListener("location:created", handleDataCreated);
     window.addEventListener("room:created", handleDataCreated);
-    window.addEventListener("harvest:created", handleDataCreated);
     window.addEventListener("strain:created", handleDataCreated);
 
     // Always clean up listeners to avoid duplicate handlers on re-renders/unmount.
@@ -119,7 +118,6 @@ function App() {
       window.removeEventListener("company:created", handleDataCreated);
       window.removeEventListener("location:created", handleDataCreated);
       window.removeEventListener("room:created", handleDataCreated);
-      window.removeEventListener("harvest:created", handleDataCreated);
       window.removeEventListener("strain:created", handleDataCreated);
     };
   }, [fetchAllData]);
@@ -231,7 +229,13 @@ function App() {
               defaultW={760}
               defaultH={500}
             >
-              <HarvestForm />
+              <HarvestForm
+                onComplete={async () => {
+                  await fetchAllData();
+                  toggleView("harvestForm");
+                  window.alert("Harvest created successfully.");
+                }}
+              />
             </DraggableWindow>
           )}
         </>
