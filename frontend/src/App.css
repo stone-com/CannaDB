@@ -317,6 +317,184 @@
   margin: 0.2rem 0;
 }
 
+/* ── Harvest Intake Form ── */
+.harvest-intake-form {
+  display: flex;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.harvest-intake-left {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+}
+
+.harvest-intake-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-left: 1px solid #444;
+  padding-left: 1rem;
+  overflow-y: auto;
+}
+
+.harvest-intake-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.harvest-strains-panel {
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.harvest-strains-heading {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.harvest-strains-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* Each strain is a clickable button row */
+.harvest-strain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #ccc;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.harvest-strain-row:hover {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+.harvest-strain-row.active {
+  background: #2a2aff18;
+  border-color: #646cff;
+  color: #a0a4ff;
+}
+
+.tote-badge {
+  font-size: 0.75rem;
+  background: #646cff33;
+  color: #a0a4ff;
+  border-radius: 10px;
+  padding: 0.1rem 0.5rem;
+  flex-shrink: 0;
+}
+
+.harvest-total-plants {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.85rem;
+  color: #aaa;
+  border-top: 1px solid #333;
+  padding-top: 0.5rem;
+}
+
+/* Right panel — active strain header */
+.harvest-active-strain {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.harvest-tote-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.harvest-tote-input-row .form-input {
+  flex: 1;
+  margin-top: 0;
+}
+
+.harvest-tote-input-row .submit-button {
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+}
+
+.harvest-totes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.harvest-tote-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #ccc;
+}
+
+.tote-remove-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+
+.tote-remove-btn:hover {
+  color: #ff6b6b;
+  background: #ff6b6b18;
+}
+
+.harvest-tote-total {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.875rem;
+  color: #aaa;
+  border-top: 1px solid #333;
+  padding-top: 0.5rem;
+}
+
+.harvest-intake-hint {
+  color: #666;
+  font-size: 0.875rem;
+  font-style: italic;
+  margin-top: 2rem;
+  text-align: center;
+}
+
 /* ─────────────────────────────────────────────
    Taskbar — fixed strip at the bottom of the screen.
    Minimized windows appear here as clickable tabs,

@@ -2,7 +2,6 @@ import { useState } from "react";
 import CompanyForm from "./CompanyForm";
 import LocationForm from "./LocationForm";
 import RoomForm from "./RoomForm";
-import HarvestForm from "./HarvestForm";
 
 // This array isn't actively looped over in the JSX below, but it's a useful
 // reference that documents all the section keys used in this file.
@@ -13,7 +12,6 @@ const SECTIONS = [
   { key: "company", label: "Add Company" },
   { key: "location", label: "Add Location" },
   { key: "room", label: "Add Room" },
-  { key: "harvest", label: "Add Harvest" },
 ];
 
 // AccordionSection is a small helper component defined right here in this file.
@@ -254,14 +252,6 @@ export default function AdminPanel() {
           onToggle={() => toggle("assign")}
         >
           <RoomForm embedded section="assign" />
-        </AccordionSection>
-
-        <AccordionSection
-          label="Add Harvest"
-          isOpen={openSection === "harvest"}
-          onToggle={() => toggle("harvest")}
-        >
-          <HarvestForm embedded />
         </AccordionSection>
       </div>
     </div>

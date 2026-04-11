@@ -7,6 +7,7 @@ import "./App.css";
 // These are the other components used in this file. React apps are built by
 // composing small reusable pieces like these together.
 import AdminPanel from "./components/AdminPanel";
+import HarvestForm from "./components/HarvestForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
 import DraggableWindow from "./components/DraggableWindow";
@@ -19,6 +20,7 @@ import Taskbar from "./components/Taskbar";
 const VIEW_OPTIONS = [
   { key: "strains", label: "Strains" },
   { key: "harvestReport", label: "Harvest Report" },
+  { key: "harvestForm", label: "Add Harvest" },
 ];
 
 function App() {
@@ -49,6 +51,7 @@ function App() {
   const [selectedViews, setSelectedViews] = useState({
     strains: true,
     harvestReport: false,
+    harvestForm: false,
   });
 
   // Tracks which open windows are currently minimized to the taskbar.
@@ -57,6 +60,7 @@ function App() {
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
+    harvestForm: false,
   });
 
   // Generic fetch helper so we can reuse the same logic for multiple endpoints.
@@ -216,6 +220,20 @@ function App() {
               <HarvestReportPage harvests={harvests} />
             </DraggableWindow>
           )}
+          {selectedViews.harvestForm && (
+            <DraggableWindow
+              title="Add Harvest"
+              onClose={() => toggleView("harvestForm")}
+              isMinimized={minimizedWindows.harvestForm}
+              onMinimize={() => toggleMinimize("harvestForm")}
+              defaultX={150}
+              defaultY={100}
+              defaultW={760}
+              defaultH={500}
+            >
+              <HarvestForm />
+            </DraggableWindow>
+          )}
         </>
       )}
 
@@ -240,6 +258,13 @@ function App() {
             visible: activePage === "dashboard" && selectedViews.harvestReport,
             minimized: minimizedWindows.harvestReport,
             onClick: () => toggleMinimize("harvestReport"),
+          },
+          {
+            key: "harvestForm",
+            label: "Add Harvest",
+            visible: activePage === "dashboard" && selectedViews.harvestForm,
+            minimized: minimizedWindows.harvestForm,
+            onClick: () => toggleMinimize("harvestForm"),
           },
         ]}
       />
