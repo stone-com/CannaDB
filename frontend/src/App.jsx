@@ -8,7 +8,7 @@ import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
-
+import BatchForm from "./components/BatchForm";
 // In React, it's common to keep UI config in arrays/objects like this.
 // We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
 // This array drives the checkbox menu on the right side.
@@ -298,6 +298,7 @@ function App() {
       {/* ── Taskbar — minimized windows appear here as tabs ────────────────────── */}
       {/* Each tab object has: key, label, visible (bool), and onClick.     */}
       {/* Taskbar renders nothing when all tabs are hidden.                  */}
+      <BatchForm />
       <Taskbar
         tabs={[
           {
