@@ -51,7 +51,7 @@ function App() {
   // { harvestReport: false } means the Harvest Report window is closed.
   // Using an object lets us manage all window visibility in one state variable.
   const [selectedViews, setSelectedViews] = useState({
-    strains: true,
+    strains: false,
     harvestReport: false,
     harvestForm: false,
     dryWeightForm: false,
@@ -149,6 +149,11 @@ function App() {
 
   return (
     <div className="app-root">
+      {/* Fixed top header bar — sits above everything and sets the top boundary for draggable windows */}
+      <header className="app-header">
+        <span className="app-header-title">GrowDB</span>
+      </header>
+
       {/* Left sidebar — only visible on the dashboard page */}
       {activePage === "dashboard" && (
         <aside className="viewer-sidebar">
@@ -179,7 +184,6 @@ function App() {
            If true → the dashboard div renders. If false → nothing renders. */}
         {activePage === "dashboard" && (
           <div className="dashboard-page">
-            <h1>Inventory Manager</h1>
             {/* loadingData && <p>...</p> shows the loading message until data arrives */}
             {loadingData && <p>Loading data...</p>}
           </div>
@@ -228,7 +232,7 @@ function App() {
               onClose={() => toggleView("harvestForm")}
               isMinimized={minimizedWindows.harvestForm}
               onMinimize={() => toggleMinimize("harvestForm")}
-              defaultX={150}
+              defaultX={240}
               defaultY={100}
               defaultW={760}
               defaultH={500}

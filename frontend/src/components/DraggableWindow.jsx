@@ -54,6 +54,12 @@ export default function DraggableWindow({
   // We pass these as CSS `width` and `height` on the outer div.
   const [size, setSize] = useState({ w: defaultW, h: defaultH });
 
+  // sizeRef mirrors the `size` state so that the mousemove handler
+  // (registered once in useEffect) always reads the CURRENT size, not the
+  // stale value captured when the effect first ran.
+  const sizeRef = useRef({ w: defaultW, h: defaultH });
+  sizeRef.current = size;
+
   // zIndex controls which window appears in front when windows overlap.
   // We initialize it by immediately incrementing the global counter so each
   // new window opens on top of all previously opened ones.
@@ -146,12 +152,21 @@ export default function DraggableWindow({
       const dy = e.clientY - startClientY;
 
       if (type === "drag") {
-        // Move the window by the same amount the cursor moved.
-        // Math.max(0, ...) clamps the position so the window can't go off the
-        // top or left edge of the screen (it can still go off right/bottom).
+        // Keep the window inside the visible workspace area:
+        //   LEFT   — 254px: sidebar (220px) + 1px border + 3px gap + 30px adjustment
+        //   TOP    — 48px:  height of the top header bar
+        //   RIGHT  — screen width minus the window's own width
+        //   BOTTOM — screen height minus taskbar (44px) and window height
+        // sizeRef.current is used instead of `size` so this closure (created
+        // once on mount) always sees the latest dimensions after a resize.
+        const LEFT_BOUND = 254;
+        const TOP_BOUND = 48;
+        const RIGHT_BOUND = window.innerWidth - sizeRef.current.w;
+        const BOTTOM_BOUND = window.innerHeight - 44 - sizeRef.current.h;
+
         setPos({
-          x: Math.max(0, startPosX + dx),
-          y: Math.max(0, startPosY + dy),
+          x: Math.min(Math.max(LEFT_BOUND, startPosX + dx), RIGHT_BOUND),
+          y: Math.min(Math.max(TOP_BOUND, startPosY + dy), BOTTOM_BOUND),
         });
       } else if (type === "resize") {
         // Grow or shrink the window by the same amount the cursor moved.
