@@ -8,6 +8,7 @@ import "./App.css";
 // composing small reusable pieces like these together.
 import AdminPanel from "./components/AdminPanel";
 import HarvestForm from "./components/HarvestForm";
+import DryWeightForm from "./components/DryWeightForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
 import DraggableWindow from "./components/DraggableWindow";
@@ -21,6 +22,7 @@ const VIEW_OPTIONS = [
   { key: "strains", label: "Strains" },
   { key: "harvestReport", label: "Harvest Report" },
   { key: "harvestForm", label: "Add Harvest" },
+  { key: "dryWeightForm", label: "Add Dry Weights" },
 ];
 
 function App() {
@@ -52,6 +54,7 @@ function App() {
     strains: true,
     harvestReport: false,
     harvestForm: false,
+    dryWeightForm: false,
   });
 
   // Tracks which open windows are currently minimized to the taskbar.
@@ -61,6 +64,7 @@ function App() {
     strains: false,
     harvestReport: false,
     harvestForm: false,
+    dryWeightForm: false,
   });
 
   // Generic fetch helper so we can reuse the same logic for multiple endpoints.
@@ -238,6 +242,27 @@ function App() {
               />
             </DraggableWindow>
           )}
+          {selectedViews.dryWeightForm && (
+            <DraggableWindow
+              title="Add Dry Weights"
+              onClose={() => toggleView("dryWeightForm")}
+              isMinimized={minimizedWindows.dryWeightForm}
+              onMinimize={() => toggleMinimize("dryWeightForm")}
+              defaultX={240}
+              defaultY={140}
+              defaultW={860}
+              defaultH={520}
+            >
+              <DryWeightForm
+                harvests={harvests}
+                onComplete={async () => {
+                  await fetchAllData();
+                  toggleView("dryWeightForm");
+                  window.alert("Dry weights saved successfully.");
+                }}
+              />
+            </DraggableWindow>
+          )}
         </>
       )}
 
@@ -269,6 +294,13 @@ function App() {
             visible: activePage === "dashboard" && selectedViews.harvestForm,
             minimized: minimizedWindows.harvestForm,
             onClick: () => toggleMinimize("harvestForm"),
+          },
+          {
+            key: "dryWeightForm",
+            label: "Add Dry Weights",
+            visible: activePage === "dashboard" && selectedViews.dryWeightForm,
+            minimized: minimizedWindows.dryWeightForm,
+            onClick: () => toggleMinimize("dryWeightForm"),
           },
         ]}
       />
