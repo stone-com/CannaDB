@@ -104,59 +104,69 @@
 }
 
 /* Accordion list */
-.admin-accordion {
+.admin-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+/* Each card is a button so it's keyboard-accessible and clickable */
+.admin-card {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.accordion-item {
-  border: 1px solid #444;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.accordion-trigger {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1.25rem;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 1.25rem 1.5rem;
   background: #1a1a1a;
-  border: none;
-  border-radius: 0;
+  border: 1px solid #444;
+  border-radius: 10px;
   color: #e0e0e0;
-  font-size: 0.95rem;
-  font-weight: 500;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
-.accordion-trigger:hover {
+.admin-card:hover {
   background: #222;
+  border-color: #646cff;
 }
 
-.accordion-trigger:focus-visible {
+.admin-card:focus-visible {
   outline: 2px solid #646cff;
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
-.accordion-arrow {
-  font-size: 0.75rem;
-  color: #666;
-  transition: transform 0.2s;
-  flex-shrink: 0;
+.admin-card-label {
+  font-size: 1rem;
+  font-weight: 600;
 }
 
-.accordion-arrow.open {
-  transform: rotate(180deg);
+.admin-card-description {
+  font-size: 0.82rem;
+  color: #888;
 }
 
-.accordion-body {
-  border-top: 1px solid #444;
-  padding: 1.5rem;
-  background: #161616;
+/* Back button shown at the top of the form panel */
+.admin-back-button {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1.5rem;
+  transition: color 0.15s;
+}
+
+.admin-back-button:hover {
+  color: #e0e0e0;
+}
+
+/* The form area that appears after clicking a card */
+.admin-form-panel {
+  max-width: 520px;
 }
 
 /* Shared form wrapper styling */
