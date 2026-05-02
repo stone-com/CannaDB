@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+﻿import { Fragment, useMemo, useState } from "react";
 
 // Formats a date value, returning "N/A" for nulls or invalid dates.
 const formatDate = (value) => {

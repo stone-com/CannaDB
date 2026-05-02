@@ -24,6 +24,7 @@ const HARVEST_OPTIONS = [
 function App() {
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activePage, setActivePage] = useState("dashboard");
@@ -64,6 +65,7 @@ function App() {
     await Promise.all([
       fetchCollection("/api/strains", setStrains),
       fetchCollection("/api/rooms", setRooms),
+      fetchCollection("/api/batches", setBatches),
       fetchCollection("/api/harvests", setHarvests),
     ]);
     setLoadingData(false);
@@ -159,7 +161,8 @@ function App() {
            If true → the dashboard div renders. If false → nothing renders. */}
         {activePage === "dashboard" && (
           <div className="dashboard-page">
-            {/* loadingData && <p>...</p> shows the loading message until data arrives */}
+            loadingData && <p>...</p> shows the loading message until data
+            arrives
             {loadingData && <p>Loading data...</p>}
           </div>
         )}
@@ -209,7 +212,7 @@ function App() {
               defaultW={700}
               defaultH={440}
             >
-              <RoomViewer rooms={rooms} />
+              <RoomViewer rooms={rooms} batches={batches} />
             </DraggableWindow>
           )}
           {selectedViews.harvestForm && (

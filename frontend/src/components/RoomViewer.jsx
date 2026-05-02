@@ -9,7 +9,7 @@ const formatDate = (value) => {
 };
 
 // Shows a room dropdown and displays the plants in that room's active batch.
-function RoomViewer({ rooms }) {
+function RoomViewer({ rooms, batches }) {
   // Which room the user has selected. Empty string = nothing chosen yet.
   const [selectedRoomId, setSelectedRoomId] = useState("");
 
@@ -27,8 +27,21 @@ function RoomViewer({ rooms }) {
     [sortedRooms, selectedRoomId],
   );
 
-  // The batch assigned to the selected room (null if none).
-  const batch = selectedRoom?.batchId ?? null;
+  // The batch in the selected room (find which batch has this room in its rooms array).
+  const batch = useMemo(() => {
+    if (!selectedRoom) return null;
+    return (
+      (Array.isArray(batches) &&
+        batches.find(
+          (b) =>
+            Array.isArray(b.rooms) &&
+            b.rooms.some(
+              (r) => r._id === selectedRoom._id || r === selectedRoom._id,
+            ),
+        )) ||
+      null
+    );
+  }, [selectedRoom, batches]);
 
   // One row per plant entry in the batch. strainId is fully populated by the backend.
   const plantRows = useMemo(() => {
