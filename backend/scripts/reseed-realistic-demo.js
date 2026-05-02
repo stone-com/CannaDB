@@ -19,6 +19,8 @@ const IRON_LOCATION = "Iron Gate";
 
 const TOTAL_HARVESTS = 18;
 const FUTURE_HARVESTS = 4;
+const MOM_PLANTS_PER_BATCH = 16;
+const DRYING_DAYS = 10;
 
 function addDays(date, days) {
   const copy = new Date(date);
@@ -103,13 +105,64 @@ function splitIntoTotes(totalWet, toteCount) {
   return pieces.map((wetWeight) => ({ wetWeight }));
 }
 
-function stageAtDate(cloneDate, now) {
-  const days = Math.floor((now - cloneDate) / (24 * 60 * 60 * 1000));
-  if (days < 0) return "future";
-  if (days < 14) return "clone";
-  if (days < 28) return "veg";
-  if (days < 84) return "flower";
-  return "done";
+function deriveLifecycle(cloneDate, harvestDate, now) {
+  const cloneStart = new Date(cloneDate);
+  const vegStart = addDays(cloneStart, 16);
+  const flowerStart = addDays(vegStart, 13);
+  const harvestReadyStart = addDays(flowerStart, 54);
+  const dryingEnd = addDays(harvestDate, DRYING_DAYS);
+
+  if (now < vegStart) {
+    return {
+      stage: "Clone",
+      stageStartedAt: cloneStart,
+      nextTransitionAt: vegStart,
+      occupancy: "clone",
+    };
+  }
+
+  if (now < flowerStart) {
+    return {
+      stage: "Veg",
+      stageStartedAt: vegStart,
+      nextTransitionAt: flowerStart,
+      occupancy: "veg",
+    };
+  }
+
+  if (now < harvestReadyStart) {
+    return {
+      stage: "Flower",
+      stageStartedAt: flowerStart,
+      nextTransitionAt: harvestReadyStart,
+      occupancy: "flower",
+    };
+  }
+
+  if (now < harvestDate) {
+    return {
+      stage: "HarvestReady",
+      stageStartedAt: harvestReadyStart,
+      nextTransitionAt: harvestDate,
+      occupancy: "flower",
+    };
+  }
+
+  if (now < dryingEnd) {
+    return {
+      stage: "Drying",
+      stageStartedAt: harvestDate,
+      nextTransitionAt: dryingEnd,
+      occupancy: "drying",
+    };
+  }
+
+  return {
+    stage: "Completed",
+    stageStartedAt: dryingEnd,
+    nextTransitionAt: null,
+    occupancy: "completed",
+  };
 }
 
 async function wipeEverythingExceptStrains() {
@@ -233,6 +286,24 @@ async function run() {
     ),
   };
 
+  const momRooms = {
+    [String(mooseLocation._id)]: roomsByLocation[
+      String(mooseLocation._id)
+    ].find((room) => room.type === "Mom"),
+    [String(ironLocation._id)]: roomsByLocation[String(ironLocation._id)].find(
+      (room) => room.type === "Mom",
+    ),
+  };
+
+  const dryingRooms = {
+    [String(mooseLocation._id)]: roomsByLocation[
+      String(mooseLocation._id)
+    ].filter((room) => room.type === "Drying"),
+    [String(ironLocation._id)]: roomsByLocation[
+      String(ironLocation._id)
+    ].filter((room) => room.type === "Drying"),
+  };
+
   // 5) Build Monday schedule with both past and future entries.
   const nextMonday = getNextMonday(now);
   const pastCount = TOTAL_HARVESTS - FUTURE_HARVESTS;
@@ -272,13 +343,17 @@ async function run() {
     );
 
     const targetPlants = isMoose ? randInt(470, 530) : randInt(280, 320);
+    const flowerPlants = Math.max(1, targetPlants - MOM_PLANTS_PER_BATCH);
+    const momRoom = momRooms[String(locationId)];
+    const momStrains = chosenStrains.slice(0, 2);
+    const momCounts = allocateCounts(MOM_PLANTS_PER_BATCH, momStrains.length);
 
     let roomEntries = [];
 
     if (isMoose) {
       // Moose Lodge harvest uses exactly 1 flower room.
       const room = mooseFlowerRooms[slot.slotIndex % mooseFlowerRooms.length];
-      const counts = allocateCounts(targetPlants, 8);
+      const counts = allocateCounts(flowerPlants, 8);
 
       const strainEntries = chosenStrains.map((strain, idx) => {
         const plantCount = counts[idx];
@@ -295,7 +370,7 @@ async function run() {
 
         const wetPerPlant = randInt(140, 190);
         const totalWet = plantCount * wetPerPlant;
-        const dryPct = randInt(23, 27) / 100;
+        const dryPct = randInt(24, 26) / 100;
         const totalDry = Math.round(totalWet * dryPct);
         const toteCount = randInt(2, 4);
 
@@ -316,7 +391,7 @@ async function run() {
       const roomSecondary = ironFlowerRoomsA2C2[pairIdx];
 
       // Split 8 strains across 2 rooms: 4 + 4 (still 8 total per harvest).
-      const counts = allocateCounts(targetPlants, 8);
+      const counts = allocateCounts(flowerPlants, 8);
       const primaryStrains = chosenStrains.slice(0, 4);
       const secondaryStrains = chosenStrains.slice(4, 8);
       const primaryCounts = counts.slice(0, 4);
@@ -338,7 +413,7 @@ async function run() {
 
           const wetPerPlant = randInt(140, 190);
           const totalWet = plantCount * wetPerPlant;
-          const dryPct = randInt(23, 27) / 100;
+          const dryPct = randInt(24, 26) / 100;
           const totalDry = Math.round(totalWet * dryPct);
           const toteCount = randInt(2, 4);
 
@@ -364,30 +439,34 @@ async function run() {
 
     // Batch lifecycle: 12 weeks total = 84 days before harvest date.
     const cloneDate = addDays(slot.harvestDate, -84);
+    const lifecycle = deriveLifecycle(cloneDate, slot.harvestDate, now);
+    const batchRooms = roomEntries.map((entry) => ({
+      roomId: entry.roomId,
+      plants: entry.strains.map((s) => ({
+        strainId: s.strainId,
+        count: s.plantCount,
+      })),
+    }));
 
-    // Build batch.plants from harvest room/strain plant totals.
-    const plantMap = new Map();
-    for (const roomEntry of roomEntries) {
-      for (const strainEntry of roomEntry.strains) {
-        const key = String(strainEntry.strainId);
-        plantMap.set(key, (plantMap.get(key) || 0) + strainEntry.plantCount);
-      }
+    if (momRoom && momStrains.length > 0) {
+      batchRooms.push({
+        roomId: momRoom._id,
+        plants: momStrains.map((strain, idx) => ({
+          strainId: strain._id,
+          count: momCounts[idx] || 0,
+        })),
+      });
     }
-
-    const batchPlants = Array.from(plantMap.entries()).map(
-      ([strainId, count]) => ({
-        strainId,
-        count,
-      }),
-    );
 
     const batch = await Batch.create({
       batchNumber: code,
       cloneDate,
       harvestDate: slot.harvestDate,
-      plants: batchPlants,
       location: locationId,
-      rooms: roomEntries.map((entry) => entry.roomId),
+      rooms: batchRooms,
+      lifecycleStage: lifecycle.stage,
+      stageStartedAt: lifecycle.stageStartedAt,
+      nextTransitionAt: lifecycle.nextTransitionAt,
       createdAt: cloneDate,
     });
 
@@ -400,24 +479,67 @@ async function run() {
       createdAt: slot.harvestDate,
     });
 
-    // Future harvests are "not harvested yet" → keep batch.harvestId null.
+    // Past/current harvests are already harvested and linked.
     if (slot.harvestDate <= now) {
       await Batch.findByIdAndUpdate(batch._id, { harvestId: harvest._id });
+
+      const dryingRoomPool = dryingRooms[String(locationId)];
+      const dryingRoom = dryingRoomPool[slot.slotIndex % dryingRoomPool.length];
+      const drySnapshotDate =
+        now < addDays(slot.harvestDate, DRYING_DAYS)
+          ? now
+          : addDays(slot.harvestDate, DRYING_DAYS);
+      const hoursDrying = Math.max(
+        0,
+        Math.round((drySnapshotDate - slot.harvestDate) / 3600000),
+      );
+
+      const dryRoomDocs = roomEntries.flatMap((roomEntry) =>
+        roomEntry.strains.map((strainEntry) => ({
+          strainId: strainEntry.strainId,
+          harvestId: harvest._id,
+          roomId: dryingRoom._id,
+          totalRacks: randInt(10, 18),
+          totalRacksUsed: randInt(1, 4),
+          strainCount: strainEntry.plantCount,
+          date: drySnapshotDate,
+          timeElapsedHours: hoursDrying,
+        })),
+      );
+
+      if (dryRoomDocs.length > 0) {
+        await DryRoomData.insertMany(dryRoomDocs);
+      }
     }
 
-    // Optional "current occupancy" for room.batchId based on stage today.
+    // Optional "current occupancy" for room.batchId based on lifecycle today.
     // If multiple active batches target same room, latest assignment wins.
-    const stage = stageAtDate(cloneDate, now);
-    if (["clone", "veg", "flower"].includes(stage)) {
-      let activeRoomId = null;
-      if (stage === "clone")
-        activeRoomId = cloneRooms[String(locationId)]?._id || null;
-      if (stage === "veg")
-        activeRoomId = vegRooms[String(locationId)]?._id || null;
-      if (stage === "flower") activeRoomId = roomEntries[0]?.roomId || null;
+    if (lifecycle.occupancy === "clone") {
+      const cloneRoom = cloneRooms[String(locationId)];
+      if (cloneRoom) {
+        await Room.findByIdAndUpdate(cloneRoom._id, { batchId: batch._id });
+      }
+    }
 
-      if (activeRoomId) {
-        await Room.findByIdAndUpdate(activeRoomId, { batchId: batch._id });
+    if (lifecycle.occupancy === "veg") {
+      const vegRoom = vegRooms[String(locationId)];
+      if (vegRoom) {
+        await Room.findByIdAndUpdate(vegRoom._id, { batchId: batch._id });
+      }
+    }
+
+    if (lifecycle.occupancy === "flower") {
+      await Room.updateMany(
+        { _id: { $in: batchRooms.map((entry) => entry.roomId) } },
+        { $set: { batchId: batch._id } },
+      );
+    }
+
+    if (lifecycle.occupancy === "drying") {
+      const dryingRoomPool = dryingRooms[String(locationId)];
+      const dryingRoom = dryingRoomPool[slot.slotIndex % dryingRoomPool.length];
+      if (dryingRoom) {
+        await Room.findByIdAndUpdate(dryingRoom._id, { batchId: batch._id });
       }
     }
 
@@ -448,6 +570,15 @@ async function run() {
   const pastHarvestCount = await Harvest.countDocuments({
     harvestDate: { $lte: now },
   });
+  const lifecycleBreakdown = await Batch.aggregate([
+    {
+      $group: {
+        _id: "$lifecycleStage",
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
 
   const locationHarvestBreakdown = await Harvest.aggregate([
     {
@@ -476,6 +607,7 @@ async function run() {
         dryRoomDataCount: dryCount,
         pastHarvestCount,
         futureHarvestCount,
+        lifecycleBreakdown,
         harvestsByLocation: locationHarvestBreakdown.map((row) => ({
           location: locationsById.get(String(row._id)) || String(row._id),
           count: row.count,

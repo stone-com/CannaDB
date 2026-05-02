@@ -41,9 +41,15 @@ function StrainDataViewer({ strains, rooms }) {
         const locationName = room?.locationId?.nickname || "N/A";
         const batch = room?.batchId;
 
-        if (!batch || !Array.isArray(batch?.plants)) return;
+        if (!batch || !Array.isArray(batch?.rooms)) return;
 
-        batch.plants.forEach((plantEntry) => {
+        // Find the entry in this batch's rooms that corresponds to the current room.
+        const roomEntry = batch.rooms.find(
+          (r) => String(r.roomId) === String(room._id),
+        );
+        if (!roomEntry || !Array.isArray(roomEntry.plants)) return;
+
+        roomEntry.plants.forEach((plantEntry) => {
           const strainId = plantEntry?.strainId?._id;
           if (!strainId || !rowMap.has(strainId)) return;
 

@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const { startBatchLifecycleJob } = require("./jobs/batchLifecycleJob");
 
 // Create the Express app instance.
 const app = express();
@@ -36,6 +37,8 @@ app.use("/api/harvests", require("./routes/harvests"));
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
+
+startBatchLifecycleJob();
 
 // Start listening for HTTP requests.
 app.listen(PORT, () => {

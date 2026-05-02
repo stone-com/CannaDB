@@ -41,13 +41,20 @@ function HarvestForm({ onComplete }) {
 
   // Derived from state — not stored separately.
   const selectedBatch = batches.find((b) => b._id === selectedBatchId) || null;
-  const selectedStrainPlant =
-    selectedBatch?.plants.find((p) => p.strainId?._id === selectedStrainId) ||
-    null;
 
-  const totalPlants = selectedBatch
-    ? selectedBatch.plants.reduce((sum, p) => sum + (p.count || 0), 0)
-    : 0;
+  // Plants scoped to the selected room. Falls back to all batch plants if no room chosen yet.
+  const selectedRoomEntry =
+    selectedBatch?.rooms?.find(
+      (r) => String(r.roomId) === String(selectedRoomId),
+    ) || null;
+  const activePlants =
+    selectedRoomEntry?.plants ??
+    (selectedBatch?.rooms ?? []).flatMap((r) => r.plants ?? []);
+
+  const selectedStrainPlant =
+    activePlants.find((p) => p.strainId?._id === selectedStrainId) || null;
+
+  const totalPlants = activePlants.reduce((sum, p) => sum + (p.count || 0), 0);
 
   // Totes and running total for the active strain.
   const activeTotes = selectedStrainId ? totes[selectedStrainId] || [] : [];
@@ -91,7 +98,7 @@ function HarvestForm({ onComplete }) {
     }
 
     try {
-      const strainsPayload = (selectedBatch?.plants || []).map((plant) => ({
+      const strainsPayload = activePlants.map((plant) => ({
         strainId: plant.strainId?._id,
         plantCount: plant.count,
         totes: (totes[plant.strainId?._id] || []).map((weight) => ({
@@ -190,7 +197,7 @@ function HarvestForm({ onComplete }) {
               {selectedBatch.batchNumber} Strains
             </p>
             <div className="harvest-strains-list">
-              {selectedBatch.plants.map((plant) => {
+              {activePlants.map((plant) => {
                 const strainId = plant.strainId?._id;
                 const strainName = plant.strainId?.name || "Unknown";
                 const toteCount = (totes[strainId] || []).length;

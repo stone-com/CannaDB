@@ -161,8 +161,8 @@ function App() {
            If true → the dashboard div renders. If false → nothing renders. */}
         {activePage === "dashboard" && (
           <div className="dashboard-page">
-            loadingData && <p>...</p> shows the loading message until data
-            arrives
+            {/* loadingData && <p>...</p> shows the loading message until data
+            arrives */}
             {loadingData && <p>Loading data...</p>}
           </div>
         )}

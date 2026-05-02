@@ -3,13 +3,13 @@ const router = express.Router();
 const Room = require("../models/Room");
 
 // Reusable populate config for all room queries.
-// The nested populate is required to hydrate plants.strainId inside a batch —
-// a flat path string like "batchId.plants.strainId" doesn't work for nested arrays.
+// The nested populate is required to hydrate rooms.plants.strainId inside a batch —
+// a flat path string like "batchId.rooms.plants.strainId" doesn't work for nested arrays.
 const ROOM_POPULATE = [
   "locationId",
   {
     path: "batchId",
-    populate: { path: "plants.strainId" },
+    populate: { path: "rooms.plants.strainId" },
   },
 ];
 

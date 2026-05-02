@@ -35,23 +35,25 @@ function RoomViewer({ rooms, batches }) {
         batches.find(
           (b) =>
             Array.isArray(b.rooms) &&
-            b.rooms.some(
-              (r) => r._id === selectedRoom._id || r === selectedRoom._id,
-            ),
+            b.rooms.some((r) => String(r.roomId) === String(selectedRoom._id)),
         )) ||
       null
     );
   }, [selectedRoom, batches]);
 
-  // One row per plant entry in the batch. strainId is fully populated by the backend.
+  // One row per plant entry for the selected room specifically.
   const plantRows = useMemo(() => {
-    if (!batch || !Array.isArray(batch.plants)) return [];
-    return batch.plants.map((entry) => ({
+    if (!batch || !Array.isArray(batch.rooms)) return [];
+    const roomEntry = batch.rooms.find(
+      (r) => String(r.roomId) === String(selectedRoomId),
+    );
+    if (!roomEntry || !Array.isArray(roomEntry.plants)) return [];
+    return roomEntry.plants.map((entry) => ({
       strainName: entry.strainId?.name || "Unknown Strain",
       strainType: entry.strainId?.type || "N/A",
       count: Number(entry.count) || 0,
     }));
-  }, [batch]);
+  }, [batch, selectedRoomId]);
 
   // Sum of all plant counts across strains.
   const totalPlants = useMemo(
