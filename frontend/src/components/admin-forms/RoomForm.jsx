@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-// Defining options in a constant array outside the component is a good habit.
-// This array never changes, so there's no reason to define it inside the function
-// (which would recreate it on every render unnecessarily).
+// Constant outside component — never changes, no need to recreate per render.
 const ROOM_TYPES = [
   "Flower",
   "Veg",
@@ -15,10 +13,9 @@ const ROOM_TYPES = [
   "Drying",
 ];
 
-// RoomForm handles two things: creating rooms and assigning batches to rooms.
-// The `section` prop tells it which of those two jobs to do when used in embedded mode.
-// The `embedded` prop tells it to skip its wrapper div/heading (since AdminPanel
-// already provides the container when this renders inside an accordion).
+// `section="add"` renders the create-room form.
+// `section="assign"` renders the batch assignment form.
+// `embedded={true}` skips the wrapper div/heading (for AdminPanel accordion use).
 function RoomForm({ embedded, section }) {
   // State for dropdown data and form values.
   const [locations, setLocations] = useState([]);
@@ -70,49 +67,26 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Date formatting helper for readable batch labels.
+  // Date formatting helper for batch labels.
   const formatDate = (value) => {
-    if (!value) {
-      return "N/A";
-    }
-
+    if (!value) return "N/A";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return "N/A";
-    }
-
+    if (Number.isNaN(date.getTime())) return "N/A";
     return date.toLocaleDateString();
   };
 
-  // useMemo caches (remembers) a computed value.
-  // It only re-runs when items in the dependency array (here: [batches]) change.
-  // Without useMemo, this filtering and sorting would run on every single render,
-  // even if batches didn't change. For big arrays, that adds up.
-  //
-  // What this does: filter out batches whose harvest date has already passed,
-  // then sort the remaining ones from soonest harvest to latest harvest.
+  // Filters out past-harvest batches and sorts by nearest harvest date.
   const selectableBatches = useMemo(() => {
-    const now = new Date(); // today's date/time
+    const now = new Date();
 
-    return [...batches] // spread creates a copy so we don't mutate the original array
+    return [...batches]
       .filter((batch) => {
-        // If a batch has no harvest date, include it (we don't know when it ends).
-        if (!batch?.harvestDate) {
-          return true;
-        }
-
+        if (!batch?.harvestDate) return true;
         const harvestDate = new Date(batch.harvestDate);
-        // If the date string is invalid, skip the check and include it.
-        if (Number.isNaN(harvestDate.getTime())) {
-          return true;
-        }
-
-        // Only keep batches where the harvest date is today or in the future.
+        if (Number.isNaN(harvestDate.getTime())) return true;
         return harvestDate >= now;
       })
       .sort((a, b) => {
-        // Sort ascending by harvest date (soonest first).
-        // Batches without a date get 0, which sorts them to the top.
         const aDate = a?.harvestDate ? new Date(a.harvestDate).getTime() : 0;
         const bDate = b?.harvestDate ? new Date(b.harvestDate).getTime() : 0;
         return aDate - bDate;
@@ -120,13 +94,10 @@ function RoomForm({ embedded, section }) {
   }, [batches]);
 
   useEffect(() => {
-    // Effect for initial load + event subscription.
-    // Initial location dropdown load.
     fetchLocations();
     fetchRooms();
     fetchBatches();
 
-    // Listen for location creation events to keep dropdown options current.
     const handleLocationCreated = () => {
       fetchLocations();
       fetchRooms();
@@ -150,7 +121,6 @@ function RoomForm({ embedded, section }) {
   }, []);
 
   const handleSubmit = async (e) => {
-    // Create a room record linked to a location by locationId.
     e.preventDefault();
     setMessage("");
 
@@ -162,7 +132,6 @@ function RoomForm({ embedded, section }) {
           locationId: formData.locationId,
           name: formData.name,
           type: formData.type,
-          // Convert string input to number before sending.
           sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
         }),
       });
@@ -174,7 +143,6 @@ function RoomForm({ embedded, section }) {
 
       const savedRoom = await res.json();
 
-      // Notify forms that depend on rooms (for example, HarvestForm).
       window.dispatchEvent(
         new CustomEvent("room:created", {
           detail: savedRoom,
@@ -199,7 +167,6 @@ function RoomForm({ embedded, section }) {
         throw new Error("Please select a room");
       }
 
-      // Empty string means "unassign" => send null.
       const payload = {
         batchId: assignmentData.batchId || null,
       };
@@ -217,7 +184,6 @@ function RoomForm({ embedded, section }) {
 
       const updatedRoom = await res.json();
 
-      // Reuse existing app-wide room refresh event.
       window.dispatchEvent(
         new CustomEvent("room:created", {
           detail: updatedRoom,

@@ -1,11 +1,5 @@
-// React hooks we use in this file:
-//   useState    – stores values that can change over time (triggers re-render when updated)
-//   useEffect   – runs code after the component renders (great for fetching data, subscriptions)
-//   useCallback – wraps a function so React doesn't recreate it on every render
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
-// These are the other components used in this file. React apps are built by
-// composing small reusable pieces like these together.
 import AdminPanel from "./components/AdminPanel";
 import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
@@ -15,9 +9,7 @@ import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
 
-// In React, it's common to keep UI config in arrays/objects like this.
-// We map over these arrays to render checkboxes instead of hard-coding each one.
-// Each object has a unique `key` and a display label.
+// Sidebar panel options mapped to checkboxes.
 const DATA_VIEWER_OPTIONS = [
   { key: "strains", label: "Strains" },
   { key: "harvestReport", label: "Harvest Report" },
@@ -30,30 +22,13 @@ const HARVEST_OPTIONS = [
 ];
 
 function App() {
-  // A React function component is just a JavaScript function that returns JSX.
-  // Every time state changes, React re-runs this function and updates the DOM efficiently.
-
-  // React state: each call creates [currentValue, setterFunction].
-  // Example: strains = current value, setStrains = function to update it.
-  // useState([]) creates a state variable initialized to an empty array.
-  // The two values you get back are: [currentValue, setterFunction]
-  // Calling the setter (e.g. setStrains([...])) updates the value and re-renders the component.
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [harvests, setHarvests] = useState([]);
-
-  // loadingData starts as true so the UI can show a loading message.
-  // Once all data fetches are done, we set it to false to reveal the content.
   const [loadingData, setLoadingData] = useState(true);
-
-  // activePage controls which "page" is showing — either "dashboard" or "admin".
-  // This is how we switch between pages without a router library.
   const [activePage, setActivePage] = useState("dashboard");
 
-  // selectedViews is an object that tracks which floating windows are open.
-  // { strains: true } means the Strains window is open.
-  // { harvestReport: false } means the Harvest Report window is closed.
-  // Using an object lets us manage all window visibility in one state variable.
+  // Tracks which floating windows are open.
   const [selectedViews, setSelectedViews] = useState({
     strains: false,
     harvestReport: false,
@@ -62,9 +37,7 @@ function App() {
     dryWeightForm: false,
   });
 
-  // Tracks which open windows are currently minimized to the taskbar.
-  // When a key is true, that window's DraggableWindow renders null and a tab
-  // appears in the taskbar at the bottom of the screen instead.
+  // Tracks which open windows are minimized to the taskbar.
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
@@ -73,26 +46,19 @@ function App() {
     dryWeightForm: false,
   });
 
-  // Generic fetch helper so we can reuse the same logic for multiple endpoints.
-  // `setter` is a function (like setStrains) passed in as an argument.
-  // useCallback memoizes the function reference so it doesn't get recreated every render.
-  // This helps with hook dependencies (like useEffect) and avoids unnecessary reruns.
+  // Fetches a JSON array from `path` and stores it via `setter`.
   const fetchCollection = useCallback(async (path, setter) => {
     try {
       const res = await fetch(path);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch ${path}`);
-      }
+      if (!res.ok) throw new Error(`Failed to fetch ${path}`);
       const data = await res.json();
-      // Defensive coding: ensure we only store arrays in list state.
       setter(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(`Error fetching ${path}:`, err);
     }
   }, []);
 
-  // Loads all datasets used in the data viewer.
-  // Promise.all runs requests in parallel instead of one-by-one.
+  // Fetches all data in parallel.
   const fetchAllData = useCallback(async () => {
     setLoadingData(true);
     await Promise.all([
@@ -104,19 +70,12 @@ function App() {
   }, [fetchCollection]);
 
   useEffect(() => {
-    // useEffect runs after render.
-    // This effect loads data when the component first mounts (and whenever fetchAllData reference changes).
-    // Because fetchAllData is in the dependency array, this is safe + lint-friendly.
     fetchAllData();
   }, [fetchAllData]);
 
   useEffect(() => {
-    // This effect subscribes to browser-level custom events.
-    // Child components dispatch these events after successful creates.
-    // Event-driven refresh: forms dispatch custom events after successful creates.
-    const handleDataCreated = () => {
-      fetchAllData();
-    };
+    // Re-fetches all data when any form dispatches a create/update event.
+    const handleDataCreated = () => fetchAllData();
 
     window.addEventListener("company:created", handleDataCreated);
     window.addEventListener("location:created", handleDataCreated);
@@ -132,30 +91,19 @@ function App() {
     };
   }, [fetchAllData]);
 
+  // Toggles a window open/closed and clears its minimized state when closing.
   const toggleView = (key) => {
-    // Functional state update — pass a function instead of a value.
-    // React gives you the current state as the argument (called `prev` here).
-    // The spread syntax `...prev` copies all existing object keys into a new object.
-    // Then [key]: !prev[key] does two things:
-    //   [key]   – computed property name: uses the value of `key` as the property name
-    //   !prev[key] – flips true to false (and false to true)
-    setSelectedViews((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-    // Also clear minimized state when closing a window entirely.
-    // If you close a window that was minimized, it shouldn't show up again as minimized.
+    setSelectedViews((prev) => ({ ...prev, [key]: !prev[key] }));
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
   };
 
-  // Sends a window to the taskbar (minimize) or restores it (if already minimized).
+  // Toggles a window between minimized (taskbar) and restored.
   const toggleMinimize = (key) => {
     setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
     <div className="app-root">
-      {/* Fixed top header bar — sits above everything and sets the top boundary for draggable windows */}
       <header className="app-header">
         <span className="app-header-title">CannaDB</span>
       </header>
@@ -220,9 +168,6 @@ function App() {
         {activePage === "admin" && <AdminPanel />}
       </div>
 
-      {/* Floating windows — only rendered on the dashboard page and after data has loaded.
-           !loadingData means "loading is finished"
-           Both conditions must be true for these windows to appear. */}
       {!loadingData && activePage === "dashboard" && (
         <>
           {selectedViews.strains && (

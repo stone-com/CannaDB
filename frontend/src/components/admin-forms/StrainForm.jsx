@@ -1,21 +1,14 @@
 import { useState } from "react";
 
-// StrainForm creates a new strain record in the database.
-//
-// The `embedded` prop controls rendering:
-//   embedded={true}  → renders just the form, no wrapper (used inside AdminPanel)
-//   embedded={false} → renders a standalone card with a heading
+// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
+// `embedded={false}` renders a standalone card with a heading.
 function StrainForm({ embedded }) {
-  // All three fields bundled into one state object.
-  // When a field changes, we spread the existing values and overwrite just that one:
-  //   { ...form, name: newValue }
+  // All three fields in one state object.
   const [form, setForm] = useState({ name: "", type: "", status: "" });
-
-  // Feedback text shown after submission. Empty string = hidden.
   const [message, setMessage] = useState("");
 
-  async function handleSubmit(e) {
-    e.preventDefault(); // prevent page reload on submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setMessage("");
 
     try {
@@ -36,19 +29,18 @@ function StrainForm({ embedded }) {
 
       const savedStrain = await res.json();
 
-      // Fire a custom browser event so App.jsx re-fetches data.
-      // Any part of the app can listen for "strain:created" with window.addEventListener.
+      // Notify App.jsx to re-fetch strains.
       window.dispatchEvent(
         new CustomEvent("strain:created", { detail: savedStrain }),
       );
 
-      setForm({ name: "", type: "", status: "" }); // clear fields
+      setForm({ name: "", type: "", status: "" });
       setMessage("Strain added successfully.");
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
       setMessage("Error: " + err.message);
     }
-  }
+  };
 
   const formContent = (
     <>

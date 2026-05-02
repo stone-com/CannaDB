@@ -1,54 +1,26 @@
 import { Fragment, useMemo, useState } from "react";
 
-// Fragment is a React wrapper that lets you return multiple elements without
-// adding an extra DOM node like <div>. We import it here so we can use it with
-// a `key` prop in the table (the shorthand <></> doesn't support key).
-
-// formatDate is a helper function defined outside the component so it can be
-// reused anywhere in this file. It lives at the top so it's easy to find.
+// Formats a date value, returning "N/A" for nulls or invalid dates.
 const formatDate = (value) => {
-  if (!value) {
-    return "N/A";
-  }
-
+  if (!value) return "N/A";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "N/A";
-  }
-
+  if (Number.isNaN(date.getTime())) return "N/A";
   return date.toLocaleDateString();
 };
 
-// StrainDataViewer shows a table of all strains with aggregated plant counts
-// pulled from the rooms that have active batches assigned to them.
-// It receives `strains` and `rooms` as props from App.jsx.
+// Aggregates plant counts from active room batches, grouped by strain.
 function StrainDataViewer({ strains, rooms }) {
-  // expandedRows tracks which table rows are currently showing their detail section.
-  // It's an object used as a key-value store (a "lookup map"):
-  //   { "abc123": true }  → that strain's row is expanded
-  //   { "abc123": false } → collapsed (or not in the object yet → also collapsed)
-  // Using an object lets us look up any strain's expansion state by ID in O(1) time.
+  // Tracks which rows are expanded. { strainId: true } = expanded.
   const [expandedRows, setExpandedRows] = useState({});
 
-  // useMemo caches the result of this computation.
-  // It only re-runs when `strains` or `rooms` changes — not on every render.
-  // This matters because this is a fairly heavy operation (looping through rooms
-  // and plants to aggregate counts). We don't want to redo it unnecessarily.
+  // Builds one row per strain with total plant counts aggregated across all rooms.
   const strainRows = useMemo(() => {
-    if (!Array.isArray(strains)) {
-      return [];
-    }
+    if (!Array.isArray(strains)) return [];
 
-    // Map is a built-in JS data structure similar to an object, but designed
-    // for storing key-value pairs where both keys and values can be anything.
-    // We use it here as a lookup table: strainId → row data.
-    // It's faster than an array for "find by ID" operations.
+    // strainId → row data lookup map.
     const rowMap = new Map();
 
-    // Build one row entry per strain with default/empty metrics.
-    // forEach loops through every strain and calls the function once per item.
     strains.forEach((strain) => {
-      // rowMap.set(key, value) stores the value under that key.
       rowMap.set(strain._id, {
         strainId: strain._id,
         name: strain.name || "N/A",
@@ -62,36 +34,22 @@ function StrainDataViewer({ strains, rooms }) {
       });
     });
 
-    // Now loop through rooms and fill in the plant data from each room's batch.
+    // Fill in plant data from each room's active batch.
     if (Array.isArray(rooms)) {
       rooms.forEach((room) => {
-        // Optional chaining (?.) — safely access a property that might not exist.
-        // room?.name means: "if room exists, get room.name; if room is null/undefined,
-        // don't crash, just return undefined". The || "N/A" fallback handles that.
         const roomName = room?.name || "N/A";
-        // room?.locationId?.nickname chains two optional accesses:
-        // first safely access locationId, then safely access its nickname.
         const locationName = room?.locationId?.nickname || "N/A";
         const batch = room?.batchId;
 
-        // If this room has no batch (or the batch has no plants), skip it.
-        if (!batch || !Array.isArray(batch?.plants)) {
-          return; // `return` inside forEach acts like `continue` in a regular loop
-        }
+        if (!batch || !Array.isArray(batch?.plants)) return;
 
         batch.plants.forEach((plantEntry) => {
           const strainId = plantEntry?.strainId?._id;
+          if (!strainId || !rowMap.has(strainId)) return;
 
-          // Skip if the strain isn't in our strains list.
-          if (!strainId || !rowMap.has(strainId)) {
-            return;
-          }
-
-          // rowMap.get(key) retrieves the row data we created above.
           const row = rowMap.get(strainId);
           const plantCount = Number(plantEntry?.count) || 0;
 
-          // Add to the running total and push this room's data into the detail list.
           row.totalPlants += plantCount;
           row.plantsByRoom.push({
             roomName,
@@ -121,13 +79,9 @@ function StrainDataViewer({ strains, rooms }) {
       });
     }
 
-    // Array.from(rowMap.values()) converts the Map's values into a regular array.
-    // Then we chain .map() and .sort() on it:
-    //   .map() transforms each row object by adding the formatted nextHarvest string
-    //   .sort() alphabetizes by strain name using localeCompare (handles accents, etc.)
+    // Sort alphabetically and attach the formatted nextHarvest string.
     return Array.from(rowMap.values())
       .map((row) => ({
-        // ...row copies all existing properties into the new object
         ...row,
         nextHarvest: row.nextHarvestDate
           ? formatDate(row.nextHarvestDate)
@@ -136,16 +90,8 @@ function StrainDataViewer({ strains, rooms }) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [strains, rooms]);
 
-  // toggleExpandedRow flips the expansion state for one row.
-  // It uses a functional state update so it always works with the latest state.
   const toggleExpandedRow = (strainId) => {
-    setExpandedRows((prev) => ({
-      // ...prev copies all existing entries so we don't lose other expanded rows
-      ...prev,
-      // [strainId] is a computed property name — the variable's value becomes the key.
-      // !prev[strainId] flips true → false and false → true (undefined is also falsy).
-      [strainId]: !prev[strainId],
-    }));
+    setExpandedRows((prev) => ({ ...prev, [strainId]: !prev[strainId] }));
   };
 
   if (strainRows.length === 0) {
@@ -169,20 +115,15 @@ function StrainDataViewer({ strains, rooms }) {
             </tr>
           </thead>
           <tbody>
-            {/* strainRows.map() converts each row object into a pair of <tr> elements.
-               Fragment with a `key` prop lets React track the pair without adding a DOM node.
-               We can't use <></> shorthand here because it doesn't support the key prop. */}
             {strainRows.map((row) => (
               <Fragment key={row.strainId}>
                 <tr>
                   <td>
-                    {/* The expand/collapse button just flips a boolean in state */}
                     <button
                       type="button"
                       className="table-toggle-button"
                       onClick={() => toggleExpandedRow(row.strainId)}
                     >
-                      {/* Ternary: show minus when expanded, plus when collapsed */}
                       {expandedRows[row.strainId] ? "−" : "+"}
                     </button>
                   </td>

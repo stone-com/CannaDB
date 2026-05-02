@@ -1,18 +1,11 @@
 import { useEffect, useState } from "react";
 
-// LocationForm creates a new facility location linked to a company.
-// The `embedded` prop works the same as in CompanyForm:
-//   embedded={true}  → no wrapper div/heading (for accordion use)
-//   embedded={false} → standalone card with heading
+// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
+// `embedded={false}` renders a standalone card with a heading.
 function LocationForm({ embedded }) {
-  // companies holds the list of options for the Company dropdown.
-  // It starts empty and gets filled when the component loads.
   const [companies, setCompanies] = useState([]);
 
-  // formData holds all three form fields in one object instead of three separate states.
-  // This is a common pattern for forms with multiple fields — easier to pass around
-  // and reset all at once. Update one field at a time using the spread pattern:
-  // setFormData({ ...formData, nickname: newValue })
+  // All three fields in one state object.
   const [formData, setFormData] = useState({
     companyId: "",
     nickname: "",
@@ -20,15 +13,11 @@ function LocationForm({ embedded }) {
   });
   const [message, setMessage] = useState("");
 
-  // fetchCompanies is defined as its own function (not inline in useEffect) so it
-  // can be called from two places: on initial load, and whenever a new company is created.
-  // This avoids copy-pasting the same fetch logic twice.
+  // Can be called on load and whenever a company:created event fires.
   const fetchCompanies = async () => {
     try {
       const res = await fetch("/api/companies");
       const data = await res.json();
-      // Defensive check: only store the data if it's actually an array.
-      // If the server returned something unexpected, default to empty array.
       setCompanies(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -36,27 +25,13 @@ function LocationForm({ embedded }) {
   };
 
   useEffect(() => {
-    // useEffect runs after the component renders.
-    // The empty array [] as the second argument means:
-    // "run this effect once, when the component first appears on the page."
-    // If you put variables in the array, the effect would re-run when those change.
     fetchCompanies();
 
-    // Subscribe to a custom browser event fired by CompanyForm.
-    // When a new company is created, we refresh the dropdown so it appears immediately.
-    const handleCompanyCreated = () => {
-      fetchCompanies();
-    };
+    // Refresh the company dropdown when a new company is added.
+    const handleCompanyCreated = () => fetchCompanies();
     window.addEventListener("company:created", handleCompanyCreated);
-
-    // The return value of useEffect is a "cleanup function".
-    // React runs it when this component is removed from the page (unmounted).
-    // Removing the listener prevents memory leaks and phantom events.
-    // If we didn't clean up, old listeners would pile up every time this component
-    // is mounted and unmounted (like when navigating between pages).
-    return () => {
+    return () =>
       window.removeEventListener("company:created", handleCompanyCreated);
-    };
   }, []);
 
   const handleSubmit = async (e) => {
@@ -168,7 +143,6 @@ function LocationForm({ embedded }) {
               className="form-select"
               value={formData.companyId}
               onChange={(e) =>
-                // Spread keeps existing fields and updates only one key.
                 setFormData({ ...formData, companyId: e.target.value })
               }
               required

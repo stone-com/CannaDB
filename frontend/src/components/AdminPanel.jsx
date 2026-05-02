@@ -76,7 +76,6 @@ export default function AdminPanel() {
     );
   }
 
-  // ── Default view: grid of cards ───────────────────────────────────────────
   return (
     <div className="admin-panel">
       <h1>Admin Controls</h1>

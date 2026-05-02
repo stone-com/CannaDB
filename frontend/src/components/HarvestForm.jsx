@@ -1,25 +1,16 @@
 import { useEffect, useState } from "react";
 
-// High-level flow:
-// 1) Load batches + rooms
-// 2) User picks a batch and room
-// 3) User selects a strain and logs tote weights
-// 4) Submit sends one harvest payload to the backend
-// onComplete is a function passed down from the parent component (App).
-// After a successful save, we call it so the parent can close the window,
-// refresh parent data, and show any success UI.
 function HarvestForm({ onComplete }) {
   // Source data loaded from API for dropdowns.
   const [batches, setBatches] = useState([]);
   const [rooms, setRooms] = useState([]);
 
-  // User selections in the form.
+  // User selections.
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [selectedStrainId, setSelectedStrainId] = useState(null);
 
-  // Tote weights are stored by strain ID.
-  // Example: { "strain123": [2600, 2550], "strainABC": [3100] }
+  // Tote weights keyed by strain ID. Example: { "strain123": [2600, 2550] }
   const [totes, setTotes] = useState({});
   const [weightInput, setWeightInput] = useState("");
 
@@ -45,10 +36,10 @@ function HarvestForm({ onComplete }) {
     loadData();
   }, []);
 
-  // Only show batches that are not already connected to a harvest.
+  // Only show batches that don't have a harvest yet.
   const unharvestedBatches = batches.filter((b) => !b.harvestId);
 
-  // These are "derived" values (calculated from state), not separate stored state.
+  // Derived from state — not stored separately.
   const selectedBatch = batches.find((b) => b._id === selectedBatchId) || null;
   const selectedStrainPlant =
     selectedBatch?.plants.find((p) => p.strainId?._id === selectedStrainId) ||
@@ -58,7 +49,7 @@ function HarvestForm({ onComplete }) {
     ? selectedBatch.plants.reduce((sum, p) => sum + (p.count || 0), 0)
     : 0;
 
-  // Totes and total for the currently selected strain on the right panel.
+  // Totes and running total for the active strain.
   const activeTotes = selectedStrainId ? totes[selectedStrainId] || [] : [];
   const activeToteTotal = activeTotes.reduce((sum, w) => sum + w, 0);
 
@@ -71,16 +62,14 @@ function HarvestForm({ onComplete }) {
   };
 
   const handleStrainClick = (strainId) => {
-    // Changing strains resets the input box, but keeps previously entered totes.
     setSelectedStrainId(strainId);
     setWeightInput("");
   };
 
   const handleAddTote = () => {
     const weight = parseFloat(weightInput);
-    if (isNaN(weight) || weight <= 0) return;
+    if (Number.isNaN(weight) || weight <= 0) return;
 
-    // Add one tote weight to the currently selected strain.
     setTotes((prev) => ({
       ...prev,
       [selectedStrainId]: [...(prev[selectedStrainId] || []), weight],
@@ -89,7 +78,6 @@ function HarvestForm({ onComplete }) {
   };
 
   const handleRemoveTote = (strainId, index) => {
-    // Remove exactly one tote row by index.
     setTotes((prev) => ({
       ...prev,
       [strainId]: prev[strainId].filter((_, i) => i !== index),
@@ -103,7 +91,6 @@ function HarvestForm({ onComplete }) {
     }
 
     try {
-      // Convert UI state into the backend's nested harvest shape.
       const strainsPayload = (selectedBatch?.plants || []).map((plant) => ({
         strainId: plant.strainId?._id,
         plantCount: plant.count,
@@ -115,13 +102,11 @@ function HarvestForm({ onComplete }) {
       const room = rooms.find((r) => r._id === selectedRoomId);
       const locationId = room?.locationId?._id;
 
-      // We need locationId because the Harvest schema requires it.
       if (!locationId) {
         window.alert("Could not find location for selected room.");
         return;
       }
 
-      // Final object sent to POST /api/harvests.
       const payload = {
         batchId: selectedBatchId,
         locationId,
@@ -130,7 +115,6 @@ function HarvestForm({ onComplete }) {
         rooms: [{ roomId: selectedRoomId, strains: strainsPayload }],
       };
 
-      // Save harvest to backend.
       const res = await fetch("/api/harvests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -142,17 +126,14 @@ function HarvestForm({ onComplete }) {
         throw new Error(errorData.error || "Failed to create harvest");
       }
 
-      // Read response body (not used further here, but keeps flow explicit).
       await res.json();
 
-      // Reset form after save.
       setSelectedBatchId("");
       setSelectedRoomId("");
       setSelectedStrainId(null);
       setTotes({});
       setWeightInput("");
 
-      // Call the parent callback if it was provided.
       if (onComplete) {
         await onComplete();
       }
@@ -166,7 +147,6 @@ function HarvestForm({ onComplete }) {
       <div className="harvest-intake-left">
         <h3 className="harvest-intake-title">Harvest Intake Form</h3>
 
-        {/* Step 1: pick the batch */}
         <div className="form-field">
           <label className="form-label">Batch</label>
           <select
@@ -188,7 +168,6 @@ function HarvestForm({ onComplete }) {
           </select>
         </div>
 
-        {/* Step 2: pick the room where harvest happened */}
         <div className="form-field">
           <label className="form-label">Harvest Room</label>
           <select
@@ -205,7 +184,6 @@ function HarvestForm({ onComplete }) {
           </select>
         </div>
 
-        {/* Step 3: show all strains in that batch and choose one to log totes */}
         {selectedBatch && (
           <div className="harvest-strains-panel">
             <p className="harvest-strains-heading">
@@ -242,7 +220,6 @@ function HarvestForm({ onComplete }) {
           </div>
         )}
 
-        {/* Step 4: allow submit only when required selections are made */}
         {selectedBatchId && selectedRoomId && (
           <button
             type="button"
@@ -255,7 +232,6 @@ function HarvestForm({ onComplete }) {
       </div>
 
       <div className="harvest-intake-right">
-        {/* Right panel is interactive only after a strain is selected */}
         {selectedStrainPlant ? (
           <>
             <p className="harvest-active-strain">
