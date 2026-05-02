@@ -10,21 +10,47 @@ const formatDate = (value) => {
 
 // Shows a room dropdown and displays the plants in that room's active batch.
 function RoomViewer({ rooms, batches }) {
+  // Which location the user has selected. Empty string = nothing chosen yet.
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   // Which room the user has selected. Empty string = nothing chosen yet.
   const [selectedRoomId, setSelectedRoomId] = useState("");
+  const allRooms = Array.isArray(rooms) ? rooms : [];
 
-  // Rooms sorted alphabetically for the dropdown.
-  const sortedRooms = useMemo(() => {
-    if (!Array.isArray(rooms)) return [];
-    return [...rooms].sort((a, b) =>
-      (a.name || "").localeCompare(b.name || ""),
+  const sortedLocations = useMemo(() => {
+    const locations = allRooms
+      .map((room) => room?.locationId)
+      .filter((location) => location?._id)
+      .filter(
+        (location, index, arr) =>
+          arr.findIndex(
+            (candidate) => String(candidate._id) === String(location._id),
+          ) === index,
+      );
+
+    return locations.sort((a, b) =>
+      (a?.nickname || "").localeCompare(b?.nickname || ""),
     );
-  }, [rooms]);
+  }, [allRooms]);
+
+  // Rooms filtered by selected location, then sorted by room name.
+  const filteredRooms = useMemo(() => {
+    if (!selectedLocationId) return [];
+    return allRooms
+      .filter(
+        (room) => String(room.locationId?._id) === String(selectedLocationId),
+      )
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [allRooms, selectedLocationId]);
+
+  const handleLocationChange = (e) => {
+    setSelectedLocationId(e.target.value);
+    setSelectedRoomId("");
+  };
 
   // Full room object for the current selection.
   const selectedRoom = useMemo(
-    () => sortedRooms.find((r) => r._id === selectedRoomId),
-    [sortedRooms, selectedRoomId],
+    () => filteredRooms.find((r) => r._id === selectedRoomId),
+    [filteredRooms, selectedRoomId],
   );
 
   // The batch in the selected room (find which batch has this room in its rooms array).
@@ -65,6 +91,28 @@ function RoomViewer({ rooms, batches }) {
     <div className="room-viewer">
       {/* Room selector */}
       <div className="room-viewer-selector">
+        <label
+          htmlFor="room-viewer-location-select"
+          className="room-viewer-label"
+        >
+          Select Location
+        </label>
+        <select
+          id="room-viewer-location-select"
+          className="room-viewer-select"
+          value={selectedLocationId}
+          onChange={handleLocationChange}
+        >
+          <option value="">— Choose a location —</option>
+          {sortedLocations.map((location) => (
+            <option key={location._id} value={location._id}>
+              {location.nickname || "Unnamed Location"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="room-viewer-selector">
         <label htmlFor="room-viewer-select" className="room-viewer-label">
           Select Room
         </label>
@@ -72,15 +120,13 @@ function RoomViewer({ rooms, batches }) {
           id="room-viewer-select"
           className="room-viewer-select"
           value={selectedRoomId}
+          disabled={!selectedLocationId}
           onChange={(e) => setSelectedRoomId(e.target.value)}
         >
           <option value="">— Choose a room —</option>
-          {sortedRooms.map((room) => (
+          {filteredRooms.map((room) => (
             <option key={room._id} value={room._id}>
               {room.name}
-              {room.locationId?.nickname
-                ? ` · ${room.locationId.nickname}`
-                : ""}
               {room.type ? ` (${room.type})` : ""}
             </option>
           ))}
