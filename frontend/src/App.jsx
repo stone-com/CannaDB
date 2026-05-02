@@ -11,16 +11,20 @@ import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
+import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
 
 // In React, it's common to keep UI config in arrays/objects like this.
-// We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
-// This array drives the checkbox menu on the right side.
+// We map over these arrays to render checkboxes instead of hard-coding each one.
 // Each object has a unique `key` and a display label.
-const VIEW_OPTIONS = [
+const DATA_VIEWER_OPTIONS = [
   { key: "strains", label: "Strains" },
   { key: "harvestReport", label: "Harvest Report" },
+  { key: "roomViewer", label: "Room Viewer" },
+];
+
+const HARVEST_OPTIONS = [
   { key: "harvestForm", label: "Add Harvest" },
   { key: "dryWeightForm", label: "Add Dry Weights" },
 ];
@@ -53,6 +57,7 @@ function App() {
   const [selectedViews, setSelectedViews] = useState({
     strains: false,
     harvestReport: false,
+    roomViewer: false,
     harvestForm: false,
     dryWeightForm: false,
   });
@@ -63,6 +68,7 @@ function App() {
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
+    roomViewer: false,
     harvestForm: false,
     dryWeightForm: false,
   });
@@ -151,27 +157,48 @@ function App() {
     <div className="app-root">
       {/* Fixed top header bar — sits above everything and sets the top boundary for draggable windows */}
       <header className="app-header">
-        <span className="app-header-title">GrowDB</span>
+        <span className="app-header-title">CannaDB</span>
       </header>
 
       {/* Left sidebar — only visible on the dashboard page */}
       {activePage === "dashboard" && (
         <aside className="viewer-sidebar">
-          <h2 className="viewer-sidebar-title">Data Viewer</h2>
+          <h2 className="viewer-sidebar-title">Panels</h2>
           <p className="viewer-sidebar-hint">
             Open a panel as a floating window:
           </p>
-          <div className="viewer-options">
-            {VIEW_OPTIONS.map((option) => (
-              <label key={option.key} className="viewer-option">
-                <input
-                  type="checkbox"
-                  checked={selectedViews[option.key]}
-                  onChange={() => toggleView(option.key)}
-                />
-                {option.label}
-              </label>
-            ))}
+          <div className="viewer-sections">
+            <section className="viewer-section">
+              <h3 className="viewer-section-title">Data Viewer</h3>
+              <div className="viewer-options">
+                {DATA_VIEWER_OPTIONS.map((option) => (
+                  <label key={option.key} className="viewer-option">
+                    <input
+                      type="checkbox"
+                      checked={selectedViews[option.key]}
+                      onChange={() => toggleView(option.key)}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section className="viewer-section">
+              <h3 className="viewer-section-title">Harvest</h3>
+              <div className="viewer-options">
+                {HARVEST_OPTIONS.map((option) => (
+                  <label key={option.key} className="viewer-option">
+                    <input
+                      type="checkbox"
+                      checked={selectedViews[option.key]}
+                      onChange={() => toggleView(option.key)}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </section>
           </div>
         </aside>
       )}
@@ -224,6 +251,20 @@ function App() {
               defaultH={520}
             >
               <HarvestReportPage harvests={harvests} />
+            </DraggableWindow>
+          )}
+          {selectedViews.roomViewer && (
+            <DraggableWindow
+              title="Room Viewer"
+              onClose={() => toggleView("roomViewer")}
+              isMinimized={minimizedWindows.roomViewer}
+              onMinimize={() => toggleMinimize("roomViewer")}
+              defaultX={480}
+              defaultY={200}
+              defaultW={700}
+              defaultH={440}
+            >
+              <RoomViewer rooms={rooms} />
             </DraggableWindow>
           )}
           {selectedViews.harvestForm && (
@@ -291,6 +332,13 @@ function App() {
             visible: activePage === "dashboard" && selectedViews.harvestReport,
             minimized: minimizedWindows.harvestReport,
             onClick: () => toggleMinimize("harvestReport"),
+          },
+          {
+            key: "roomViewer",
+            label: "Room Viewer",
+            visible: activePage === "dashboard" && selectedViews.roomViewer,
+            minimized: minimizedWindows.roomViewer,
+            onClick: () => toggleMinimize("roomViewer"),
           },
           {
             key: "harvestForm",

@@ -31,8 +31,7 @@ function DryWeightForm({ harvests, onComplete }) {
   const harvestStrains = [];
   if (selectedHarvest && Array.isArray(selectedHarvest.rooms)) {
     selectedHarvest.rooms.forEach((roomEntry, roomIndex) => {
-      const roomName =
-        roomEntry?.roomId?.name || roomEntry?.roomId || "Unknown";
+      const roomName = roomEntry?.roomId?.name || "Unknown";
       const strains = Array.isArray(roomEntry?.strains)
         ? roomEntry.strains
         : [];
@@ -41,8 +40,7 @@ function DryWeightForm({ harvests, onComplete }) {
         harvestStrains.push({
           key: `${roomIndex}-${strainIndex}`,
           roomName,
-          strainName:
-            strainEntry?.strainId?.name || strainEntry?.strainId || "Unknown",
+          strainName: strainEntry?.strainId?.name || "Unknown",
           plantCount: strainEntry?.plantCount || 0,
         });
       });

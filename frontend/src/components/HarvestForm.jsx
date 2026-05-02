@@ -113,7 +113,7 @@ function HarvestForm({ onComplete }) {
       }));
 
       const room = rooms.find((r) => r._id === selectedRoomId);
-      const locationId = room?.locationId?._id || room?.locationId;
+      const locationId = room?.locationId?._id;
 
       // We need locationId because the Harvest schema requires it.
       if (!locationId) {

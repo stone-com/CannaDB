@@ -136,11 +136,8 @@ function HarvestReportPage({ harvests }) {
       // Optional chaining (?.) avoids crashes if roomEntry is null/undefined.
       const roomId = roomEntry?.roomId;
 
-      // roomId can be either populated object or raw string ID.
-      // `||` fallback chain: use first truthy value.
-      const roomName = roomId?.name || roomId || "N/A";
+      const roomName = roomId?.name || "N/A";
       const roomType = roomId?.type || "N/A";
-      // `??` nullish coalescing only falls back on null/undefined (not 0).
       const roomSqFoot = roomId?.sqFoot ?? "N/A";
       const roomSectionKey = `${selectedHarvest._id}-room-${roomIndex}`;
 
@@ -153,8 +150,7 @@ function HarvestReportPage({ harvests }) {
       const strainRows = strains.map((strainEntry, strainIndex) => {
         const strainId = strainEntry?.strainId;
 
-        // strainId can also be populated object or raw string ID.
-        const strainName = strainId?.name || strainId || "N/A";
+        const strainName = strainId?.name || "N/A";
 
         return {
           // React list keys must be unique + stable within the list.
@@ -194,11 +190,7 @@ function HarvestReportPage({ harvests }) {
     return roomSections.map((section) => section.roomName).join(", ");
   }, [roomSections]);
 
-  // locationId can be populated object or raw string ID, same pattern as room/strain refs.
-  const locationName =
-    selectedHarvest?.locationId?.nickname ||
-    selectedHarvest?.locationId ||
-    "N/A";
+  const locationName = selectedHarvest?.locationId?.nickname || "N/A";
 
   // Toggle function for expandable detail rows.
   // Functional update receives latest previous state (`prev`) safely.

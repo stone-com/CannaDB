@@ -77,6 +77,26 @@
   line-height: 1.4;
 }
 
+.viewer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.viewer-section {
+  border-top: 1px solid #2f2f2f;
+  padding-top: 0.75rem;
+}
+
+.viewer-section-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a0a0a0;
+}
+
 /* ── Dashboard page ── */
 .dashboard-page {
   padding: 2rem;
@@ -241,7 +261,7 @@
 
 .viewer-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: 1fr;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
@@ -733,4 +753,124 @@
   );
   border-bottom-right-radius: 8px;
   flex-shrink: 0;
+}
+
+/* ─────────────────────────────────────────────
+   Room Viewer
+───────────────────────────────────────────── */
+.room-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+}
+
+.room-viewer-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.room-viewer-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.room-viewer-select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  background: #1a1a1a;
+  border: 1px solid #555;
+  border-radius: 5px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.room-viewer-select:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+.room-viewer-empty {
+  color: #666;
+  font-size: 0.875rem;
+  font-style: italic;
+  margin: 0;
+}
+
+.room-viewer-no-batch {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.room-viewer-no-batch p {
+  margin: 0;
+}
+
+.room-viewer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Summary cards row */
+.room-viewer-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.room-viewer-meta-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+}
+
+.room-viewer-meta-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.room-viewer-meta-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+/* Plants table — reuses .harvest-table base styles */
+.room-viewer-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #444;
+}
+
+.room-viewer-table th,
+.room-viewer-table td {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #444;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.room-viewer-table th {
+  background: #1a1a1a;
+  color: #aaa;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
 }

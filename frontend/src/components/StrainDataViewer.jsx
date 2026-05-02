@@ -80,12 +80,8 @@ function StrainDataViewer({ strains, rooms }) {
         }
 
         batch.plants.forEach((plantEntry) => {
-          const strainRef = plantEntry?.strainId;
-          // strainRef might be a populated object or just a raw ID string.
-          // The ?. safely handles both cases.
-          const strainId = strainRef?._id || strainRef;
+          const strainId = plantEntry?.strainId?._id;
 
-          // rowMap.has(key) checks if we know about this strain.
           // Skip if the strain isn't in our strains list.
           if (!strainId || !rowMap.has(strainId)) {
             return;

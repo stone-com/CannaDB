@@ -36,6 +36,20 @@ const batchSchema = new mongoose.Schema({
       },
     },
   ],
+  location: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Location",
+    default: null,
+  },
+  // Array of room _ids this batch is currently in.
+  // Each entry is an ObjectId that references a Room document.
+  // Using an array because a batch can occupy multiple rooms at once.
+  rooms: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,
