@@ -2,6 +2,17 @@ const express = require("express");
 const router = express.Router();
 const Room = require("../models/Room");
 
+// Reusable populate config for all room queries.
+// The nested populate is required to hydrate rooms.plants.strainId inside a batch —
+// a flat path string like "batchId.rooms.plants.strainId" doesn't work for nested arrays.
+const ROOM_POPULATE = [
+  "locationId",
+  {
+    path: "batchId",
+    populate: { path: "rooms.plants.strainId" },
+  },
+];
+
 // Room CRUD endpoints.
 // Each handler returns JSON so the frontend can consume API responses directly.
 
@@ -25,11 +36,7 @@ router.post("/", async (req, res) => {
     });
 
     const savedRoom = await room.save();
-    const populatedRoom = await savedRoom.populate([
-      "locationId",
-      "batchId",
-      "batchId.plants.strainId",
-    ]);
+    const populatedRoom = await savedRoom.populate(ROOM_POPULATE);
     res.status(201).json(populatedRoom);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -39,11 +46,7 @@ router.post("/", async (req, res) => {
 // Return all rooms with location details.
 router.get("/", async (req, res) => {
   try {
-    const rooms = await Room.find().populate([
-      "locationId",
-      "batchId",
-      "batchId.plants.strainId",
-    ]);
+    const rooms = await Room.find().populate(ROOM_POPULATE);
     res.json(rooms);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -53,11 +56,7 @@ router.get("/", async (req, res) => {
 // Return one room by ID with location details.
 router.get("/:id", async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id).populate([
-      "locationId",
-      "batchId",
-      "batchId.plants.strainId",
-    ]);
+    const room = await Room.findById(req.params.id).populate(ROOM_POPULATE);
     if (!room) {
       return res.status(404).json({ error: "Room not found" });
     }
@@ -83,11 +82,7 @@ router.patch("/:id", async (req, res) => {
     if (batchId !== undefined) room.batchId = batchId;
 
     const updatedRoom = await room.save();
-    const populatedRoom = await updatedRoom.populate([
-      "locationId",
-      "batchId",
-      "batchId.plants.strainId",
-    ]);
+    const populatedRoom = await updatedRoom.populate(ROOM_POPULATE);
 
     res.json(populatedRoom);
   } catch (error) {

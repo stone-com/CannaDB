@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 
-function LocationForm() {
-  // Array state for dropdown options.
+// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
+// `embedded={false}` renders a standalone card with a heading.
+function LocationForm({ embedded }) {
   const [companies, setCompanies] = useState([]);
-  // Object state for form fields.
+
+  // All three fields in one state object.
   const [formData, setFormData] = useState({
     companyId: "",
     nickname: "",
@@ -11,8 +13,7 @@ function LocationForm() {
   });
   const [message, setMessage] = useState("");
 
-  // Helper function called from useEffect and from event listeners.
-  // Keeping it separate avoids duplicating fetch code.
+  // Can be called on load and whenever a company:created event fires.
   const fetchCompanies = async () => {
     try {
       const res = await fetch("/api/companies");
@@ -24,25 +25,16 @@ function LocationForm() {
   };
 
   useEffect(() => {
-    // Empty dependency array [] means this effect runs once after initial mount.
-    // Initial dropdown load on mount.
     fetchCompanies();
 
-    // Listen for custom event emitted by CompanyForm after successful create.
-    const handleCompanyCreated = () => {
-      fetchCompanies();
-    };
-
+    // Refresh the company dropdown when a new company is added.
+    const handleCompanyCreated = () => fetchCompanies();
     window.addEventListener("company:created", handleCompanyCreated);
-
-    return () => {
-      // Cleanup runs when component unmounts.
+    return () =>
       window.removeEventListener("company:created", handleCompanyCreated);
-    };
   }, []);
 
   const handleSubmit = async (e) => {
-    // Submit location form data to backend.
     e.preventDefault();
     setMessage("");
 
@@ -53,7 +45,8 @@ function LocationForm() {
         body: JSON.stringify({
           companyId: formData.companyId,
           nickname: formData.nickname,
-          // Convert empty string to null for optional backend field.
+          // `|| null` converts empty string to null for optional backend field.
+          // Many mongoose schemas distinguish between "not provided" (null) and "empty string".
           address: formData.address || null,
         }),
       });
@@ -79,6 +72,66 @@ function LocationForm() {
     }
   };
 
+  if (embedded) {
+    return (
+      <>
+        <form onSubmit={handleSubmit}>
+          <div className="form-field">
+            <label className="form-label">
+              Company (required):
+              <select
+                className="form-select"
+                value={formData.companyId}
+                onChange={(e) =>
+                  setFormData({ ...formData, companyId: e.target.value })
+                }
+                required
+              >
+                <option value="">-- Select Company --</option>
+                {companies.map((company) => (
+                  <option key={company._id} value={company._id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Nickname (required):
+              <input
+                className="form-input"
+                type="text"
+                value={formData.nickname}
+                onChange={(e) =>
+                  setFormData({ ...formData, nickname: e.target.value })
+                }
+                required
+              />
+            </label>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Address:
+              <input
+                className="form-input"
+                type="text"
+                value={formData.address}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
+              />
+            </label>
+          </div>
+          <button className="submit-button" type="submit">
+            Add Location
+          </button>
+        </form>
+        {message && <p className="status-message">{message}</p>}
+      </>
+    );
+  }
+
   return (
     <div className="form-container">
       <h2>Add Location</h2>
@@ -90,7 +143,6 @@ function LocationForm() {
               className="form-select"
               value={formData.companyId}
               onChange={(e) =>
-                // Spread keeps existing fields and updates only one key.
                 setFormData({ ...formData, companyId: e.target.value })
               }
               required

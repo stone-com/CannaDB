@@ -1,33 +1,23 @@
-import { Fragment, useMemo, useState } from "react";
+﻿import { Fragment, useMemo, useState } from "react";
 
-// Date helper used in the expandable Plants section.
-// We keep one formatter function so date output is consistent everywhere.
+// Formats a date value, returning "N/A" for nulls or invalid dates.
 const formatDate = (value) => {
-  if (!value) {
-    return "N/A";
-  }
-
+  if (!value) return "N/A";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "N/A";
-  }
-
+  if (Number.isNaN(date.getTime())) return "N/A";
   return date.toLocaleDateString();
 };
 
+// Aggregates plant counts from active room batches, grouped by strain.
 function StrainDataViewer({ strains, rooms }) {
-  // Tracks which strain rows are expanded in the table.
-  // Example: { "strainId1": true, "strainId2": false }
+  // Tracks which rows are expanded. { strainId: true } = expanded.
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Build derived table data from raw `strains` + room batch assignments.
-  // useMemo avoids recomputing this on every render unless inputs change.
+  // Builds one row per strain with total plant counts aggregated across all rooms.
   const strainRows = useMemo(() => {
-    if (!Array.isArray(strains)) {
-      return [];
-    }
+    if (!Array.isArray(strains)) return [];
 
-    // Initialize one row entry per strain, then fill metrics from room.batchId.
+    // strainId → row data lookup map.
     const rowMap = new Map();
 
     strains.forEach((strain) => {
@@ -37,7 +27,6 @@ function StrainDataViewer({ strains, rooms }) {
         type: strain.type || "N/A",
         status: strain.status || "N/A",
         totalPlants: 0,
-        // Not implemented yet in backend inventory system.
         totalDrying: "Coming Soon",
         totalInventory: "Coming Soon",
         nextHarvestDate: null,
@@ -45,25 +34,24 @@ function StrainDataViewer({ strains, rooms }) {
       });
     });
 
-    // Read room assignments and attach strain plant counts from each room's batch.
+    // Fill in plant data from each room's active batch.
     if (Array.isArray(rooms)) {
       rooms.forEach((room) => {
         const roomName = room?.name || "N/A";
         const locationName = room?.locationId?.nickname || "N/A";
         const batch = room?.batchId;
 
-        if (!batch || !Array.isArray(batch?.plants)) {
-          return;
-        }
+        if (!batch || !Array.isArray(batch?.rooms)) return;
 
-        batch.plants.forEach((plantEntry) => {
-          const strainRef = plantEntry?.strainId;
-          const strainId = strainRef?._id || strainRef;
+        // Find the entry in this batch's rooms that corresponds to the current room.
+        const roomEntry = batch.rooms.find(
+          (r) => String(r.roomId) === String(room._id),
+        );
+        if (!roomEntry || !Array.isArray(roomEntry.plants)) return;
 
-          // Skip unknown strains that are not in `/api/strains` list.
-          if (!strainId || !rowMap.has(strainId)) {
-            return;
-          }
+        roomEntry.plants.forEach((plantEntry) => {
+          const strainId = plantEntry?.strainId?._id;
+          if (!strainId || !rowMap.has(strainId)) return;
 
           const row = rowMap.get(strainId);
           const plantCount = Number(plantEntry?.count) || 0;
@@ -77,7 +65,7 @@ function StrainDataViewer({ strains, rooms }) {
             batchHarvestDate: batch?.harvestDate || null,
           });
 
-          // Track nearest upcoming batch harvest date for this strain.
+          // Track the nearest upcoming harvest date for this strain.
           const harvestDateValue = batch?.harvestDate
             ? new Date(batch.harvestDate)
             : null;
@@ -97,10 +85,10 @@ function StrainDataViewer({ strains, rooms }) {
       });
     }
 
+    // Sort alphabetically and attach the formatted nextHarvest string.
     return Array.from(rowMap.values())
       .map((row) => ({
         ...row,
-        // Keep placeholder text if no upcoming batch harvest date found yet.
         nextHarvest: row.nextHarvestDate
           ? formatDate(row.nextHarvestDate)
           : "N/A",
@@ -108,12 +96,8 @@ function StrainDataViewer({ strains, rooms }) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [strains, rooms]);
 
-  // Expand/collapse handler for each strain row.
   const toggleExpandedRow = (strainId) => {
-    setExpandedRows((prev) => ({
-      ...prev,
-      [strainId]: !prev[strainId],
-    }));
+    setExpandedRows((prev) => ({ ...prev, [strainId]: !prev[strainId] }));
   };
 
   if (strainRows.length === 0) {

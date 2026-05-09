@@ -1,78 +1,126 @@
 import { useEffect, useState } from "react";
 
-function HarvestForm() {
-  // State for dropdown source data.
+function HarvestForm({ onComplete }) {
+  // Source data loaded from API for dropdowns.
   const [batches, setBatches] = useState([]);
   const [rooms, setRooms] = useState([]);
-  // State for controlled form values.
-  const [formData, setFormData] = useState({
-    batchId: "",
-    roomId: "",
-    harvestDate: "",
-  });
-  const [message, setMessage] = useState("");
 
-  // Load related data required to build a valid harvest payload.
-  const fetchDependencies = async () => {
-    try {
-      // Promise.all runs both API requests in parallel.
-      const [batchRes, roomRes] = await Promise.all([
-        fetch("/api/batches"),
-        fetch("/api/rooms"),
-      ]);
+  // User selections.
+  const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [selectedStrainId, setSelectedStrainId] = useState(null);
 
-      // Then parse both JSON responses in parallel too.
-      const [batchData, roomData] = await Promise.all([
-        batchRes.json(),
-        roomRes.json(),
-      ]);
+  // Tote weights keyed by strain ID. Example: { "strain123": [2600, 2550] }
+  const [totes, setTotes] = useState({});
+  const [weightInput, setWeightInput] = useState("");
 
-      setBatches(Array.isArray(batchData) ? batchData : []);
-      setRooms(Array.isArray(roomData) ? roomData : []);
-    } catch (error) {
-      console.error("Error fetching harvest form data:", error);
-    }
-  };
-
+  // Load batches and rooms once when the form opens.
   useEffect(() => {
-    // Effect runs once on mount because dependency array is empty.
-    // Initial dropdown load.
-    fetchDependencies();
-
-    // Refresh harvest dependencies when related records are created.
-    const handleDependencyCreated = () => {
-      fetchDependencies();
+    const loadData = async () => {
+      try {
+        const [batchRes, roomRes] = await Promise.all([
+          fetch("/api/batches"),
+          fetch("/api/rooms"),
+        ]);
+        const [batchData, roomData] = await Promise.all([
+          batchRes.json(),
+          roomRes.json(),
+        ]);
+        setBatches(Array.isArray(batchData) ? batchData : []);
+        setRooms(Array.isArray(roomData) ? roomData : []);
+      } catch (error) {
+        console.error("Error fetching harvest form data:", error);
+      }
     };
 
-    window.addEventListener("room:created", handleDependencyCreated);
-    window.addEventListener("batch:created", handleDependencyCreated);
-
-    return () => {
-      // Cleanup event listeners when component unmounts.
-      window.removeEventListener("room:created", handleDependencyCreated);
-      window.removeEventListener("batch:created", handleDependencyCreated);
-    };
+    loadData();
   }, []);
 
-  const handleSubmit = async (e) => {
-    // Create a minimal harvest record (batch + optional room + optional date).
-    // rooms shape must match backend schema: [{ roomId, strains: [...] }]
-    e.preventDefault();
-    setMessage("");
+  // Only show batches that don't have a harvest yet.
+  const unharvestedBatches = batches.filter((b) => !b.harvestId);
+
+  // Derived from state — not stored separately.
+  const selectedBatch = batches.find((b) => b._id === selectedBatchId) || null;
+
+  // Plants scoped to the selected room. Falls back to all batch plants if no room chosen yet.
+  const selectedRoomEntry =
+    selectedBatch?.rooms?.find(
+      (r) => String(r.roomId) === String(selectedRoomId),
+    ) || null;
+  const activePlants =
+    selectedRoomEntry?.plants ??
+    (selectedBatch?.rooms ?? []).flatMap((r) => r.plants ?? []);
+
+  const selectedStrainPlant =
+    activePlants.find((p) => p.strainId?._id === selectedStrainId) || null;
+
+  const totalPlants = activePlants.reduce((sum, p) => sum + (p.count || 0), 0);
+
+  // Totes and running total for the active strain.
+  const activeTotes = selectedStrainId ? totes[selectedStrainId] || [] : [];
+  const activeToteTotal = activeTotes.reduce((sum, w) => sum + w, 0);
+
+  // When batch changes, clear strain/tote work from the previous batch.
+  const handleBatchChange = (e) => {
+    setSelectedBatchId(e.target.value);
+    setSelectedStrainId(null);
+    setTotes({});
+    setWeightInput("");
+  };
+
+  const handleStrainClick = (strainId) => {
+    setSelectedStrainId(strainId);
+    setWeightInput("");
+  };
+
+  const handleAddTote = () => {
+    const weight = parseFloat(weightInput);
+    if (Number.isNaN(weight) || weight <= 0) return;
+
+    setTotes((prev) => ({
+      ...prev,
+      [selectedStrainId]: [...(prev[selectedStrainId] || []), weight],
+    }));
+    setWeightInput("");
+  };
+
+  const handleRemoveTote = (strainId, index) => {
+    setTotes((prev) => ({
+      ...prev,
+      [strainId]: prev[strainId].filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedBatchId || !selectedRoomId) {
+      window.alert("Please select a batch and a room.");
+      return;
+    }
 
     try {
-      // Build request payload from form state.
-      const payload = {
-        batchId: formData.batchId,
-        rooms: formData.roomId
-          ? [{ roomId: formData.roomId, strains: [] }]
-          : [],
-      };
+      const strainsPayload = activePlants.map((plant) => ({
+        strainId: plant.strainId?._id,
+        plantCount: plant.count,
+        totes: (totes[plant.strainId?._id] || []).map((weight) => ({
+          wetWeight: weight,
+        })),
+      }));
 
-      if (formData.harvestDate) {
-        // Only include harvestDate when provided.
-        payload.harvestDate = formData.harvestDate;
+      const room = rooms.find((r) => r._id === selectedRoomId);
+      const locationId = room?.locationId?._id;
+
+      if (!locationId) {
+        window.alert("Could not find location for selected room.");
+        return;
       }
+
+      const payload = {
+        batchId: selectedBatchId,
+        locationId,
+        harvestNumber: `${selectedBatch?.batchNumber}-${Date.now()}`,
+        harvestDate: selectedBatch?.harvestDate || new Date().toISOString(),
+        rooms: [{ roomId: selectedRoomId, strains: strainsPayload }],
+      };
 
       const res = await fetch("/api/harvests", {
         method: "POST",
@@ -82,89 +130,176 @@ function HarvestForm() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to add harvest");
+        throw new Error(errorData.error || "Failed to create harvest");
       }
 
-      const savedHarvest = await res.json();
+      await res.json();
 
-      // Tell the parent/data-viewer to refresh.
-      window.dispatchEvent(
-        new CustomEvent("harvest:created", {
-          detail: savedHarvest,
-        }),
-      );
+      setSelectedBatchId("");
+      setSelectedRoomId("");
+      setSelectedStrainId(null);
+      setTotes({});
+      setWeightInput("");
 
-      setFormData({ batchId: "", roomId: "", harvestDate: "" });
-      setMessage("Harvest added successfully.");
+      if (onComplete) {
+        await onComplete();
+      }
     } catch (error) {
-      setMessage(`Error: ${error.message}`);
+      window.alert(`Error: ${error.message}`);
     }
   };
 
   return (
-    <div className="form-container">
-      <h2>Add Harvest</h2>
-      <form onSubmit={handleSubmit}>
+    <div className="harvest-intake-form">
+      <div className="harvest-intake-left">
+        <h3 className="harvest-intake-title">Harvest Intake Form</h3>
+
         <div className="form-field">
-          <label className="form-label">
-            Batch (required):
-            <select
-              className="form-select"
-              value={formData.batchId}
-              onChange={(e) =>
-                setFormData({ ...formData, batchId: e.target.value })
-              }
-              required
-            >
-              <option value="">-- Select Batch --</option>
-              {batches.map((batch) => (
+          <label className="form-label">Batch</label>
+          <select
+            className="form-select"
+            value={selectedBatchId}
+            onChange={handleBatchChange}
+          >
+            <option value="">-- Select Batch --</option>
+            {unharvestedBatches.map((batch) => {
+              const dateStr = batch.harvestDate
+                ? new Date(batch.harvestDate).toLocaleDateString()
+                : "No date set";
+              return (
                 <option key={batch._id} value={batch._id}>
-                  {batch.batchNumber}
+                  {batch.batchNumber} - {dateStr}
                 </option>
-              ))}
-            </select>
-          </label>
+              );
+            })}
+          </select>
         </div>
 
         <div className="form-field">
-          <label className="form-label">
-            Room:
-            <select
-              className="form-select"
-              value={formData.roomId}
-              onChange={(e) =>
-                setFormData({ ...formData, roomId: e.target.value })
-              }
-            >
-              <option value="">-- Optional Room --</option>
-              {rooms.map((room) => (
-                <option key={room._id} value={room._id}>
-                  {room.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <label className="form-label">Harvest Room</label>
+          <select
+            className="form-select"
+            value={selectedRoomId}
+            onChange={(e) => setSelectedRoomId(e.target.value)}
+          >
+            <option value="">-- Select Room --</option>
+            {rooms.map((room) => (
+              <option key={room._id} value={room._id}>
+                {room.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="form-field">
-          <label className="form-label">
-            Harvest Date:
-            <input
-              className="form-input"
-              type="date"
-              value={formData.harvestDate}
-              onChange={(e) =>
-                setFormData({ ...formData, harvestDate: e.target.value })
-              }
-            />
-          </label>
-        </div>
+        {selectedBatch && (
+          <div className="harvest-strains-panel">
+            <p className="harvest-strains-heading">
+              {selectedBatch.batchNumber} Strains
+            </p>
+            <div className="harvest-strains-list">
+              {activePlants.map((plant) => {
+                const strainId = plant.strainId?._id;
+                const strainName = plant.strainId?.name || "Unknown";
+                const toteCount = (totes[strainId] || []).length;
+                const isActive = selectedStrainId === strainId;
+                return (
+                  <button
+                    key={strainId}
+                    type="button"
+                    className={`harvest-strain-row${isActive ? " active" : ""}`}
+                    onClick={() => handleStrainClick(strainId)}
+                  >
+                    <span>
+                      {strainName} &mdash; {plant.count} Plants
+                    </span>
+                    {toteCount > 0 && (
+                      <span className="tote-badge">
+                        {toteCount} tote{toteCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="harvest-total-plants">
+              Total Plants to Harvest: <strong>{totalPlants}</strong>
+            </p>
+          </div>
+        )}
 
-        <button className="submit-button" type="submit">
-          Add Harvest
-        </button>
-      </form>
-      {message && <p className="status-message">{message}</p>}
+        {selectedBatchId && selectedRoomId && (
+          <button
+            type="button"
+            className="submit-button"
+            onClick={handleSubmit}
+          >
+            Submit Harvest
+          </button>
+        )}
+      </div>
+
+      <div className="harvest-intake-right">
+        {selectedStrainPlant ? (
+          <>
+            <p className="harvest-active-strain">
+              {selectedStrainPlant.strainId?.name} &mdash;{" "}
+              {selectedStrainPlant.count} Plants
+            </p>
+
+            <div className="form-field">
+              <label className="form-label">Enter Wet Weight (grams)</label>
+              <div className="harvest-tote-input-row">
+                <input
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  value={weightInput}
+                  onChange={(e) => setWeightInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddTote();
+                  }}
+                  placeholder="e.g. 2660"
+                />
+                <button
+                  type="button"
+                  className="submit-button"
+                  onClick={handleAddTote}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {activeTotes.length > 0 && (
+              <div className="harvest-totes-list">
+                {activeTotes.map((weight, i) => (
+                  <div key={i} className="harvest-tote-row">
+                    <span>
+                      Tote {i + 1}: {weight.toLocaleString()} g
+                    </span>
+                    <button
+                      type="button"
+                      className="tote-remove-btn"
+                      onClick={() => handleRemoveTote(selectedStrainId, i)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <p className="harvest-tote-total">
+                  Total: <strong>{activeToteTotal.toLocaleString()} g</strong>
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="harvest-intake-hint">
+            {selectedBatch
+              ? "Click a strain on the left to enter tote weights."
+              : "Select a batch to get started."}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

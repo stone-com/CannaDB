@@ -8,7 +8,7 @@ const Batch = require("../models/Batch");
 // Create a new batch
 router.post("/", async (req, res) => {
   try {
-    const { batchNumber, cloneDate, harvestDate, plants } = req.body;
+    const { batchNumber, cloneDate, harvestDate, location, rooms } = req.body;
 
     if (!batchNumber || !cloneDate) {
       return res
@@ -16,19 +16,23 @@ router.post("/", async (req, res) => {
         .json({ error: "batchNumber and cloneDate are required" });
     }
 
+    const clone = new Date(cloneDate);
+
     // Build a new batch document from the request body.
     const batch = new Batch({
       batchNumber,
       cloneDate,
       harvestDate: harvestDate || null,
-      plants: plants || [],
+      location: location || null,
+      rooms: rooms || [],
+      lifecycleStage: "Clone",
+      stageStartedAt: clone,
+      nextTransitionAt: new Date(clone.getTime() + 16 * 86400000),
     });
 
     const savedBatch = await batch.save();
     // Populate linked docs so frontend gets readable related data.
-    const populatedBatch = await savedBatch.populate([
-      "plants.strainId",
-    ]);
+    const populatedBatch = await savedBatch.populate("rooms.plants.strainId");
     res.status(201).json(populatedBatch);
   } catch (error) {
     if (error.code === 11000) {
@@ -42,9 +46,7 @@ router.post("/", async (req, res) => {
 // Return all batches with populated relations.
 router.get("/", async (req, res) => {
   try {
-    const batches = await Batch.find().populate([
-      "plants.strainId",
-    ]);
+    const batches = await Batch.find().populate("rooms.plants.strainId");
     res.json(batches);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -54,9 +56,9 @@ router.get("/", async (req, res) => {
 // Return one batch by ID with populated relations.
 router.get("/:id", async (req, res) => {
   try {
-    const batch = await Batch.findById(req.params.id).populate([
-      "plants.strainId",
-    ]);
+    const batch = await Batch.findById(req.params.id).populate(
+      "rooms.plants.strainId",
+    );
     if (!batch) {
       return res.status(404).json({ error: "Batch not found" });
     }

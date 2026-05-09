@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-// Constant arrays are useful for dropdown options that don't change.
+// Constant outside component — never changes, no need to recreate per render.
 const ROOM_TYPES = [
   "Flower",
   "Veg",
@@ -13,7 +13,10 @@ const ROOM_TYPES = [
   "Drying",
 ];
 
-function RoomForm() {
+// `section="add"` renders the create-room form.
+// `section="assign"` renders the batch assignment form.
+// `embedded={true}` skips the wrapper div/heading (for AdminPanel accordion use).
+function RoomForm({ embedded, section }) {
   // State for dropdown data and form values.
   const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -64,36 +67,23 @@ function RoomForm() {
     }
   };
 
-  // Date formatting helper for readable batch labels.
+  // Date formatting helper for batch labels.
   const formatDate = (value) => {
-    if (!value) {
-      return "N/A";
-    }
-
+    if (!value) return "N/A";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return "N/A";
-    }
-
+    if (Number.isNaN(date.getTime())) return "N/A";
     return date.toLocaleDateString();
   };
 
-  // Show active/upcoming batches first for assignment workflow.
-  // Active logic: harvest date is today or in the future.
+  // Filters out past-harvest batches and sorts by nearest harvest date.
   const selectableBatches = useMemo(() => {
     const now = new Date();
 
     return [...batches]
       .filter((batch) => {
-        if (!batch?.harvestDate) {
-          return true;
-        }
-
+        if (!batch?.harvestDate) return true;
         const harvestDate = new Date(batch.harvestDate);
-        if (Number.isNaN(harvestDate.getTime())) {
-          return true;
-        }
-
+        if (Number.isNaN(harvestDate.getTime())) return true;
         return harvestDate >= now;
       })
       .sort((a, b) => {
@@ -104,13 +94,10 @@ function RoomForm() {
   }, [batches]);
 
   useEffect(() => {
-    // Effect for initial load + event subscription.
-    // Initial location dropdown load.
     fetchLocations();
     fetchRooms();
     fetchBatches();
 
-    // Listen for location creation events to keep dropdown options current.
     const handleLocationCreated = () => {
       fetchLocations();
       fetchRooms();
@@ -134,7 +121,6 @@ function RoomForm() {
   }, []);
 
   const handleSubmit = async (e) => {
-    // Create a room record linked to a location by locationId.
     e.preventDefault();
     setMessage("");
 
@@ -146,7 +132,6 @@ function RoomForm() {
           locationId: formData.locationId,
           name: formData.name,
           type: formData.type,
-          // Convert string input to number before sending.
           sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
         }),
       });
@@ -158,7 +143,6 @@ function RoomForm() {
 
       const savedRoom = await res.json();
 
-      // Notify forms that depend on rooms (for example, HarvestForm).
       window.dispatchEvent(
         new CustomEvent("room:created", {
           detail: savedRoom,
@@ -183,7 +167,6 @@ function RoomForm() {
         throw new Error("Please select a room");
       }
 
-      // Empty string means "unassign" => send null.
       const payload = {
         batchId: assignmentData.batchId || null,
       };
@@ -201,7 +184,6 @@ function RoomForm() {
 
       const updatedRoom = await res.json();
 
-      // Reuse existing app-wide room refresh event.
       window.dispatchEvent(
         new CustomEvent("room:created", {
           detail: updatedRoom,
@@ -214,6 +196,153 @@ function RoomForm() {
       setAssignmentMessage(`Error: ${error.message}`);
     }
   };
+
+  if (embedded && section === "add") {
+    return (
+      <>
+        <form onSubmit={handleSubmit}>
+          <div className="form-field">
+            <label className="form-label">
+              Location (required):
+              <select
+                className="form-select"
+                value={formData.locationId}
+                onChange={(e) =>
+                  setFormData({ ...formData, locationId: e.target.value })
+                }
+                required
+              >
+                <option value="">-- Select Location --</option>
+                {locations.map((loc) => (
+                  <option key={loc._id} value={loc._id}>
+                    {loc.nickname}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Room Name (required):
+              <input
+                className="form-input"
+                type="text"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                required
+              />
+            </label>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Room Type (required):
+              <select
+                className="form-select"
+                value={formData.type}
+                onChange={(e) =>
+                  setFormData({ ...formData, type: e.target.value })
+                }
+                required
+              >
+                <option value="">-- Select Room Type --</option>
+                {ROOM_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Square Feet:
+              <input
+                className="form-input"
+                type="number"
+                min="0"
+                value={formData.sqFoot}
+                onChange={(e) =>
+                  setFormData({ ...formData, sqFoot: e.target.value })
+                }
+              />
+            </label>
+          </div>
+          <button className="submit-button" type="submit">
+            Add Room
+          </button>
+        </form>
+        {message && <p className="status-message">{message}</p>}
+      </>
+    );
+  }
+
+  if (embedded && section === "assign") {
+    return (
+      <>
+        <form onSubmit={handleAssignmentSubmit}>
+          <div className="form-field">
+            <label className="form-label">
+              Room (required):
+              <select
+                className="form-select"
+                value={assignmentData.roomId}
+                onChange={(e) =>
+                  setAssignmentData({
+                    ...assignmentData,
+                    roomId: e.target.value,
+                  })
+                }
+                required
+              >
+                <option value="">-- Select Room --</option>
+                {rooms.map((room) => (
+                  <option key={room._id} value={room._id}>
+                    {/* room.locationId?.nickname uses optional chaining (?.).
+                        The ?. means: "if locationId exists, access .nickname —
+                        if locationId is null or undefined, don't crash, just return undefined."
+                        The || fallback then kicks in and shows 'Unknown Location' instead. */}
+                    {room.locationId?.nickname || "Unknown Location"} -{" "}
+                    {room.name} ({room.type})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Batch:
+              <select
+                className="form-select"
+                value={assignmentData.batchId}
+                onChange={(e) =>
+                  setAssignmentData({
+                    ...assignmentData,
+                    batchId: e.target.value,
+                  })
+                }
+              >
+                <option value="">-- No Batch (Unassign) --</option>
+                {selectableBatches.map((batch) => (
+                  <option key={batch._id} value={batch._id}>
+                    {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
+                    Harvest: {formatDate(batch.harvestDate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button className="submit-button" type="submit">
+            Save Assignment
+          </button>
+        </form>
+        {assignmentMessage && (
+          <p className="status-message">{assignmentMessage}</p>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="form-container">

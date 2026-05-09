@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const Harvest = require("../models/Harvest");
+const Batch = require("../models/Batch");
+const Room = require("../models/Room");
 
 // Harvest CRUD endpoints.
 // Note: rooms + strains are nested in this schema, so populate uses nested paths.
@@ -24,6 +26,16 @@ router.post("/", async (req, res) => {
     });
 
     const savedHarvest = await harvest.save();
+
+    await Batch.findByIdAndUpdate(batchId, {
+      harvestId: savedHarvest._id,
+      lifecycleStage: "Drying",
+      stageStartedAt: new Date(),
+      nextTransitionAt: null,
+    });
+
+    await Room.updateMany({ batchId }, { $set: { batchId: null } });
+
     // Nested populate path syntax:
     // 'rooms.strains.strainId' means each room item -> each strain item -> strainId ref.
     const populatedHarvest = await savedHarvest.populate([
@@ -89,6 +101,13 @@ router.patch("/:id", async (req, res) => {
     if (harvestDate !== undefined) harvest.harvestDate = harvestDate;
 
     const updatedHarvest = await harvest.save();
+
+    await Batch.findByIdAndUpdate(harvest.batchId, {
+      lifecycleStage: "Completed",
+      stageStartedAt: new Date(),
+      nextTransitionAt: null,
+    });
+
     const populatedHarvest = await updatedHarvest.populate([
       "locationId",
       "batchId",

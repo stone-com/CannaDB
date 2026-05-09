@@ -21,21 +21,49 @@ const batchSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
-  // Nested array where each item stores one strain + plant count.
-  plants: [
+  location: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Location",
+    default: null,
+  },
+  // Each entry tracks one room this batch occupies plus the plants in that room.
+  // A batch can span multiple rooms (e.g. two flower rooms, a mom room, etc.).
+  rooms: [
     {
-      strainId: {
+      roomId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Strain",
+        ref: "Room",
         required: true,
       },
-      count: {
-        type: Number,
-        required: true,
-        default: 0,
-      },
+      plants: [
+        {
+          strainId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Strain",
+            required: true,
+          },
+          count: {
+            type: Number,
+            required: true,
+            default: 0,
+          },
+        },
+      ],
     },
   ],
+  lifecycleStage: {
+    type: String,
+    enum: ["Clone", "Veg", "Flower", "HarvestReady", "Drying", "Completed"],
+    default: "Clone",
+  },
+  stageStartedAt: {
+    type: Date,
+    default: null,
+  },
+  nextTransitionAt: {
+    type: Date,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
