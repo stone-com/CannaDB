@@ -153,6 +153,7 @@ function App() {
                 ))}
               </div>
             </section>
+      <BatchForm />
           </div>
         </aside>
       )}
@@ -266,7 +267,6 @@ function App() {
       {/* ── Taskbar — minimized windows appear here as tabs ────────────────────── */}
       {/* Each tab object has: key, label, visible (bool), and onClick.     */}
       {/* Taskbar renders nothing when all tabs are hidden.                  */}
-      <BatchForm />
       <Taskbar
         activePage={activePage}
         onNavigate={setActivePage}

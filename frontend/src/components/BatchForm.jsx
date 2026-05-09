@@ -9,6 +9,10 @@ function BatchForm() {
  const [count, setCount] = useState("");
  const [plants, setPlants] = useState([]);
   const [strains, setStrains] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [selectedRoom, setSelectedRoom] = useState("");
+  const [batchRooms, setBatchRooms] = useState([]);
+
   useEffect(() => {
     async function fetchStrains() {
       try {
@@ -18,9 +22,26 @@ function BatchForm() {
       } catch (error) {
         console.error("Error fetching strains:", error);
       }}
+      async function fetchRooms() {
+        try {
+          const response = await fetch("/api/rooms");
+          const data = await response.json();
+          setRooms(data);
+        } catch (error) {
+          console.error("Error fetching rooms:", error);
+        }
+      }
+      fetchRooms();
      fetchStrains();
   }, []);
-
+  function addRoom() {
+  if (!selectedRoom) return;
+  const nextBatchRooms = [...batchRooms, { roomId: selectedRoom, plants }];
+  setBatchRooms(nextBatchRooms);
+  setSelectedRoom("");
+  setPlants([]);
+  console.log("batchRooms after addRoom:", nextBatchRooms);
+}
 function addPlant() {
   if (!selectedStrain || !count) return;
   setPlants([...plants, { strainId: selectedStrain, count: Number(count) }]);
@@ -30,7 +51,7 @@ function addPlant() {
 
 async function handleSubmit(e) {
   e.preventDefault();
-  if (!batchNumber || !cloneDate || plants.length === 0) {
+  if (!batchNumber || !cloneDate || batchRooms.length === 0) {
     alert("Please complete all required fields.");
     return;
   }
@@ -38,7 +59,7 @@ async function handleSubmit(e) {
     batchNumber,
     harvestDate,
     cloneDate,
-    plants,
+    rooms: batchRooms,
   };
   try {
     const response = await fetch("/api/batches", {
@@ -55,6 +76,7 @@ async function handleSubmit(e) {
   setBatchNumber("");
     setHarvestDate("");
     setCloneDate("");
+    setSelectedRoom("");
     setSelectedStrain("");
     setCount("");
     setPlants([]);
@@ -98,8 +120,21 @@ async function handleSubmit(e) {
           value={harvestDate}
           onChange={(e) => setHarvestDate(e.target.value)}
         />
-     
-<hr />
+
+<label className="form-label" htmlFor ="selectedRoom">Room:</label>
+<select
+  id="selectedRoom"
+  value={selectedRoom}
+  onChange={(e) => setSelectedRoom(e.target.value)}
+>
+  <option value="" placeholder="Select a room"></option>
+  {rooms.map((room) => (
+    <option key={room._id} value={room._id}>
+      {room.name}
+    </option>
+  ))}
+</select>
+
 <label className="form-label" htmlFor ="selectedStrain">Strain:</label>
 <select
   id="selectedStrain"
@@ -134,9 +169,13 @@ async function handleSubmit(e) {
 </p>
 
 {plants.length === 0 && <p>Selected Plants</p>}
-
-<ul>
-  {plants.map((p, i) => {
+{batchRooms.map((room, idx) => {
+  const roomInfo = rooms.find(r => r._id === room.roomId);
+  return (
+    <div key={idx}>
+      <h4>{roomInfo ? roomInfo.name : "Unknown Room"}</h4>
+      <ul>
+  {room.plants.map((p, i) => {
     const strain = strains.find(s => s._id === p.strainId);
     return (
       <li key={i}>
@@ -152,7 +191,30 @@ async function handleSubmit(e) {
     );
   })}
 </ul>
+</div>
+)})}
 
+
+{/* <ul>
+  {plants.map((p, i) => {
+    const strain = strains.find(s => s._id === p.strainId);
+    return (
+      <li key={i}>
+        {strain ? strain.name : "Unknown Strain"} — {p.count}
+      <button
+          type="button"
+          onClick={() => {
+            setPlants(plants.filter((_, idx) => idx !== i));
+          }}
+        >X
+        </button>
+      </li>
+    );
+  })}
+</ul> */}
+<button type="button" onClick={addRoom}>
+  Add to Room
+</button>
 <button type="submit" onClick={handleSubmit}>
   Submit Batch
 </button>
