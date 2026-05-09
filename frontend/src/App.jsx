@@ -8,7 +8,11 @@ import StrainDataViewer from "./components/StrainDataViewer";
 import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
-
+import BatchForm from "./components/BatchForm";
+// In React, it's common to keep UI config in arrays/objects like this.
+// We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
+// This array drives the checkbox menu on the right side.
+// Each object has a unique `key` and a display label.
 // Sidebar panel options mapped to checkboxes.
 const DATA_VIEWER_OPTIONS = [
   { key: "strains", label: "Strains" },
@@ -259,10 +263,10 @@ function App() {
         </>
       )}
 
-      {/* Taskbar is always shown, regardless of page.
-           We pass it the current page + a navigate function so it can switch pages.
-           tabs is an array of objects built right here — each object describes one
-           window tab including whether it's visible and whether it's minimized. */}
+      {/* ── Taskbar — minimized windows appear here as tabs ────────────────────── */}
+      {/* Each tab object has: key, label, visible (bool), and onClick.     */}
+      {/* Taskbar renders nothing when all tabs are hidden.                  */}
+      <BatchForm />
       <Taskbar
         activePage={activePage}
         onNavigate={setActivePage}
