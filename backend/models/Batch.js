@@ -1,13 +1,13 @@
 const mongoose = require("mongoose");
 
-// Batch = one production unit tracked over time.
+// A batch is one tracked plant group over time.
 const batchSchema = new mongoose.Schema({
   batchNumber: {
     type: String,
     required: true,
     unique: true,
   },
-  // Optional link to a Harvest document once the batch is harvested.
+  // Set after harvest is created.
   harvestId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Harvest",
@@ -21,13 +21,18 @@ const batchSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  batchType: {
+    type: String,
+    enum: ["production", "mom"],
+    default: "production",
+  },
   location: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Location",
     default: null,
   },
-  // Each entry tracks one room this batch occupies plus the plants in that room.
-  // A batch can span multiple rooms (e.g. two flower rooms, a mom room, etc.).
+  // Planned plants per room.
+  // Current live occupancy is stored in RoomAssignment.
   rooms: [
     {
       roomId: {
@@ -46,6 +51,7 @@ const batchSchema = new mongoose.Schema({
             type: Number,
             required: true,
             default: 0,
+            min: 0,
           },
         },
       ],
@@ -53,14 +59,18 @@ const batchSchema = new mongoose.Schema({
   ],
   lifecycleStage: {
     type: String,
-    enum: ["Clone", "Veg", "Flower", "HarvestReady", "Drying", "Completed"],
+    enum: [
+      "Clone",
+      "Veg",
+      "Flower",
+      "Mom",
+      "HarvestReady",
+      "Drying",
+      "Completed",
+    ],
     default: "Clone",
   },
   stageStartedAt: {
-    type: Date,
-    default: null,
-  },
-  nextTransitionAt: {
     type: Date,
     default: null,
   },
@@ -69,5 +79,8 @@ const batchSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+batchSchema.index({ lifecycleStage: 1, batchType: 1, harvestDate: 1 });
+batchSchema.index({ location: 1, lifecycleStage: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Batch", batchSchema);

@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 
-// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
-// `embedded={false}` renders a standalone card with a heading.
+// `embedded` decides inline form vs standalone card view.
 function LocationForm({ embedded }) {
   const [companies, setCompanies] = useState([]);
 
-  // All three fields in one state object.
+  // Form values.
   const [formData, setFormData] = useState({
     companyId: "",
     nickname: "",
@@ -13,7 +12,7 @@ function LocationForm({ embedded }) {
   });
   const [message, setMessage] = useState("");
 
-  // Can be called on load and whenever a company:created event fires.
+  // Load company options.
   const fetchCompanies = async () => {
     try {
       const res = await fetch("/api/companies");
@@ -27,7 +26,7 @@ function LocationForm({ embedded }) {
   useEffect(() => {
     fetchCompanies();
 
-    // Refresh the company dropdown when a new company is added.
+    // Refresh when a company is created.
     const handleCompanyCreated = () => fetchCompanies();
     window.addEventListener("company:created", handleCompanyCreated);
     return () =>
@@ -45,8 +44,7 @@ function LocationForm({ embedded }) {
         body: JSON.stringify({
           companyId: formData.companyId,
           nickname: formData.nickname,
-          // `|| null` converts empty string to null for optional backend field.
-          // Many mongoose schemas distinguish between "not provided" (null) and "empty string".
+          // Send null for optional empty address.
           address: formData.address || null,
         }),
       });
@@ -58,7 +56,7 @@ function LocationForm({ embedded }) {
 
       const savedLocation = await res.json();
 
-      // Notify other forms (like RoomForm) to refresh locations.
+      // Let other forms refresh location data.
       window.dispatchEvent(
         new CustomEvent("location:created", {
           detail: savedLocation,

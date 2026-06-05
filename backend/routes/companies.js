@@ -1,12 +1,10 @@
 const express = require("express");
-// express.Router() creates a mini-router for this feature.
 const router = express.Router();
 const Company = require("../models/Company");
 
-// Company CRUD endpoints.
-// Each handler is async so we can await database calls.
+// Company create/read endpoints.
 
-// Create a new company
+// Create company.
 router.post("/", async (req, res) => {
   try {
     const { name } = req.body;
@@ -15,14 +13,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Company name is required" });
     }
 
-    // Create a Mongoose document instance from request data.
     const company = new Company({ name });
-
-    // .save() writes the document to MongoDB.
     const savedCompany = await company.save();
     res.status(201).json(savedCompany);
   } catch (error) {
-    // Mongo duplicate-key error code.
     if (error.code === 11000) {
       res.status(400).json({ error: "Company name must be unique" });
     } else {
@@ -31,7 +25,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Return all companies.
+// List companies.
 router.get("/", async (req, res) => {
   try {
     const companies = await Company.find();
@@ -41,7 +35,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Return one company by ID.
+// Get one company.
 router.get("/:id", async (req, res) => {
   try {
     const company = await Company.findById(req.params.id);

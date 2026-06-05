@@ -1,26 +1,48 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 function DryWeightForm({ harvests, onComplete }) {
-  // Selected harvest ID and currently highlighted strain key.
-  const [selectedHarvestId, setSelectedHarvestId] = useState("");
+  // Current selected batch/strain row.
+  const [selectedBatchId, setSelectedBatchId] = useState("");
   const [selectedStrainKey, setSelectedStrainKey] = useState(null);
-  // Current dry weight input and the committed values map.
+  // Input value and saved dry weights.
   const [dryWeightInput, setDryWeightInput] = useState("");
   const [dryWeightsByKey, setDryWeightsByKey] = useState({});
 
-  // Sort newest-first.
-  const sortedHarvests = Array.isArray(harvests)
-    ? [...harvests].sort(
-        (a, b) => new Date(b.harvestDate) - new Date(a.harvestDate),
-      )
-    : [];
+  const sortedHarvests = useMemo(
+    () =>
+      Array.isArray(harvests)
+        ? [...harvests].sort(
+            (a, b) => new Date(b.harvestDate) - new Date(a.harvestDate),
+          )
+        : [],
+    [harvests],
+  );
 
-  const selectedHarvest =
-    sortedHarvests.find((harvest) => harvest._id === selectedHarvestId) || null;
+  const batchesForSelection = useMemo(
+    () =>
+      sortedHarvests.map((harvest) => ({
+        batchId: harvest?.batchId?._id || "",
+        batchNumber: harvest?.batchId?.batchNumber || "Unknown Batch",
+        harvest,
+      })),
+    [sortedHarvests],
+  );
 
-  // Flatten all room/strain entries into a key-indexed list for the picker.
-  const harvestStrains = [];
-  if (selectedHarvest && Array.isArray(selectedHarvest.rooms)) {
+  const selectedHarvest = useMemo(
+    () =>
+      batchesForSelection.find(
+        (entry) => String(entry.batchId) === String(selectedBatchId),
+      )?.harvest || null,
+    [batchesForSelection, selectedBatchId],
+  );
+
+  const harvestStrains = useMemo(() => {
+    if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) {
+      return [];
+    }
+
+    const rows = [];
+
     selectedHarvest.rooms.forEach((roomEntry, roomIndex) => {
       const roomName = roomEntry?.roomId?.name || "Unknown";
       const strains = Array.isArray(roomEntry?.strains)
@@ -28,7 +50,7 @@ function DryWeightForm({ harvests, onComplete }) {
         : [];
 
       strains.forEach((strainEntry, strainIndex) => {
-        harvestStrains.push({
+        rows.push({
           key: `${roomIndex}-${strainIndex}`,
           roomName,
           strainName: strainEntry?.strainId?.name || "Unknown",
@@ -36,14 +58,19 @@ function DryWeightForm({ harvests, onComplete }) {
         });
       });
     });
-  }
 
-  const selectedStrain =
-    harvestStrains.find((entry) => entry.key === selectedStrainKey) || null;
+    return rows;
+  }, [selectedHarvest]);
 
-  // Resets all sub-state when a new harvest is chosen.
-  const handleHarvestChange = (e) => {
-    setSelectedHarvestId(e.target.value);
+  const selectedStrain = useMemo(
+    () =>
+      harvestStrains.find((entry) => entry.key === selectedStrainKey) || null,
+    [harvestStrains, selectedStrainKey],
+  );
+
+  // Reset form state when batch changes.
+  const handleBatchChange = (e) => {
+    setSelectedBatchId(e.target.value);
     setSelectedStrainKey(null);
     setDryWeightInput("");
     setDryWeightsByKey({});
@@ -69,7 +96,7 @@ function DryWeightForm({ harvests, onComplete }) {
     }));
   };
 
-  // PATCHes the harvest with updated dry weights for every strain.
+  // Save dry weights back to the harvest.
   const handleSubmit = async () => {
     if (!selectedHarvest) {
       window.alert("Please select a harvest.");
@@ -102,7 +129,10 @@ function DryWeightForm({ harvests, onComplete }) {
       const res = await fetch(`/api/harvests/${selectedHarvest._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rooms: updatedRooms }),
+        body: JSON.stringify({
+          rooms: updatedRooms,
+          finalizeDryWeights: true,
+        }),
       });
 
       if (!res.ok) {
@@ -120,9 +150,10 @@ function DryWeightForm({ harvests, onComplete }) {
     }
   };
 
-  const activeDryWeight = selectedStrain
-    ? dryWeightsByKey[selectedStrain.key]
-    : undefined;
+  const activeDryWeight = useMemo(
+    () => (selectedStrain ? dryWeightsByKey[selectedStrain.key] : undefined),
+    [dryWeightsByKey, selectedStrain],
+  );
 
   return (
     <div className="harvest-intake-form">
@@ -130,14 +161,14 @@ function DryWeightForm({ harvests, onComplete }) {
         <h3 className="harvest-intake-title">Dry Weight Entry</h3>
 
         <div className="form-field">
-          <label className="form-label">Harvest</label>
+          <label className="form-label">Batch</label>
           <select
             className="form-select"
-            value={selectedHarvestId}
-            onChange={handleHarvestChange}
+            value={selectedBatchId}
+            onChange={handleBatchChange}
           >
-            <option value="">-- Select Harvest --</option>
-            {sortedHarvests.map((harvest) => {
+            <option value="">-- Select Batch --</option>
+            {batchesForSelection.map(({ batchId, batchNumber, harvest }) => {
               const date = new Date(harvest?.harvestDate);
               const dateText = Number.isNaN(date.getTime())
                 ? "N/A"
@@ -149,10 +180,10 @@ function DryWeightForm({ harvests, onComplete }) {
                 .map((roomEntry) => roomEntry?.roomId?.name)
                 .filter(Boolean)
                 .join(", ");
-              const label = `${dateText} - ${harvestNumberText} - ${locationText} - ${roomNames || "No Rooms"}`;
+              const label = `${batchNumber} - ${dateText} - ${harvestNumberText} - ${locationText} - ${roomNames || "No Rooms"}`;
 
               return (
-                <option key={harvest._id} value={harvest._id}>
+                <option key={harvest._id} value={batchId}>
                   {label}
                 </option>
               );
@@ -193,7 +224,7 @@ function DryWeightForm({ harvests, onComplete }) {
           </div>
         )}
 
-        {selectedHarvestId && (
+        {selectedBatchId && (
           <button
             type="button"
             className="submit-button"
@@ -252,7 +283,7 @@ function DryWeightForm({ harvests, onComplete }) {
           <p className="harvest-intake-hint">
             {selectedHarvest
               ? "Click a strain on the left to enter dry weight."
-              : "Select a harvest to get started."}
+              : "Select a batch to get started."}
           </p>
         )}
       </div>

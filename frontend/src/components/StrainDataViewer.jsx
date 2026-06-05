@@ -1,23 +1,16 @@
 ﻿import { Fragment, useMemo, useState } from "react";
+import { formatDate } from "../utils/formatDate";
 
-// Formats a date value, returning "N/A" for nulls or invalid dates.
-const formatDate = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return date.toLocaleDateString();
-};
-
-// Aggregates plant counts from active room batches, grouped by strain.
-function StrainDataViewer({ strains, rooms }) {
-  // Tracks which rows are expanded. { strainId: true } = expanded.
+// Show strain totals and yield metrics.
+function StrainDataViewer({ strains, roomAssignments, harvests }) {
+  // Expanded table rows by strain ID.
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Builds one row per strain with total plant counts aggregated across all rooms.
+  // Build one summary row per strain.
   const strainRows = useMemo(() => {
     if (!Array.isArray(strains)) return [];
 
-    // strainId → row data lookup map.
+    // Map by strain ID.
     const rowMap = new Map();
 
     strains.forEach((strain) => {
@@ -27,30 +20,30 @@ function StrainDataViewer({ strains, rooms }) {
         type: strain.type || "N/A",
         status: strain.status || "N/A",
         totalPlants: 0,
-        totalDrying: "Coming Soon",
-        totalInventory: "Coming Soon",
+        totalWetWeightGrams: 0,
+        totalDryWeightGrams: 0,
+        totalHarvestPlantCount: 0,
         nextHarvestDate: null,
         plantsByRoom: [],
       });
     });
 
-    // Fill in plant data from each room's active batch.
-    if (Array.isArray(rooms)) {
-      rooms.forEach((room) => {
+    if (Array.isArray(roomAssignments)) {
+      roomAssignments.forEach((assignment) => {
+        const room = assignment?.roomId;
+        const batch = assignment?.batchId;
         const roomName = room?.name || "N/A";
         const locationName = room?.locationId?.nickname || "N/A";
-        const batch = room?.batchId;
+        const assignedPlants = Array.isArray(assignment?.assignedPlants)
+          ? assignment.assignedPlants
+          : [];
 
-        if (!batch || !Array.isArray(batch?.rooms)) return;
+        if (!room || !batch || assignedPlants.length === 0) return;
 
-        // Find the entry in this batch's rooms that corresponds to the current room.
-        const roomEntry = batch.rooms.find(
-          (r) => String(r.roomId) === String(room._id),
-        );
-        if (!roomEntry || !Array.isArray(roomEntry.plants)) return;
-
-        roomEntry.plants.forEach((plantEntry) => {
-          const strainId = plantEntry?.strainId?._id;
+        assignedPlants.forEach((plantEntry) => {
+          const strainId = String(
+            plantEntry?.strainId?._id || plantEntry?.strainId || "",
+          );
           if (!strainId || !rowMap.has(strainId)) return;
 
           const row = rowMap.get(strainId);
@@ -62,10 +55,10 @@ function StrainDataViewer({ strains, rooms }) {
             locationName,
             plantCount,
             batchNumber: batch?.batchNumber || "N/A",
+            batchType: batch?.batchType || "production",
             batchHarvestDate: batch?.harvestDate || null,
           });
 
-          // Track the nearest upcoming harvest date for this strain.
           const harvestDateValue = batch?.harvestDate
             ? new Date(batch.harvestDate)
             : null;
@@ -85,16 +78,54 @@ function StrainDataViewer({ strains, rooms }) {
       });
     }
 
-    // Sort alphabetically and attach the formatted nextHarvest string.
+    if (Array.isArray(harvests)) {
+      harvests.forEach((harvest) => {
+        const rooms = Array.isArray(harvest?.rooms) ? harvest.rooms : [];
+
+        rooms.forEach((roomEntry) => {
+          const strainsInRoom = Array.isArray(roomEntry?.strains)
+            ? roomEntry.strains
+            : [];
+
+          strainsInRoom.forEach((strainEntry) => {
+            const strainId = String(
+              strainEntry?.strainId?._id || strainEntry?.strainId || "",
+            );
+            if (!strainId || !rowMap.has(strainId)) return;
+
+            const row = rowMap.get(strainId);
+            row.totalWetWeightGrams +=
+              Number(strainEntry?.totalWetWeightGrams) || 0;
+            row.totalDryWeightGrams +=
+              Number(strainEntry?.totalDryWeightGrams) || 0;
+            row.totalHarvestPlantCount += Number(strainEntry?.plantCount) || 0;
+          });
+        });
+      });
+    }
+
+    // Add calculated display fields and sort.
     return Array.from(rowMap.values())
       .map((row) => ({
         ...row,
+        avgDryWeightPerPlant:
+          row.totalHarvestPlantCount > 0
+            ? (row.totalDryWeightGrams / row.totalHarvestPlantCount).toFixed(2)
+            : "N/A",
+        wetToDryPercentChange:
+          row.totalWetWeightGrams > 0
+            ? (
+                ((row.totalWetWeightGrams - row.totalDryWeightGrams) /
+                  row.totalWetWeightGrams) *
+                100
+              ).toFixed(2)
+            : "N/A",
         nextHarvest: row.nextHarvestDate
           ? formatDate(row.nextHarvestDate)
           : "N/A",
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [strains, rooms]);
+  }, [strains, roomAssignments, harvests]);
 
   const toggleExpandedRow = (strainId) => {
     setExpandedRows((prev) => ({ ...prev, [strainId]: !prev[strainId] }));
@@ -115,8 +146,8 @@ function StrainDataViewer({ strains, rooms }) {
               <th>Type</th>
               <th>Status</th>
               <th>Total Plants</th>
-              <th>Total Drying</th>
-              <th>Total Inventory</th>
+              <th>Avg Dry (g/plant)</th>
+              <th>Wet→Dry Change (%)</th>
               <th>Next Harvest</th>
             </tr>
           </thead>
@@ -137,8 +168,12 @@ function StrainDataViewer({ strains, rooms }) {
                   <td>{row.type}</td>
                   <td>{row.status}</td>
                   <td>{row.totalPlants}</td>
-                  <td>{row.totalDrying}</td>
-                  <td>{row.totalInventory}</td>
+                  <td>{row.avgDryWeightPerPlant}</td>
+                  <td>
+                    {row.wetToDryPercentChange === "N/A"
+                      ? "N/A"
+                      : `${row.wetToDryPercentChange}%`}
+                  </td>
                   <td>{row.nextHarvest}</td>
                 </tr>
 
@@ -183,11 +218,19 @@ function StrainDataViewer({ strains, rooms }) {
                         </div>
 
                         <div className="strain-expand-section">
-                          <h4>Inventory</h4>
+                          <h4>Yield Metrics</h4>
                           <p>
-                            Inventory tracking columns are placeholders for now.
-                            This section will be connected once inventory
-                            endpoints are implemented.
+                            Historical average dry weight per plant:{" "}
+                            <strong>{row.avgDryWeightPerPlant}</strong>
+                            {row.avgDryWeightPerPlant !== "N/A" ? " g" : ""}
+                          </p>
+                          <p>
+                            Historical wet-to-dry change:{" "}
+                            <strong>
+                              {row.wetToDryPercentChange === "N/A"
+                                ? "N/A"
+                                : `${row.wetToDryPercentChange}%`}
+                            </strong>
                           </p>
                         </div>
                       </div>

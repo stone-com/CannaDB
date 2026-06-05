@@ -2,10 +2,9 @@ const mongoose = require("mongoose");
 const { applyHarvestCalculations } = require("../utils/harvestCalculations");
 const Room = require("./Room");
 
-// This schema stores a single harvest "record".
-// Think of it as: one batch + one or more rooms + strain metrics for each room.
+// One harvest record: batch + rooms + per-strain metrics.
 const harvestSchema = new mongoose.Schema({
-  // Human-readable unique harvest number for operations/reporting.
+  // Human-friendly unique ID for this harvest.
   harvestNumber: {
     type: String,
     required: true,
@@ -18,14 +17,13 @@ const harvestSchema = new mongoose.Schema({
     ref: "Batch",
     required: true,
   },
-  // Direct link to the location where this harvest happened.
+  // Location where the harvest was done.
   locationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Location",
     required: true,
   },
-  // `rooms` is an array because a harvest can span multiple rooms.
-  // Each room entry can also hold room-specific strain metrics.
+  // A harvest can include multiple rooms.
   rooms: [
     {
       roomId: {
@@ -34,7 +32,7 @@ const harvestSchema = new mongoose.Schema({
         required: true,
       },
       strains: [
-        // This nested object stores metrics for one strain inside one room.
+        // Metrics for one strain in one room.
         {
           strainId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -49,8 +47,7 @@ const harvestSchema = new mongoose.Schema({
           },
           totes: [
             {
-              // Each tote entry only stores wet weight.
-              // Dry totals are stored separately at strain level.
+              // Tote entries store wet weight only.
               wetWeight: {
                 type: Number,
                 required: true,
@@ -80,7 +77,7 @@ const harvestSchema = new mongoose.Schema({
             type: Number,
             default: null,
           },
-          // Justin's formula result for this strain.
+          // Yield score from the harvest formula.
           yieldGramsPerSquareFoot: {
             type: Number,
             default: null,
@@ -90,7 +87,7 @@ const harvestSchema = new mongoose.Schema({
     },
   ],
 
-  // Rollups across every room + strain entry above.
+  // Totals across all rooms and strains.
   totalPlantCount: {
     type: Number,
     default: 0,
@@ -124,11 +121,13 @@ const harvestSchema = new mongoose.Schema({
   },
 });
 
-// Mongoose hook: runs before validation on .save().
-// We use it so derived fields always stay in sync with the raw inputs.
+harvestSchema.index({ batchId: 1 }, { unique: true });
+harvestSchema.index({ harvestDate: -1, createdAt: -1 });
+harvestSchema.index({ locationId: 1, harvestDate: -1 });
+
+// Recompute derived fields before validation/save.
 harvestSchema.pre("validate", async function () {
-  // `this` is the current document instance being saved.
-  // If locationId was not explicitly provided, try to derive it from the first room.
+  // Fill location from first room if client did not send locationId.
   if (!this.locationId) {
     const firstRoomId = Array.isArray(this.rooms)
       ? this.rooms[0]?.roomId

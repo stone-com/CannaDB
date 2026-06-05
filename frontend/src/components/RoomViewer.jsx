@@ -1,20 +1,17 @@
 import { useMemo, useState } from "react";
+import { formatDate } from "../utils/formatDate";
 
-// Formats a date value, returning "N/A" for nulls or invalid dates.
-const formatDate = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return date.toLocaleDateString();
-};
-
-// Shows a room dropdown and displays the plants in that room's active batch.
-function RoomViewer({ rooms, batches }) {
-  // Which location the user has selected. Empty string = nothing chosen yet.
+// Show active batch and plant data for one room.
+function RoomViewer({ rooms, roomAssignments }) {
+  // Selected location.
   const [selectedLocationId, setSelectedLocationId] = useState("");
-  // Which room the user has selected. Empty string = nothing chosen yet.
+  // Selected room.
   const [selectedRoomId, setSelectedRoomId] = useState("");
-  const allRooms = Array.isArray(rooms) ? rooms : [];
+  const allRooms = useMemo(() => (Array.isArray(rooms) ? rooms : []), [rooms]);
+  const assignments = useMemo(
+    () => (Array.isArray(roomAssignments) ? roomAssignments : []),
+    [roomAssignments],
+  );
 
   const sortedLocations = useMemo(() => {
     const locations = allRooms
@@ -32,7 +29,7 @@ function RoomViewer({ rooms, batches }) {
     );
   }, [allRooms]);
 
-  // Rooms filtered by selected location, then sorted by room name.
+  // Rooms in selected location.
   const filteredRooms = useMemo(() => {
     if (!selectedLocationId) return [];
     return allRooms
@@ -47,49 +44,38 @@ function RoomViewer({ rooms, batches }) {
     setSelectedRoomId("");
   };
 
-  // Full room object for the current selection.
-  const selectedRoom = useMemo(
-    () => filteredRooms.find((r) => r._id === selectedRoomId),
-    [filteredRooms, selectedRoomId],
+  // Assignments for selected room.
+  const selectedRoomAssignments = useMemo(
+    () =>
+      assignments.filter(
+        (assignment) =>
+          String(assignment?.roomId?._id) === String(selectedRoomId),
+      ),
+    [assignments, selectedRoomId],
   );
 
-  // The batch in the selected room (find which batch has this room in its rooms array).
-  const batch = useMemo(() => {
-    if (!selectedRoom) return null;
-    return (
-      (Array.isArray(batches) &&
-        batches.find(
-          (b) =>
-            Array.isArray(b.rooms) &&
-            b.rooms.some((r) => String(r.roomId) === String(selectedRoom._id)),
-        )) ||
-      null
-    );
-  }, [selectedRoom, batches]);
+  const selectedRoom =
+    filteredRooms.find((room) => String(room._id) === String(selectedRoomId)) ||
+    null;
 
-  // One row per plant entry for the selected room specifically.
-  const plantRows = useMemo(() => {
-    if (!batch || !Array.isArray(batch.rooms)) return [];
-    const roomEntry = batch.rooms.find(
-      (r) => String(r.roomId) === String(selectedRoomId),
-    );
-    if (!roomEntry || !Array.isArray(roomEntry.plants)) return [];
-    return roomEntry.plants.map((entry) => ({
-      strainName: entry.strainId?.name || "Unknown Strain",
-      strainType: entry.strainId?.type || "N/A",
-      count: Number(entry.count) || 0,
-    }));
-  }, [batch, selectedRoomId]);
+  const roomTotalPlants = useMemo(() => {
+    return selectedRoomAssignments.reduce((sum, assignment) => {
+      const assignedPlants = Array.isArray(assignment?.assignedPlants)
+        ? assignment.assignedPlants
+        : [];
 
-  // Sum of all plant counts across strains.
-  const totalPlants = useMemo(
-    () => plantRows.reduce((sum, row) => sum + row.count, 0),
-    [plantRows],
-  );
+      return (
+        sum +
+        assignedPlants.reduce(
+          (innerSum, plant) => innerSum + (Number(plant?.count) || 0),
+          0,
+        )
+      );
+    }, 0);
+  }, [selectedRoomAssignments]);
 
   return (
     <div className="room-viewer">
-      {/* Room selector */}
       <div className="room-viewer-selector">
         <label
           htmlFor="room-viewer-location-select"
@@ -133,15 +119,13 @@ function RoomViewer({ rooms, batches }) {
         </select>
       </div>
 
-      {/* Nothing selected yet */}
       {!selectedRoom && (
         <p className="room-viewer-empty">
           Choose a room above to view its current contents.
         </p>
       )}
 
-      {/* Room selected but no batch assigned */}
-      {selectedRoom && !batch && (
+      {selectedRoom && selectedRoomAssignments.length === 0 && (
         <div className="room-viewer-no-batch">
           <p>
             <strong>{selectedRoom.name}</strong> has no active batch assigned.
@@ -149,66 +133,106 @@ function RoomViewer({ rooms, batches }) {
         </div>
       )}
 
-      {/* Room selected and batch exists */}
-      {selectedRoom && batch && (
+      {selectedRoom && selectedRoomAssignments.length > 0 && (
         <div className="room-viewer-content">
-          {/* Batch summary cards */}
           <div className="room-viewer-meta">
             <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Batch</span>
+              <span className="room-viewer-meta-label">Room</span>
               <span className="room-viewer-meta-value">
-                {batch.batchNumber || "N/A"}
+                {selectedRoom.name}
               </span>
             </div>
             <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Clone Date</span>
+              <span className="room-viewer-meta-label">Type</span>
               <span className="room-viewer-meta-value">
-                {formatDate(batch.cloneDate)}
-              </span>
-            </div>
-            <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Harvest Date</span>
-              <span className="room-viewer-meta-value">
-                {formatDate(batch.harvestDate)}
+                {selectedRoom.type || "N/A"}
               </span>
             </div>
             <div className="room-viewer-meta-card">
               <span className="room-viewer-meta-label">Total Plants</span>
-              <span className="room-viewer-meta-value">{totalPlants}</span>
+              <span className="room-viewer-meta-value">{roomTotalPlants}</span>
+            </div>
+            <div className="room-viewer-meta-card">
+              <span className="room-viewer-meta-label">Active Batches</span>
+              <span className="room-viewer-meta-value">
+                {selectedRoomAssignments.length}
+              </span>
             </div>
           </div>
 
-          {/* Plants table */}
-          {plantRows.length === 0 ? (
-            <p className="room-viewer-empty">
-              No plants recorded in this batch.
-            </p>
-          ) : (
-            <table className="room-viewer-table">
-              <thead>
-                <tr>
-                  <th>Strain</th>
-                  <th>Type</th>
-                  <th>Plant Count</th>
-                  <th>% of Room</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plantRows.map((row, i) => (
-                  <tr key={i}>
-                    <td>{row.strainName}</td>
-                    <td>{row.strainType}</td>
-                    <td>{row.count}</td>
-                    <td>
-                      {totalPlants > 0
-                        ? `${((row.count / totalPlants) * 100).toFixed(1)}%`
-                        : "N/A"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {selectedRoomAssignments.map((assignment) => {
+            const batch = assignment.batchId;
+            const assignedPlants = Array.isArray(assignment?.assignedPlants)
+              ? assignment.assignedPlants
+              : [];
+            const strainRows = assignedPlants;
+            const batchTotalPlants = strainRows.reduce(
+              (sum, row) => sum + (Number(row.count) || 0),
+              0,
+            );
+
+            return (
+              <section key={assignment._id} className="room-viewer-assignment">
+                <div className="room-viewer-meta">
+                  <div className="room-viewer-meta-card">
+                    <span className="room-viewer-meta-label">Batch</span>
+                    <span className="room-viewer-meta-value">
+                      {batch?.batchNumber || "N/A"}
+                    </span>
+                  </div>
+                  <div className="room-viewer-meta-card">
+                    <span className="room-viewer-meta-label">Type</span>
+                    <span className="room-viewer-meta-value">
+                      {batch?.batchType || "production"}
+                    </span>
+                  </div>
+                  <div className="room-viewer-meta-card">
+                    <span className="room-viewer-meta-label">Clone Date</span>
+                    <span className="room-viewer-meta-value">
+                      {formatDate(batch?.cloneDate)}
+                    </span>
+                  </div>
+                  <div className="room-viewer-meta-card">
+                    <span className="room-viewer-meta-label">Plants</span>
+                    <span className="room-viewer-meta-value">
+                      {batchTotalPlants}
+                    </span>
+                  </div>
+                </div>
+
+                {strainRows.length === 0 ? (
+                  <p className="room-viewer-empty">
+                    No plants recorded for this batch in the selected room.
+                  </p>
+                ) : (
+                  <table className="room-viewer-table">
+                    <thead>
+                      <tr>
+                        <th>Strain</th>
+                        <th>Type</th>
+                        <th>Plant Count</th>
+                        <th>% of Room</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {strainRows.map((row, i) => (
+                        <tr key={`${assignment._id}-${i}`}>
+                          <td>{row.strainId?.name || "Unknown Strain"}</td>
+                          <td>{row.strainId?.type || "N/A"}</td>
+                          <td>{row.count}</td>
+                          <td>
+                            {roomTotalPlants > 0
+                              ? `${((Number(row.count) / roomTotalPlants) * 100).toFixed(1)}%`
+                              : "N/A"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>

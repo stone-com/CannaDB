@@ -1,14 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
+import { formatDate } from "../utils/formatDate";
 
-// Formats a date value, returning "N/A" for nulls or invalid dates.
-const formatDate = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return date.toLocaleDateString();
-};
-
-// Builds a readable dropdown label: "3/15/2024 — Harvest 42 — Denver Facility — Room A, Room B"
+// Build dropdown label for one harvest.
 const buildHarvestOptionLabel = (harvest) => {
   if (!harvest) return "N/A";
 
@@ -29,7 +22,7 @@ function HarvestReportPage({ harvests }) {
   const [selectedHarvestId, setSelectedHarvestId] = useState("");
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Sorted newest-first for the dropdown.
+  // Show newest harvests first.
   const sortedHarvests = useMemo(() => {
     if (!Array.isArray(harvests)) return [];
     return [...harvests].sort(
@@ -37,7 +30,7 @@ function HarvestReportPage({ harvests }) {
     );
   }, [harvests]);
 
-  // Keeps the user's selection if still valid; auto-selects the most recent harvest otherwise.
+  // Keep current selection, otherwise default to newest harvest.
   const effectiveSelectedHarvestId = useMemo(() => {
     if (sortedHarvests.length === 0) return "";
     const stillExists = sortedHarvests.some((h) => h._id === selectedHarvestId);
@@ -53,7 +46,7 @@ function HarvestReportPage({ harvests }) {
     [effectiveSelectedHarvestId, sortedHarvests],
   );
 
-  // Converts the selected harvest into display-ready room sections with strain rows.
+  // Build room sections and strain rows for display.
   const roomSections = useMemo(() => {
     if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) return [];
 

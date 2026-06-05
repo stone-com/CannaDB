@@ -1,33 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 function HarvestForm({ onComplete }) {
-  // Source data loaded from API for dropdowns.
+  // Data used by dropdowns and lookups.
   const [batches, setBatches] = useState([]);
-  const [rooms, setRooms] = useState([]);
+  const [roomAssignments, setRoomAssignments] = useState([]);
 
-  // User selections.
+  // Current user selections.
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [selectedStrainId, setSelectedStrainId] = useState(null);
 
-  // Tote weights keyed by strain ID. Example: { "strain123": [2600, 2550] }
+  // Tote weights keyed by strain ID.
   const [totes, setTotes] = useState({});
   const [weightInput, setWeightInput] = useState("");
 
-  // Load batches and rooms once when the form opens.
+  // Load initial data once.
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [batchRes, roomRes] = await Promise.all([
+        const [batchRes, assignmentRes] = await Promise.all([
           fetch("/api/batches"),
-          fetch("/api/rooms"),
+          fetch("/api/room-assignments?active=true"),
         ]);
-        const [batchData, roomData] = await Promise.all([
+        const [batchData, assignmentData] = await Promise.all([
           batchRes.json(),
-          roomRes.json(),
+          assignmentRes.json(),
         ]);
         setBatches(Array.isArray(batchData) ? batchData : []);
-        setRooms(Array.isArray(roomData) ? roomData : []);
+        setRoomAssignments(Array.isArray(assignmentData) ? assignmentData : []);
       } catch (error) {
         console.error("Error fetching harvest form data:", error);
       }
@@ -36,33 +36,82 @@ function HarvestForm({ onComplete }) {
     loadData();
   }, []);
 
-  // Only show batches that don't have a harvest yet.
-  const unharvestedBatches = batches.filter((b) => !b.harvestId);
+  const unharvestedBatches = useMemo(
+    () => batches.filter((batch) => !batch.harvestId),
+    [batches],
+  );
 
-  // Derived from state — not stored separately.
-  const selectedBatch = batches.find((b) => b._id === selectedBatchId) || null;
+  const selectedBatch = useMemo(
+    () => batches.find((batch) => batch._id === selectedBatchId) || null,
+    [batches, selectedBatchId],
+  );
 
-  // Plants scoped to the selected room. Falls back to all batch plants if no room chosen yet.
-  const selectedRoomEntry =
-    selectedBatch?.rooms?.find(
-      (r) => String(r.roomId) === String(selectedRoomId),
-    ) || null;
-  const activePlants =
-    selectedRoomEntry?.plants ??
-    (selectedBatch?.rooms ?? []).flatMap((r) => r.plants ?? []);
+  const availableRooms = useMemo(() => {
+    if (!selectedBatchId) return [];
 
-  const selectedStrainPlant =
-    activePlants.find((p) => p.strainId?._id === selectedStrainId) || null;
+    const assignedRoomMap = new Map();
 
-  const totalPlants = activePlants.reduce((sum, p) => sum + (p.count || 0), 0);
+    roomAssignments
+      .filter(
+        (assignment) =>
+          String(assignment?.batchId?._id) === String(selectedBatchId) &&
+          assignment?.active !== false,
+      )
+      .forEach((assignment) => {
+        const room = assignment?.roomId;
+        if (room?._id) {
+          assignedRoomMap.set(String(room._id), room);
+        }
+      });
 
-  // Totes and running total for the active strain.
-  const activeTotes = selectedStrainId ? totes[selectedStrainId] || [] : [];
-  const activeToteTotal = activeTotes.reduce((sum, w) => sum + w, 0);
+    return Array.from(assignedRoomMap.values());
+  }, [roomAssignments, selectedBatchId]);
 
-  // When batch changes, clear strain/tote work from the previous batch.
+  const selectedRoomAssignment = useMemo(
+    () =>
+      roomAssignments.find(
+        (assignment) =>
+          String(assignment?.batchId?._id) === String(selectedBatchId) &&
+          String(assignment?.roomId?._id) === String(selectedRoomId) &&
+          assignment?.active !== false,
+      ) || null,
+    [roomAssignments, selectedBatchId, selectedRoomId],
+  );
+
+  const activePlants = useMemo(
+    () =>
+      Array.isArray(selectedRoomAssignment?.assignedPlants)
+        ? selectedRoomAssignment.assignedPlants
+        : [],
+    [selectedRoomAssignment],
+  );
+
+  const selectedStrainPlant = useMemo(
+    () =>
+      activePlants.find((plant) => plant.strainId?._id === selectedStrainId) ||
+      null,
+    [activePlants, selectedStrainId],
+  );
+
+  const totalPlants = useMemo(
+    () => activePlants.reduce((sum, plant) => sum + (plant.count || 0), 0),
+    [activePlants],
+  );
+
+  const activeTotes = useMemo(
+    () => (selectedStrainId ? totes[selectedStrainId] || [] : []),
+    [selectedStrainId, totes],
+  );
+
+  const activeToteTotal = useMemo(
+    () => activeTotes.reduce((sum, weight) => sum + weight, 0),
+    [activeTotes],
+  );
+
+  // Clear room/strain/tote state when batch changes.
   const handleBatchChange = (e) => {
     setSelectedBatchId(e.target.value);
+    setSelectedRoomId("");
     setSelectedStrainId(null);
     setTotes({});
     setWeightInput("");
@@ -106,7 +155,7 @@ function HarvestForm({ onComplete }) {
         })),
       }));
 
-      const room = rooms.find((r) => r._id === selectedRoomId);
+      const room = availableRooms.find((r) => r._id === selectedRoomId);
       const locationId = room?.locationId?._id;
 
       if (!locationId) {
@@ -183,7 +232,7 @@ function HarvestForm({ onComplete }) {
             onChange={(e) => setSelectedRoomId(e.target.value)}
           >
             <option value="">-- Select Room --</option>
-            {rooms.map((room) => (
+            {availableRooms.map((room) => (
               <option key={room._id} value={room._id}>
                 {room.name}
               </option>

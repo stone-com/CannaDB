@@ -2,13 +2,9 @@ const express = require("express");
 const router = express.Router();
 const Strain = require("../models/Strain");
 
-// Strain CRUD endpoints.
-// Pattern used in all routes:
-// 1) Validate input
-// 2) Run DB query
-// 3) Return JSON or error status
+// Strain create/read endpoints.
 
-// Create a new strain
+// Create strain.
 router.post("/", async (req, res) => {
   try {
     const { name, type, status } = req.body;
@@ -34,7 +30,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Return all strains.
+// List strains.
 router.get("/", async (req, res) => {
   try {
     const strains = await Strain.find();
@@ -44,7 +40,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Return one strain by ID.
+// Get one strain.
 router.get("/:id", async (req, res) => {
   try {
     const strain = await Strain.findById(req.params.id);

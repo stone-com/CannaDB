@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatDate } from "../../utils/formatDate";
 
-// Constant outside component — never changes, no need to recreate per render.
+// Fixed room type options.
 const ROOM_TYPES = [
   "Flower",
   "Veg",
@@ -13,11 +14,24 @@ const ROOM_TYPES = [
   "Drying",
 ];
 
-// `section="add"` renders the create-room form.
-// `section="assign"` renders the batch assignment form.
-// `embedded={true}` skips the wrapper div/heading (for AdminPanel accordion use).
+const MS_PER_DAY = 86400000;
+
+const NEXT_STAGE_BY_BATCH_TYPE = {
+  production: {
+    Clone: "Veg",
+    Veg: "Flower",
+    Flower: "HarvestReady",
+  },
+  mom: {
+    Clone: "Veg",
+    Veg: "Mom",
+  },
+};
+
+// `section` chooses add-room vs assign-room UI.
+// `embedded` chooses inline vs card layout.
 function RoomForm({ embedded, section }) {
-  // State for dropdown data and form values.
+  // Data and form state.
   const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -31,10 +45,14 @@ function RoomForm({ embedded, section }) {
     roomId: "",
     batchId: "",
   });
+  const [assignmentMode, setAssignmentMode] = useState("whole");
+  const [wholeRoomId, setWholeRoomId] = useState("");
+  const [splitDestinations, setSplitDestinations] = useState([]);
+  const [shouldAdvanceStage, setShouldAdvanceStage] = useState(false);
   const [message, setMessage] = useState("");
   const [assignmentMessage, setAssignmentMessage] = useState("");
 
-  // Loads location options for the room form dropdown.
+  // Load locations for dropdown.
   const fetchLocations = async () => {
     try {
       const res = await fetch("/api/locations");
@@ -45,7 +63,7 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Loads rooms so the assignment dropdown can target a room record.
+  // Load rooms for assignment targets.
   const fetchRooms = async () => {
     try {
       const res = await fetch("/api/rooms");
@@ -56,7 +74,7 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Loads batches used by room assignment section.
+  // Load batches for assignment section.
   const fetchBatches = async () => {
     try {
       const res = await fetch("/api/batches");
@@ -67,15 +85,7 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Date formatting helper for batch labels.
-  const formatDate = (value) => {
-    if (!value) return "N/A";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "N/A";
-    return date.toLocaleDateString();
-  };
-
-  // Filters out past-harvest batches and sorts by nearest harvest date.
+  // Hide harvested batches and sort by harvest date.
   const selectableBatches = useMemo(() => {
     const now = new Date();
 
@@ -92,6 +102,72 @@ function RoomForm({ embedded, section }) {
         return aDate - bDate;
       });
   }, [batches]);
+
+  const selectedBatch = useMemo(
+    () =>
+      selectableBatches.find(
+        (batch) => String(batch._id) === String(assignmentData.batchId),
+      ) || null,
+    [selectableBatches, assignmentData.batchId],
+  );
+
+  const batchPlantTotals = useMemo(() => {
+    if (!selectedBatch) return [];
+
+    const totals = new Map();
+
+    (selectedBatch.rooms || []).forEach((roomEntry) => {
+      (roomEntry?.plants || []).forEach((plantEntry) => {
+        const strainId = String(
+          plantEntry?.strainId?._id || plantEntry?.strainId,
+        );
+        if (!strainId || strainId === "undefined") return;
+
+        const strainName = plantEntry?.strainId?.name || "Unknown Strain";
+        const current = totals.get(strainId) || {
+          strainId,
+          strainName,
+          totalCount: 0,
+        };
+
+        current.totalCount += Number(plantEntry?.count) || 0;
+        totals.set(strainId, current);
+      });
+    });
+
+    return Array.from(totals.values());
+  }, [selectedBatch]);
+
+  const assignableRooms = useMemo(() => {
+    if (!selectedBatch?.location) return rooms;
+
+    return rooms.filter(
+      (room) =>
+        String(room?.locationId?._id) === String(selectedBatch.location),
+    );
+  }, [rooms, selectedBatch]);
+
+  const nextStage = useMemo(() => {
+    if (!selectedBatch) return null;
+    const map =
+      NEXT_STAGE_BY_BATCH_TYPE[selectedBatch.batchType] ||
+      NEXT_STAGE_BY_BATCH_TYPE.production;
+    return map[selectedBatch.lifecycleStage] || null;
+  }, [selectedBatch]);
+
+  const daysInStage = useMemo(() => {
+    if (!selectedBatch?.stageStartedAt) return "N/A";
+    const startedAt = new Date(selectedBatch.stageStartedAt);
+    if (Number.isNaN(startedAt.getTime())) return "N/A";
+    const days = Math.max(
+      0,
+      Math.floor((Date.now() - startedAt.getTime()) / MS_PER_DAY),
+    );
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }, [selectedBatch]);
+
+  const createZeroCounts = () =>
+    Object.fromEntries(batchPlantTotals.map((plant) => [plant.strainId, "0"]));
 
   useEffect(() => {
     fetchLocations();
@@ -157,45 +233,167 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Updates a room's current batch assignment.
+  // Save room assignment for selected batch.
   const handleAssignmentSubmit = async (e) => {
     e.preventDefault();
     setAssignmentMessage("");
 
     try {
-      if (!assignmentData.roomId) {
-        throw new Error("Please select a room");
+      if (!assignmentData.batchId) {
+        throw new Error("Please select a batch");
       }
 
-      const payload = {
-        batchId: assignmentData.batchId || null,
+      let payload = {
+        mode: assignmentMode,
+        notes: null,
+        advanceStage: shouldAdvanceStage,
       };
 
-      const res = await fetch(`/api/rooms/${assignmentData.roomId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (assignmentMode === "whole") {
+        if (!wholeRoomId) {
+          throw new Error("Please select a destination room");
+        }
+        payload.roomId = wholeRoomId;
+      } else {
+        const normalizedAssignments = splitDestinations
+          .filter((destination) => destination.roomId)
+          .map((destination) => ({
+            roomId: destination.roomId,
+            plants: batchPlantTotals
+              .map((plant) => ({
+                strainId: plant.strainId,
+                count: Number(destination.strainCounts?.[plant.strainId]) || 0,
+              }))
+              .filter((plant) => plant.count > 0),
+          }))
+          .filter((destination) => destination.plants.length > 0);
+
+        if (normalizedAssignments.length === 0) {
+          throw new Error("Please allocate plants to at least one room");
+        }
+
+        const totalsByStrain = Object.fromEntries(
+          batchPlantTotals.map((plant) => [plant.strainId, 0]),
+        );
+
+        normalizedAssignments.forEach((destination) => {
+          destination.plants.forEach((plant) => {
+            totalsByStrain[plant.strainId] += plant.count;
+          });
+        });
+
+        const hasMismatch = batchPlantTotals.some(
+          (plant) => totalsByStrain[plant.strainId] !== plant.totalCount,
+        );
+
+        if (hasMismatch) {
+          throw new Error(
+            "Split counts must exactly match the full batch totals for each strain",
+          );
+        }
+
+        payload.assignments = normalizedAssignments;
+      }
+
+      const res = await fetch(
+        `/api/batches/${assignmentData.batchId}/assign-rooms`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to assign batch to room");
       }
 
-      const updatedRoom = await res.json();
+      const result = await res.json();
 
       window.dispatchEvent(
-        new CustomEvent("room:created", {
-          detail: updatedRoom,
+        new CustomEvent("batch:updated", { detail: result.batch }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("roomAssignment:created", {
+          detail: result.assignments,
         }),
       );
 
-      setAssignmentMessage("Room batch assignment saved.");
-      fetchRooms();
+      setAssignmentMessage("Batch room allocation saved.");
+      setAssignmentData({ roomId: "", batchId: "" });
+      setWholeRoomId("");
+      setSplitDestinations([]);
+      setShouldAdvanceStage(false);
+      fetchBatches();
     } catch (error) {
       setAssignmentMessage(`Error: ${error.message}`);
     }
   };
+
+  const handleBatchSelection = (batchId) => {
+    setAssignmentData({ roomId: "", batchId });
+    setWholeRoomId("");
+    setShouldAdvanceStage(false);
+    setSplitDestinations(
+      batchId
+        ? [
+            {
+              roomId: "",
+              strainCounts: createZeroCounts(),
+            },
+          ]
+        : [],
+    );
+  };
+
+  const handleAddSplitDestination = () => {
+    setSplitDestinations((prev) => [
+      ...prev,
+      {
+        roomId: "",
+        strainCounts: createZeroCounts(),
+      },
+    ]);
+  };
+
+  const handleRemoveSplitDestination = (index) => {
+    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSplitRoomChange = (index, roomId) => {
+    setSplitDestinations((prev) =>
+      prev.map((destination, i) =>
+        i === index ? { ...destination, roomId } : destination,
+      ),
+    );
+  };
+
+  const handleSplitCountChange = (index, strainId, value) => {
+    const normalizedValue =
+      value === "" ? "" : String(Math.max(0, Number(value) || 0));
+
+    setSplitDestinations((prev) =>
+      prev.map((destination, i) =>
+        i === index
+          ? {
+              ...destination,
+              strainCounts: {
+                ...destination.strainCounts,
+                [strainId]: normalizedValue,
+              },
+            }
+          : destination,
+      ),
+    );
+  };
+
+  const getAllocatedCount = (strainId) =>
+    splitDestinations.reduce(
+      (sum, destination) =>
+        sum + (Number(destination.strainCounts?.[strainId]) || 0),
+      0,
+    );
 
   if (embedded && section === "add") {
     return (
@@ -284,46 +482,14 @@ function RoomForm({ embedded, section }) {
         <form onSubmit={handleAssignmentSubmit}>
           <div className="form-field">
             <label className="form-label">
-              Room (required):
-              <select
-                className="form-select"
-                value={assignmentData.roomId}
-                onChange={(e) =>
-                  setAssignmentData({
-                    ...assignmentData,
-                    roomId: e.target.value,
-                  })
-                }
-                required
-              >
-                <option value="">-- Select Room --</option>
-                {rooms.map((room) => (
-                  <option key={room._id} value={room._id}>
-                    {/* room.locationId?.nickname uses optional chaining (?.).
-                        The ?. means: "if locationId exists, access .nickname —
-                        if locationId is null or undefined, don't crash, just return undefined."
-                        The || fallback then kicks in and shows 'Unknown Location' instead. */}
-                    {room.locationId?.nickname || "Unknown Location"} -{" "}
-                    {room.name} ({room.type})
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Batch:
+              Batch (required):
               <select
                 className="form-select"
                 value={assignmentData.batchId}
-                onChange={(e) =>
-                  setAssignmentData({
-                    ...assignmentData,
-                    batchId: e.target.value,
-                  })
-                }
+                onChange={(e) => handleBatchSelection(e.target.value)}
+                required
               >
-                <option value="">-- No Batch (Unassign) --</option>
+                <option value="">-- Select Batch --</option>
                 {selectableBatches.map((batch) => (
                   <option key={batch._id} value={batch._id}>
                     {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
@@ -333,8 +499,177 @@ function RoomForm({ embedded, section }) {
               </select>
             </label>
           </div>
+
+          {selectedBatch && (
+            <div className="form-field">
+              <p className="status-message">
+                Current Stage: <strong>{selectedBatch.lifecycleStage}</strong>
+              </p>
+              <p className="status-message">
+                In Stage For: <strong>{daysInStage}</strong>
+              </p>
+              <p className="status-message">
+                Next Stage: <strong>{nextStage || "N/A"}</strong>
+              </p>
+              <p className="status-message">
+                Current Room Plan:{" "}
+                <strong>
+                  {(selectedBatch.rooms || []).length > 0
+                    ? selectedBatch.rooms
+                        .map((entry) => {
+                          const room = rooms.find(
+                            (candidate) =>
+                              String(candidate._id) === String(entry.roomId),
+                          );
+                          return room?.name || "Unknown Room";
+                        })
+                        .join(", ")
+                    : "No room plan set"}
+                </strong>
+              </p>
+            </div>
+          )}
+
+          {selectedBatch && (
+            <div className="form-field">
+              <label className="form-label">
+                <input
+                  type="radio"
+                  checked={assignmentMode === "whole"}
+                  onChange={() => setAssignmentMode("whole")}
+                />{" "}
+                Whole batch to one room
+              </label>
+              <label className="form-label">
+                <input
+                  type="radio"
+                  checked={assignmentMode === "split"}
+                  onChange={() => setAssignmentMode("split")}
+                />{" "}
+                Split strains/plants across multiple rooms
+              </label>
+
+              <label className="form-label">
+                <input
+                  type="checkbox"
+                  checked={shouldAdvanceStage}
+                  disabled={!nextStage}
+                  onChange={(e) => setShouldAdvanceStage(e.target.checked)}
+                />{" "}
+                Advance to next stage when saving
+              </label>
+            </div>
+          )}
+
+          {selectedBatch && assignmentMode === "whole" && (
+            <div className="form-field">
+              <label className="form-label">
+                Destination Room:
+                <select
+                  className="form-select"
+                  value={wholeRoomId}
+                  onChange={(e) => setWholeRoomId(e.target.value)}
+                  required
+                >
+                  <option value="">-- Select Room --</option>
+                  {assignableRooms.map((room) => (
+                    <option key={room._id} value={room._id}>
+                      {room.locationId?.nickname || "Unknown Location"} -{" "}
+                      {room.name} ({room.type})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {selectedBatch && assignmentMode === "split" && (
+            <div className="form-field">
+              <p className="status-message">
+                Set plant counts per strain for each destination room. Totals
+                must match the full batch.
+              </p>
+
+              {batchPlantTotals.map((plant) => (
+                <p key={`totals-${plant.strainId}`} className="status-message">
+                  {plant.strainName}: {getAllocatedCount(plant.strainId)} /{" "}
+                  {plant.totalCount}
+                </p>
+              ))}
+
+              {splitDestinations.map((destination, index) => (
+                <div
+                  key={`split-destination-${index}`}
+                  className="form-field"
+                  style={{ border: "1px solid #ddd", padding: "12px" }}
+                >
+                  <label className="form-label">
+                    Destination Room {index + 1}
+                    <select
+                      className="form-select"
+                      value={destination.roomId}
+                      onChange={(e) =>
+                        handleSplitRoomChange(index, e.target.value)
+                      }
+                    >
+                      <option value="">-- Select Room --</option>
+                      {assignableRooms.map((room) => (
+                        <option key={room._id} value={room._id}>
+                          {room.locationId?.nickname || "Unknown Location"} -{" "}
+                          {room.name} ({room.type})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {batchPlantTotals.map((plant) => (
+                    <label
+                      className="form-label"
+                      key={`split-${index}-${plant.strainId}`}
+                    >
+                      {plant.strainName} Count
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="0"
+                        value={
+                          destination.strainCounts?.[plant.strainId] || "0"
+                        }
+                        onChange={(e) =>
+                          handleSplitCountChange(
+                            index,
+                            plant.strainId,
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                  ))}
+
+                  {splitDestinations.length > 1 && (
+                    <button
+                      className="submit-button"
+                      type="button"
+                      onClick={() => handleRemoveSplitDestination(index)}
+                    >
+                      Remove Room
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                className="submit-button"
+                type="button"
+                onClick={handleAddSplitDestination}
+              >
+                Add Destination Room
+              </button>
+            </div>
+          )}
+
           <button className="submit-button" type="submit">
-            Save Assignment
+            Save Batch Room Plan
           </button>
         </form>
         {assignmentMessage && (

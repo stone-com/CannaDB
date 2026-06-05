@@ -1,7 +1,6 @@
 import { useState } from "react";
 
-// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
-// `embedded={false}` renders a standalone card with a heading.
+// `embedded` decides inline form vs standalone card view.
 function CompanyForm({ embedded }) {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
@@ -24,7 +23,7 @@ function CompanyForm({ embedded }) {
 
       const savedCompany = await res.json();
 
-      // Notify LocationForm so it refreshes the company dropdown.
+      // Let other forms refresh company data.
       window.dispatchEvent(
         new CustomEvent("company:created", {
           detail: savedCompany,

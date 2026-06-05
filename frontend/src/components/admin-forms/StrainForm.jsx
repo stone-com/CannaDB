@@ -1,9 +1,8 @@
 import { useState } from "react";
 
-// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
-// `embedded={false}` renders a standalone card with a heading.
+// `embedded` decides inline form vs standalone card view.
 function StrainForm({ embedded }) {
-  // All three fields in one state object.
+  // Form values.
   const [form, setForm] = useState({ name: "", type: "", status: "" });
   const [message, setMessage] = useState("");
 
@@ -29,7 +28,7 @@ function StrainForm({ embedded }) {
 
       const savedStrain = await res.json();
 
-      // Notify App.jsx to re-fetch strains.
+      // Notify app to refresh strain data.
       window.dispatchEvent(
         new CustomEvent("strain:created", { detail: savedStrain }),
       );
@@ -100,10 +99,10 @@ function StrainForm({ embedded }) {
     </>
   );
 
-  // When embedded, just return the form content — no wrapper or heading.
+  // Inline mode for accordion panels.
   if (embedded) return formContent;
 
-  // Standalone mode: wrap in a card with a heading.
+  // Standalone page/card mode.
   return (
     <div className="form-container">
       <h2>Add Strain</h2>

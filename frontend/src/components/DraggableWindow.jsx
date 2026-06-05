@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-// Module-level counter — shared across all instances.
-// Each window gets the next highest value so newly focused windows render on top.
+// Shared counter so focused windows stay on top.
 let globalZIndex = 100;
 
-// Floating, draggable, resizable window shell.
-//
-// Drag / resize mechanic:
-//   1. On mousedown: snapshot cursor position + window position/size.
-//   2. On mousemove: compute (dx, dy) from snapshot, apply to state.
-//   3. On mouseup: clear snapshot.
+// Draggable and resizable window shell.
 export default function DraggableWindow({
   title,
   onClose,
@@ -21,27 +15,27 @@ export default function DraggableWindow({
   defaultW = 540,
   defaultH = 460,
 }) {
-  // Top-left corner position (CSS left / top).
+  // Current window position.
   const [pos, setPos] = useState({ x: defaultX, y: defaultY });
 
-  // Current window dimensions (CSS width / height).
+  // Current window size.
   const [size, setSize] = useState({ w: defaultW, h: defaultH });
 
-  // Ref mirrors size so the mousemove closure always reads the latest value.
+  // Keep latest size available inside mouse listeners.
   const sizeRef = useRef({ w: defaultW, h: defaultH });
   sizeRef.current = size;
 
-  // Each window gets an incrementing z-index so new windows open on top.
+  // Newer focus gets higher z-index.
   const [zIndex, setZIndex] = useState(() => ++globalZIndex);
 
-  // Snapshot of cursor + window state captured at the start of a drag/resize.
+  // Active drag/resize snapshot.
   const interaction = useRef(null);
 
   const bringToFront = () => {
     setZIndex(++globalZIndex);
   };
 
-  // Starts a drag: snapshot cursor position and window position.
+  // Start dragging.
   const handleTitleMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -56,10 +50,7 @@ export default function DraggableWindow({
     };
   };
 
-  // ── handleResizeMouseDown ───────────────────────────────────────────────────
-  // Fires when the user presses the mouse button on the resize grip (bottom-right).
-  // This is how resizing starts.
-  // Starts a resize: snapshot cursor position and current size.
+  // Start resizing from bottom-right handle.
   const handleResizeMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -74,17 +65,11 @@ export default function DraggableWindow({
     };
   };
 
-  // ── useEffect: global mousemove + mouseup listeners ────────────────────────
-  // We attach these to `window` (the whole browser window), not just this div.
-  // Why? Because if the user moves the mouse quickly, the cursor can leave the
-  // window's div entirely — but we still want dragging/resizing to continue.
-  // Attaching to `window` ensures we always catch the mouse movement.
+  // Track drag/resize even if cursor leaves the component.
   useEffect(() => {
     const onMouseMove = (e) => {
-      // If no interaction is active (user isn't dragging or resizing), do nothing.
       if (!interaction.current) return;
 
-      // Pull out everything we saved when the mouse button was pressed.
       const {
         type,
         startClientX,
@@ -95,19 +80,11 @@ export default function DraggableWindow({
         startH,
       } = interaction.current;
 
-      // Calculate how far the cursor has moved since the interaction started.
-      // dx = horizontal distance, dy = vertical distance.
       const dx = e.clientX - startClientX;
       const dy = e.clientY - startClientY;
 
       if (type === "drag") {
-        // Keep the window inside the visible workspace area:
-        //   LEFT   — 254px: sidebar (220px) + 1px border + 3px gap + 30px adjustment
-        //   TOP    — 48px:  height of the top header bar
-        //   RIGHT  — screen width minus the window's own width
-        //   BOTTOM — screen height minus taskbar (44px) and window height
-        // sizeRef.current is used instead of `size` so this closure (created
-        // once on mount) always sees the latest dimensions after a resize.
+        // Keep window inside app bounds.
         const LEFT_BOUND = 254;
         const TOP_BOUND = 48;
         const RIGHT_BOUND = window.innerWidth - sizeRef.current.w;
@@ -118,10 +95,7 @@ export default function DraggableWindow({
           y: Math.min(Math.max(TOP_BOUND, startPosY + dy), BOTTOM_BOUND),
         });
       } else if (type === "resize") {
-        // Grow or shrink the window by the same amount the cursor moved.
-        // Math.max enforces minimum sizes so the window can't collapse to nothing:
-        //   width minimum:  300px
-        //   height minimum: 200px
+        // Enforce minimum window size.
         setSize({
           w: Math.max(300, startW + dx),
           h: Math.max(200, startH + dy),
@@ -142,7 +116,7 @@ export default function DraggableWindow({
     };
   }, []);
 
-  // State is preserved while minimized — window restores to exact position/size.
+  // Keep state while minimized.
   if (isMinimized) return null;
 
   return (
@@ -157,24 +131,15 @@ export default function DraggableWindow({
       }}
       onMouseDown={bringToFront}
     >
-      {/* ── Title bar ──────────────────────────────────────────────────────── */}
-      {/* The title bar listens for mousedown to start a drag. */}
       <div className="dw-titlebar" onMouseDown={handleTitleMouseDown}>
-        {/* The window's name, e.g. "Strains (12)" */}
         <span className="dw-title">{title}</span>
 
-        {/* Control buttons on the right side of the title bar */}
         <div className="dw-controls">
-          {/* Minimize button — sends the window to the taskbar (Windows-style). */}
-          {/* onMinimize is called in App.jsx, which sets isMinimized=true and  */}
-          {/* adds a tab to the bottom taskbar. The window re-opens when that   */}
-          {/* tab is clicked. */}
           <button
             className="dw-btn"
             title="Minimize to taskbar"
             onClick={(e) => {
-              // stopPropagation prevents the click from also triggering
-              // handleTitleMouseDown (which would start a drag unintentionally).
+              // Avoid starting drag when clicking controls.
               e.stopPropagation();
               onMinimize();
             }}

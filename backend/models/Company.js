@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// Company = top-level business record.
+// Top-level company record.
 const companySchema = new mongoose.Schema({
   name: {
     type: String,
@@ -8,7 +8,7 @@ const companySchema = new mongoose.Schema({
     unique: true,
     trim: true,
   },
-  // Timestamp is auto-generated when the document is created.
+  // Auto-set when document is created.
   createdAt: {
     type: Date,
     default: Date.now,

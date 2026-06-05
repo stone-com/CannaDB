@@ -1,14 +1,139 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Batch = require("../models/Batch");
+const Room = require("../models/Room");
+const RoomAssignment = require("../models/RoomAssignment");
+const {
+  aggregatePlantTotalsMap,
+  aggregateAssignmentTotalsMap,
+  mapTotalsToPlants,
+  normalizeRoomPlants,
+  roomEntriesFromAssignments,
+  subtractPlantsFromRooms,
+} = require("../utils/plantHelpers");
+const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
 
-// Batch CRUD endpoints.
-// `populate(...)` replaces ObjectId refs with actual referenced documents.
+// Populate strain details inside each batch room/plant entry.
+const BATCH_POPULATE = "rooms.plants.strainId";
 
-// Create a new batch
+// Shared populate config for room assignment responses.
+// This keeps room details, batch summary info, and strain details in one payload.
+const ROOM_ASSIGNMENT_POPULATE = [
+  {
+    path: "roomId",
+    populate: { path: "locationId" },
+  },
+  {
+    path: "batchId",
+    select:
+      "batchNumber batchType cloneDate harvestDate location lifecycleStage stageStartedAt",
+  },
+  "assignedPlants.strainId",
+];
+
+// Defines the next lifecycle stage for each batch type.
+// Example: a production batch moves Clone -> Veg -> Flower.
+const NEXT_STAGE_BY_BATCH_TYPE = {
+  production: {
+    Clone: "Veg",
+    Veg: "Flower",
+    Flower: "HarvestReady",
+  },
+  mom: {
+    Clone: "Veg",
+    Veg: "Mom",
+  },
+};
+
+// Get the current total plants for a batch by strain.
+// Active room assignments are the main source of truth.
+// If none exist yet, fall back to the batch's stored room data.
+async function getCurrentBatchTotals(batchId, fallbackRooms, session = null) {
+  const assignmentQuery = RoomAssignment.find({
+    batchId,
+    active: true,
+  }).select("assignedPlants");
+
+  if (session) assignmentQuery.session(session);
+
+  const activeAssignments = await assignmentQuery;
+
+  if (activeAssignments.length === 0) {
+    return aggregatePlantTotalsMap(fallbackRooms);
+  }
+
+  return aggregateAssignmentTotalsMap(activeAssignments);
+}
+
+// Replace each batch's rooms with rooms built from active assignments when available.
+// This lets the API return the live room state without needing duplicate active data on Batch.
+async function attachDerivedRoomsToBatches(batches) {
+  if (!Array.isArray(batches) || batches.length === 0) {
+    return [];
+  }
+
+  const batchIds = batches.map((batch) => batch._id);
+  const assignments = await RoomAssignment.find({
+    active: true,
+    batchId: { $in: batchIds },
+  })
+    .select("batchId roomId assignedPlants")
+    .populate("assignedPlants.strainId");
+
+  const roomsByBatchId = new Map();
+
+  assignments.forEach((assignment) => {
+    const key = String(assignment.batchId);
+    const existing = roomsByBatchId.get(key) || [];
+
+    existing.push({
+      roomId: assignment.roomId,
+      plants: assignment.assignedPlants,
+    });
+
+    roomsByBatchId.set(key, existing);
+  });
+
+  return batches.map((batch) => {
+    const batchObject =
+      typeof batch.toObject === "function" ? batch.toObject() : { ...batch };
+    const derivedRooms = roomsByBatchId.get(String(batch._id));
+
+    if (Array.isArray(derivedRooms) && derivedRooms.length > 0) {
+      batchObject.rooms = derivedRooms;
+    }
+
+    return batchObject;
+  });
+}
+
+// Build a unique batch number for new mom batches.
+// It re-tries with a timestamp-based suffix until it finds an unused value.
+async function buildUniqueMomBatchNumber(baseBatchNumber, session = null) {
+  const normalizedBase = baseBatchNumber || "BATCH";
+
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const suffix = `${Date.now()}-${attempt}`;
+    const candidate = `${normalizedBase}-MOM-${suffix}`;
+    // eslint-disable-next-line no-await-in-loop
+    const existsQuery = Batch.exists({ batchNumber: candidate });
+    if (session) existsQuery.session(session);
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await existsQuery;
+    if (!exists) return candidate;
+  }
+
+  throw new Error("Unable to generate a unique mom batch number");
+}
+
+// Batch create/read and movement endpoints.
+
+// Create batch.
 router.post("/", async (req, res) => {
   try {
-    const { batchNumber, cloneDate, harvestDate, location, rooms } = req.body;
+    const { batchNumber, cloneDate, harvestDate, location, rooms, batchType } =
+      req.body;
 
     if (!batchNumber || !cloneDate) {
       return res
@@ -16,23 +141,20 @@ router.post("/", async (req, res) => {
         .json({ error: "batchNumber and cloneDate are required" });
     }
 
-    const clone = new Date(cloneDate);
-
-    // Build a new batch document from the request body.
+    // New batches start in Clone stage.
     const batch = new Batch({
       batchNumber,
       cloneDate,
       harvestDate: harvestDate || null,
       location: location || null,
       rooms: rooms || [],
+      batchType: batchType || "production",
       lifecycleStage: "Clone",
-      stageStartedAt: clone,
-      nextTransitionAt: new Date(clone.getTime() + 16 * 86400000),
+      stageStartedAt: new Date(cloneDate),
     });
 
     const savedBatch = await batch.save();
-    // Populate linked docs so frontend gets readable related data.
-    const populatedBatch = await savedBatch.populate("rooms.plants.strainId");
+    const populatedBatch = await savedBatch.populate(BATCH_POPULATE);
     res.status(201).json(populatedBatch);
   } catch (error) {
     if (error.code === 11000) {
@@ -43,25 +165,539 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Return all batches with populated relations.
+// List batches.
 router.get("/", async (req, res) => {
   try {
-    const batches = await Batch.find().populate("rooms.plants.strainId");
-    res.json(batches);
+    // Load saved batch data, then swap in live room state from active assignments.
+    const batches = await Batch.find().populate(BATCH_POPULATE);
+    const hydrated = await attachDerivedRoomsToBatches(batches);
+    res.json(hydrated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Return one batch by ID with populated relations.
-router.get("/:id", async (req, res) => {
+// Move batch to a room and advance its stage.
+router.post("/:id/move", async (req, res) => {
   try {
-    const batch = await Batch.findById(req.params.id).populate(
-      "rooms.plants.strainId",
-    );
+    const { roomId, notes } = req.body;
+
+    if (!roomId) {
+      return res.status(400).json({ error: "roomId is required" });
+    }
+
+    const [batch, room] = await Promise.all([
+      Batch.findById(req.params.id),
+      Room.findById(roomId),
+    ]);
+
     if (!batch) {
       return res.status(404).json({ error: "Batch not found" });
     }
+
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    const stageMap =
+      NEXT_STAGE_BY_BATCH_TYPE[batch.batchType] ||
+      NEXT_STAGE_BY_BATCH_TYPE.production;
+    const nextStage = stageMap[batch.lifecycleStage];
+
+    if (!nextStage) {
+      return res.status(400).json({
+        error: `No next stage available from ${batch.lifecycleStage}`,
+      });
+    }
+
+    const { savedAssignmentId } = await runWithOptionalTransaction(
+      mongoose,
+      async (session) => {
+        const now = new Date();
+
+        // Close any current active room placements for this batch.
+        await RoomAssignment.updateMany(
+          { batchId: batch._id, active: true },
+          { $set: { active: false, endedAt: now } },
+          session ? { session } : undefined,
+        );
+
+        // Create the new active room assignment using the batch's current plant totals.
+        const assignment = new RoomAssignment({
+          batchId: batch._id,
+          roomId,
+          assignedPlants: mapTotalsToPlants(
+            await getCurrentBatchTotals(batch._id, batch.rooms, session),
+          ),
+          active: true,
+          source: "manual",
+          startedAt: now,
+          endedAt: null,
+          notes: notes || null,
+        });
+
+        const savedAssignment = await assignment.save(
+          session ? { session } : undefined,
+        );
+
+        // Moving also advances the lifecycle stage.
+        batch.lifecycleStage = nextStage;
+        batch.stageStartedAt = now;
+        await batch.save(session ? { session } : undefined);
+
+        return { savedAssignmentId: savedAssignment._id };
+      },
+    );
+
+    const [batchDoc, populatedAssignment] = await Promise.all([
+      Batch.findById(batch._id).populate(BATCH_POPULATE),
+      RoomAssignment.findById(savedAssignmentId).populate([
+        {
+          path: "roomId",
+          populate: { path: "locationId" },
+        },
+        {
+          path: "batchId",
+          select:
+            "batchNumber batchType cloneDate harvestDate location lifecycleStage stageStartedAt",
+        },
+        "assignedPlants.strainId",
+      ]),
+    ]);
+
+    const [populatedBatch] = await attachDerivedRoomsToBatches([batchDoc]);
+
+    res.status(201).json({
+      batch: populatedBatch,
+      assignment: populatedAssignment,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign batch to one room or split across rooms.
+router.post("/:id/assign-rooms", async (req, res) => {
+  try {
+    const { mode, roomId, assignments, notes, advanceStage } = req.body;
+
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) {
+      return res.status(404).json({ error: "Batch not found" });
+    }
+
+    // Start from the batch's current live plant totals.
+    const currentTotals = await getCurrentBatchTotals(batch._id, batch.rooms);
+    const normalizedMode = mode === "split" ? "split" : "whole";
+
+    let normalizedAssignments = [];
+
+    if (normalizedMode === "whole") {
+      if (!roomId) {
+        return res.status(400).json({ error: "roomId is required" });
+      }
+
+      // Whole mode sends the full batch into one room.
+      normalizedAssignments = [
+        {
+          roomId,
+          plants: Array.from(currentTotals.entries()).map(
+            ([strainId, count]) => ({
+              strainId,
+              count,
+            }),
+          ),
+        },
+      ];
+    } else {
+      // Split mode lets the user divide the batch across multiple rooms.
+      if (!Array.isArray(assignments) || assignments.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "assignments are required for split mode" });
+      }
+
+      normalizedAssignments = assignments
+        .filter((entry) => entry?.roomId)
+        .map((entry) => ({
+          roomId: entry.roomId,
+          plants: (Array.isArray(entry?.plants) ? entry.plants : [])
+            .map((plant) => ({
+              strainId: String(plant?.strainId || ""),
+              count: Number(plant?.count) || 0,
+            }))
+            .filter((plant) => plant.strainId && plant.count > 0),
+        }))
+        .filter((entry) => entry.plants.length > 0);
+
+      if (normalizedAssignments.length === 0) {
+        return res.status(400).json({ error: "No split allocations were set" });
+      }
+
+      // Make sure the split still accounts for every plant.
+      const proposedTotals = new Map();
+      normalizedAssignments.forEach((entry) => {
+        entry.plants.forEach((plant) => {
+          proposedTotals.set(
+            plant.strainId,
+            (proposedTotals.get(plant.strainId) || 0) + plant.count,
+          );
+        });
+      });
+
+      const sameKeyCount = proposedTotals.size === currentTotals.size;
+      const sameCounts = Array.from(currentTotals.entries()).every(
+        ([strainId, count]) => proposedTotals.get(strainId) === count,
+      );
+
+      if (!sameKeyCount || !sameCounts) {
+        return res.status(400).json({
+          error:
+            "Split allocation must account for every strain and match current total plant counts",
+        });
+      }
+    }
+
+    const uniqueRoomIds = [
+      ...new Set(normalizedAssignments.map((entry) => String(entry.roomId))),
+    ];
+
+    const roomDocs = await Room.find({ _id: { $in: uniqueRoomIds } }).select(
+      "_id locationId",
+    );
+
+    if (roomDocs.length !== uniqueRoomIds.length) {
+      return res
+        .status(400)
+        .json({ error: "One or more selected rooms are invalid" });
+    }
+
+    if (batch.location) {
+      const badRoom = roomDocs.find(
+        (roomDoc) => String(roomDoc.locationId) !== String(batch.location),
+      );
+
+      if (badRoom) {
+        return res.status(400).json({
+          error: "All selected rooms must belong to the batch location",
+        });
+      }
+    }
+
+    const { savedAssignmentIds } = await runWithOptionalTransaction(
+      mongoose,
+      async (session) => {
+        const now = new Date();
+
+        // End current active assignments before writing the new room layout.
+        await RoomAssignment.updateMany(
+          { batchId: batch._id, active: true },
+          { $set: { active: false, endedAt: now } },
+          session ? { session } : undefined,
+        );
+
+        // Create one active assignment per selected room.
+        const savedAssignments = await RoomAssignment.insertMany(
+          uniqueRoomIds.map((id) => {
+            const roomAssignmentEntry = normalizedAssignments.find(
+              (entry) => String(entry.roomId) === String(id),
+            );
+
+            return {
+              batchId: batch._id,
+              roomId: id,
+              assignedPlants: roomAssignmentEntry?.plants || [],
+              active: true,
+              source: "manual",
+              startedAt: now,
+              endedAt: null,
+              notes: notes || null,
+            };
+          }),
+          session ? { session } : undefined,
+        );
+
+        if (advanceStage === true) {
+          // Optionally advance the batch stage as part of the room move.
+          const stageMap =
+            NEXT_STAGE_BY_BATCH_TYPE[batch.batchType] ||
+            NEXT_STAGE_BY_BATCH_TYPE.production;
+          const nextStage = stageMap[batch.lifecycleStage];
+
+          if (!nextStage) {
+            throw new Error(
+              `No next stage available from ${batch.lifecycleStage}`,
+            );
+          }
+
+          batch.lifecycleStage = nextStage;
+          batch.stageStartedAt = now;
+        }
+
+        if (advanceStage === true) {
+          await batch.save(session ? { session } : undefined);
+        }
+
+        return {
+          savedAssignmentIds: savedAssignments.map((entry) => entry._id),
+        };
+      },
+    );
+
+    const [updatedBatchDoc, populatedAssignments] = await Promise.all([
+      Batch.findById(batch._id).populate(BATCH_POPULATE),
+      RoomAssignment.find({
+        _id: { $in: savedAssignmentIds },
+      }).populate(ROOM_ASSIGNMENT_POPULATE),
+    ]);
+
+    const [updatedBatch] = await attachDerivedRoomsToBatches([updatedBatchDoc]);
+
+    res.status(201).json({
+      batch: updatedBatch,
+      assignments: populatedAssignments,
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        error:
+          "Conflicting active room assignment was detected. Refresh and try again.",
+      });
+    }
+
+    if (String(error?.message || "").startsWith("No next stage available")) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a mom batch from selected plants in a production batch.
+router.post("/:id/create-moms", async (req, res) => {
+  try {
+    const { plants, momRoomId, notes } = req.body;
+
+    const sourceBatch = await Batch.findById(req.params.id).populate(
+      BATCH_POPULATE,
+    );
+    if (!sourceBatch) {
+      return res.status(404).json({ error: "Source batch not found" });
+    }
+
+    if (sourceBatch.batchType !== "production") {
+      return res.status(400).json({
+        error: "Only production batches can be used to create mom batches",
+      });
+    }
+
+    if (!Array.isArray(plants) || plants.length === 0) {
+      return res.status(400).json({
+        error: "plants array is required to create a mom batch",
+      });
+    }
+
+    // Figure out how many plants are currently available to cut from the source batch.
+    const availableTotals = await getCurrentBatchTotals(
+      sourceBatch._id,
+      sourceBatch.rooms,
+    );
+    const requestedCuts = new Map();
+
+    plants.forEach((entry) => {
+      const strainId = String(entry?.strainId || "");
+      const count = Number(entry?.count) || 0;
+      if (!strainId || count <= 0) return;
+      requestedCuts.set(strainId, (requestedCuts.get(strainId) || 0) + count);
+    });
+
+    if (requestedCuts.size === 0) {
+      return res.status(400).json({
+        error: "At least one positive strain cut count is required",
+      });
+    }
+
+    const overdrawn = Array.from(requestedCuts.entries()).find(
+      ([strainId, cutCount]) => cutCount > (availableTotals.get(strainId) || 0),
+    );
+
+    if (overdrawn) {
+      return res.status(400).json({
+        error: "Requested mom cut exceeds available plants in source batch",
+      });
+    }
+
+    let momRoom = null;
+
+    if (momRoomId) {
+      momRoom = await Room.findById(momRoomId);
+      if (!momRoom) {
+        return res.status(404).json({ error: "Selected mom room not found" });
+      }
+    } else {
+      momRoom = await Room.findOne({
+        locationId: sourceBatch.location,
+        type: "Mom",
+      });
+      if (!momRoom) {
+        return res.status(400).json({
+          error: "No mom room found at source batch location",
+        });
+      }
+    }
+
+    if (String(momRoom.locationId) !== String(sourceBatch.location)) {
+      return res.status(400).json({
+        error: "Mom room must belong to the same location as source batch",
+      });
+    }
+
+    const { savedMomBatchId, momAssignmentId } =
+      await runWithOptionalTransaction(mongoose, async (session) => {
+        const now = new Date();
+
+        // Load active assignments so the cut is based on the live room layout.
+        const activeAssignmentsQuery = RoomAssignment.find({
+          batchId: sourceBatch._id,
+          active: true,
+        });
+        if (session) activeAssignmentsQuery.session(session);
+        const activeSourceAssignments = await activeAssignmentsQuery;
+
+        const sourceRoomEntries =
+          activeSourceAssignments.length > 0
+            ? roomEntriesFromAssignments(activeSourceAssignments)
+            : normalizeRoomPlants(sourceBatch.rooms);
+
+        // Remove the requested mom cuts from the source batch room totals.
+        const updatedSourceRooms = subtractPlantsFromRooms(
+          sourceRoomEntries,
+          requestedCuts,
+        );
+        const momPlants = mapTotalsToPlants(requestedCuts);
+
+        if (activeSourceAssignments.length === 0) {
+          // If the batch has no active assignments yet, fall back to saving on Batch.rooms.
+          sourceBatch.rooms = updatedSourceRooms;
+          await sourceBatch.save(session ? { session } : undefined);
+        }
+
+        const momBatchNumber = await buildUniqueMomBatchNumber(
+          sourceBatch.batchNumber,
+          session,
+        );
+
+        // Create the new mom batch.
+        const momBatch = new Batch({
+          batchNumber: momBatchNumber,
+          cloneDate: now,
+          harvestDate: null,
+          batchType: "mom",
+          location: sourceBatch.location,
+          rooms: [
+            {
+              roomId: momRoom._id,
+              plants: momPlants,
+            },
+          ],
+          lifecycleStage: "Mom",
+          stageStartedAt: now,
+        });
+        const savedMomBatch = await momBatch.save(
+          session ? { session } : undefined,
+        );
+
+        if (activeSourceAssignments.length > 0) {
+          // Update the source batch's active room assignments after the cut.
+          await RoomAssignment.bulkWrite(
+            activeSourceAssignments.map((assignment) => {
+              const roomEntry = updatedSourceRooms.find(
+                (entry) => String(entry.roomId) === String(assignment.roomId),
+              );
+
+              return {
+                updateOne: {
+                  filter: { _id: assignment._id },
+                  update: {
+                    $set: roomEntry
+                      ? {
+                          assignedPlants: roomEntry.plants,
+                        }
+                      : {
+                          assignedPlants: [],
+                          active: false,
+                          endedAt: now,
+                        },
+                  },
+                },
+              };
+            }),
+            session ? { session } : undefined,
+          );
+        }
+
+        // Create the first active room assignment for the new mom batch.
+        const momAssignment = new RoomAssignment({
+          batchId: savedMomBatch._id,
+          roomId: momRoom._id,
+          assignedPlants: momPlants,
+          active: true,
+          source: "manual",
+          startedAt: now,
+          endedAt: null,
+          notes: notes || "Created from production batch mom cut",
+        });
+
+        const savedMomAssignment = await momAssignment.save(
+          session ? { session } : undefined,
+        );
+
+        return {
+          savedMomBatchId: savedMomBatch._id,
+          momAssignmentId: savedMomAssignment._id,
+        };
+      });
+
+    const [sourceBatchDoc, momBatchDoc, populatedMomAssignment] =
+      await Promise.all([
+        Batch.findById(sourceBatch._id).populate(BATCH_POPULATE),
+        Batch.findById(savedMomBatchId).populate(BATCH_POPULATE),
+        RoomAssignment.findById(momAssignmentId).populate(
+          ROOM_ASSIGNMENT_POPULATE,
+        ),
+      ]);
+
+    const [updatedSourceBatch, populatedMomBatch] =
+      await attachDerivedRoomsToBatches([sourceBatchDoc, momBatchDoc]);
+
+    res.status(201).json({
+      sourceBatch: updatedSourceBatch,
+      momBatch: populatedMomBatch,
+      momAssignment: populatedMomAssignment,
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        error:
+          "A conflicting active assignment or mom batch number was detected. Refresh and try again.",
+      });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get one batch.
+router.get("/:id", async (req, res) => {
+  try {
+    const batchDoc = await Batch.findById(req.params.id).populate(
+      BATCH_POPULATE,
+    );
+    if (!batchDoc) {
+      return res.status(404).json({ error: "Batch not found" });
+    }
+
+    const [batch] = await attachDerivedRoomsToBatches([batchDoc]);
     res.json(batch);
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,4 +1,4 @@
-﻿// Fixed bottom navigation bar. Also renders minimized window tabs.
+﻿// Bottom bar with page navigation and minimized window tabs.
 export default function Taskbar({ tabs, activePage, onNavigate }) {
   const visibleTabs = tabs.filter((tab) => tab.visible);
 
@@ -11,7 +11,9 @@ export default function Taskbar({ tabs, activePage, onNavigate }) {
               key={tab.key}
               className={`taskbar-tab${tab.minimized ? " taskbar-tab--minimized" : " taskbar-tab--open"}`}
               onClick={tab.onClick}
-              title={tab.minimized ? `Restore ${tab.label}` : `Minimize ${tab.label}`}
+              title={
+                tab.minimized ? `Restore ${tab.label}` : `Minimize ${tab.label}`
+              }
             >
               {tab.label}
             </button>
