@@ -1,11 +1,13 @@
-﻿import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Chip,
   InputAdornment,
+  Paper,
   Stack,
   TextField,
   Typography,
@@ -169,7 +171,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   }, [strainRows, searchQuery]);
 
   if (strainRows.length === 0) {
-    return <Typography color="text.secondary">No strains yet.</Typography>;
+    return <Alert severity="info">No strains yet.</Alert>;
   }
 
   const columns = [
@@ -210,34 +212,59 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   ];
 
   return (
-    <Stack spacing={2} sx={{ width: "100%" }}>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={1}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", sm: "center" }}
+    <Stack spacing={2.25} sx={{ width: "100%" }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 2.5,
+          border: "1px solid",
+          borderColor: "divider",
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(244, 250, 248, 0.9))",
+          backdropFilter: "blur(8px)",
+        }}
       >
-        <TextField
-          size="small"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search strains, type, status, room, location, or batch"
-          sx={{ minWidth: { xs: "100%", sm: 360 } }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          }}
-        />
+        <Stack spacing={1.25}>
+          <Stack spacing={0.5}>
+            <Typography variant="h5" sx={{ fontWeight: 800 }}>
+              Strain Viewer
+            </Typography>
+            <Typography color="text.secondary" variant="body2">
+              Live plants, upcoming harvest visibility, and historical yield
+              context.
+            </Typography>
+          </Stack>
 
-        <Typography variant="body2" color="text.secondary">
-          Showing {filteredRows.length} of {strainRows.length}
-        </Typography>
-      </Stack>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            justifyContent="space-between"
+            alignItems={{ xs: "stretch", sm: "center" }}
+          >
+            <TextField
+              size="small"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search strains, type, status, room, location, or batch"
+              sx={{ minWidth: { xs: "100%", sm: 360 } }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-      <Box sx={{ height: 360, width: "100%" }}>
+            <Typography variant="body2" color="text.secondary">
+              Showing {filteredRows.length} of {strainRows.length}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      <Box sx={{ height: 380, width: "100%" }}>
         <DataGrid
           rows={filteredRows.map((row) => ({ ...row, id: row.strainId }))}
           columns={columns}
@@ -247,14 +274,42 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
             pagination: { paginationModel: { pageSize: 10, page: 0 } },
           }}
           onRowClick={(params) => toggleExpandedRow(params.id)}
+          sx={{
+            borderRadius: 1.75,
+            borderColor: "divider",
+            backgroundColor: "rgba(255,255,255,0.93)",
+            "& .MuiDataGrid-columnHeaders": {
+              backgroundColor: "rgba(25, 118, 210, 0.06)",
+              fontWeight: 700,
+            },
+          }}
         />
       </Box>
 
       {filteredRows.map((row) => (
         <Fragment key={row.strainId}>
           {expandedStrainId === row.strainId && (
-            <Accordion defaultExpanded>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Accordion
+              defaultExpanded
+              elevation={0}
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: "12px !important",
+                overflow: "hidden",
+                backgroundColor: "rgba(255,255,255,0.95)",
+                "&::before": { display: "none" },
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  background:
+                    "linear-gradient(90deg, rgba(76, 175, 80, 0.08), rgba(76, 175, 80, 0.02))",
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
                 <Typography sx={{ fontWeight: 700 }}>
                   {row.name} Details
                 </Typography>
@@ -323,6 +378,14 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                       ]}
                       hideFooter
                       disableRowSelectionOnClick
+                      sx={{
+                        borderRadius: 1.5,
+                        borderColor: "divider",
+                        "& .MuiDataGrid-columnHeaders": {
+                          backgroundColor: "rgba(25, 118, 210, 0.06)",
+                          fontWeight: 700,
+                        },
+                      }}
                     />
                   </Box>
                 )}

@@ -7,13 +7,19 @@ import {
   Box,
   Card,
   CardContent,
+  Chip,
+  Divider,
   MenuItem,
+  Paper,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import GrassIcon from "@mui/icons-material/Grass";
+import ScaleIcon from "@mui/icons-material/Scale";
+import WarehouseIcon from "@mui/icons-material/Warehouse";
 import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
@@ -36,7 +42,7 @@ const buildHarvestOptionLabel = (harvest) => {
 
 function HarvestReportPage({ harvests }) {
   const [selectedHarvestId, setSelectedHarvestId] = useState("");
-  const [expandedRows, setExpandedRows] = useState({});
+  const [expandedRowKey, setExpandedRowKey] = useState(null);
 
   // Show newest harvests first.
   const sortedHarvests = useMemo(() => {
@@ -117,75 +123,196 @@ function HarvestReportPage({ harvests }) {
 
   const locationName = selectedHarvest?.locationId?.nickname || "N/A";
 
+  const formatMetric = (value) => {
+    if (value === null || value === undefined || value === "N/A") return "N/A";
+    if (typeof value === "number") return value.toLocaleString();
+    return value;
+  };
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: "Total Plants",
+        value: selectedHarvest?.totalPlantCount ?? 0,
+        icon: <GrassIcon fontSize="small" />,
+        tone: "linear-gradient(135deg, rgba(9, 121, 105, 0.14), rgba(9, 121, 105, 0.03))",
+      },
+      {
+        label: "Total Wet (g)",
+        value: selectedHarvest?.totalWetWeightGrams ?? 0,
+        icon: <ScaleIcon fontSize="small" />,
+        tone: "linear-gradient(135deg, rgba(2, 136, 209, 0.16), rgba(2, 136, 209, 0.03))",
+      },
+      {
+        label: "Total Dry (g)",
+        value: selectedHarvest?.totalDryWeightGrams ?? 0,
+        icon: <ScaleIcon fontSize="small" />,
+        tone: "linear-gradient(135deg, rgba(245, 124, 0, 0.17), rgba(245, 124, 0, 0.03))",
+      },
+      {
+        label: "Yield (g / sq ft)",
+        value: selectedHarvest?.totalYieldGramsPerSquareFoot ?? "N/A",
+        icon: <WarehouseIcon fontSize="small" />,
+        tone: "linear-gradient(135deg, rgba(123, 31, 162, 0.14), rgba(123, 31, 162, 0.03))",
+      },
+    ],
+    [selectedHarvest],
+  );
+
   const toggleExpandedRow = (rowKey) => {
-    setExpandedRows((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }));
+    setExpandedRowKey((prev) => (prev === rowKey ? null : rowKey));
   };
 
   return (
-    <Stack spacing={2}>
-      <Stack>
-        <Typography variant="h5">Harvest Report</Typography>
-        <Typography color="text.secondary" variant="body2">
-          Select a harvest date to view full room and strain details.
-        </Typography>
-      </Stack>
-
-      <TextField
-        select
-        fullWidth
-        label="Harvest Date"
-        value={effectiveSelectedHarvestId}
-        onChange={(e) => {
-          setSelectedHarvestId(e.target.value);
-          setExpandedRows({});
+    <Stack spacing={2.25}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 2.5,
+          border: "1px solid",
+          borderColor: "divider",
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(244, 250, 248, 0.9))",
+          backdropFilter: "blur(8px)",
         }}
       >
-        {sortedHarvests.length === 0 && (
-          <MenuItem value="">No harvests</MenuItem>
-        )}
-        {sortedHarvests.map((harvest) => (
-          <MenuItem key={harvest._id} value={harvest._id}>
-            {buildHarvestOptionLabel(harvest)}
-          </MenuItem>
-        ))}
-      </TextField>
+        <Stack spacing={1.25}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            spacing={1}
+          >
+            <Stack spacing={0.5}>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Harvest Report
+              </Typography>
+              <Typography color="text.secondary" variant="body2">
+                Complete room and strain breakdown for each harvest run.
+              </Typography>
+            </Stack>
+            {selectedHarvest && (
+              <Chip
+                label={`Date: ${formatDate(selectedHarvest.harvestDate)}`}
+                color="success"
+                variant="outlined"
+              />
+            )}
+          </Stack>
+
+          <TextField
+            select
+            fullWidth
+            label="Select Harvest"
+            value={effectiveSelectedHarvestId}
+            onChange={(e) => {
+              setSelectedHarvestId(e.target.value);
+              setExpandedRowKey(null);
+            }}
+          >
+            {sortedHarvests.length === 0 && (
+              <MenuItem value="">No harvests</MenuItem>
+            )}
+            {sortedHarvests.map((harvest) => (
+              <MenuItem key={harvest._id} value={harvest._id}>
+                {buildHarvestOptionLabel(harvest)}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Stack>
+      </Paper>
 
       {!selectedHarvest ? (
         <Alert severity="info">No harvest selected.</Alert>
       ) : (
         <>
-          <Grid container spacing={2}>
-            {[
-              ["Harvest Number", selectedHarvest.harvestNumber || "N/A"],
-              ["Location", locationName],
-              ["Rooms", roomNamesSummary],
-              [
-                "Total Strains",
-                roomSections.reduce(
-                  (total, section) => total + section.strainRows.length,
-                  0,
-                ),
-              ],
-              ["Total Plants", selectedHarvest.totalPlantCount ?? 0],
-              ["Total Wet (g)", selectedHarvest.totalWetWeightGrams ?? 0],
-              ["Total Dry (g)", selectedHarvest.totalDryWeightGrams ?? 0],
-              [
-                "Yield (g / sq ft)",
-                selectedHarvest.totalYieldGramsPerSquareFoot ?? "N/A",
-              ],
-            ].map(([label, value]) => (
-              <Grid key={label} size={{ xs: 12, sm: 6, lg: 3 }}>
-                <Card>
+          <Grid container spacing={1.5}>
+            {summaryCards.map((card) => (
+              <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
+                <Card
+                  elevation={0}
+                  sx={{
+                    borderRadius: 2,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    background: card.tone,
+                    minHeight: 108,
+                  }}
+                >
                   <CardContent>
-                    <Typography color="text.secondary" variant="body2">
-                      {label}
-                    </Typography>
-                    <Typography variant="h6">{value}</Typography>
+                    <Stack spacing={0.5}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Box
+                          sx={{
+                            color: "text.secondary",
+                            display: "inline-flex",
+                          }}
+                        >
+                          {card.icon}
+                        </Box>
+                        <Typography color="text.secondary" variant="body2">
+                          {card.label}
+                        </Typography>
+                      </Stack>
+                      <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                        {formatMetric(card.value)}
+                      </Typography>
+                    </Stack>
                   </CardContent>
                 </Card>
               </Grid>
             ))}
           </Grid>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 1.5, md: 2 },
+              borderRadius: 2.25,
+              border: "1px solid",
+              borderColor: "divider",
+              background: "rgba(255,255,255,0.9)",
+            }}
+          >
+            <Grid container spacing={1.25}>
+              {[
+                ["Harvest Number", selectedHarvest.harvestNumber || "N/A"],
+                ["Location", locationName],
+                ["Rooms", roomNamesSummary],
+                [
+                  "Total Strains",
+                  roomSections.reduce(
+                    (total, section) => total + section.strainRows.length,
+                    0,
+                  ),
+                ],
+              ].map(([label, value]) => (
+                <Grid key={label} size={{ xs: 12, md: 6 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{
+                      px: 1.25,
+                      py: 1,
+                      borderRadius: 1.5,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      backgroundColor: "background.paper",
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      {label}
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                      {formatMetric(value)}
+                    </Typography>
+                  </Stack>
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
 
           {roomSections.length === 0 ? (
             <Alert severity="info">
@@ -193,25 +320,46 @@ function HarvestReportPage({ harvests }) {
             </Alert>
           ) : (
             roomSections.map((section) => (
-              <Accordion key={section.roomSectionKey} defaultExpanded>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Accordion
+                key={section.roomSectionKey}
+                defaultExpanded
+                elevation={0}
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: "12px !important",
+                  overflow: "hidden",
+                  backgroundColor: "rgba(255,255,255,0.95)",
+                  "&::before": { display: "none" },
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{
+                    background:
+                      "linear-gradient(90deg, rgba(76, 175, 80, 0.08), rgba(76, 175, 80, 0.02))",
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
                   <Stack>
-                    <Typography sx={{ fontWeight: 700 }}>
+                    <Typography sx={{ fontWeight: 800 }}>
                       Room: {section.roomName} ({section.roomType})
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Sq Ft: {section.roomSqFoot}
+                      Sq Ft: {section.roomSqFoot} • Strains:{" "}
+                      {section.strainRows.length}
                     </Typography>
                   </Stack>
                 </AccordionSummary>
-                <AccordionDetails>
+                <AccordionDetails sx={{ pt: 2 }}>
                   {section.strainRows.length === 0 ? (
                     <Alert severity="info">
                       No strains found for this room.
                     </Alert>
                   ) : (
                     <>
-                      <Box sx={{ height: 320, mb: 2 }}>
+                      <Box sx={{ height: 340, mb: 2 }}>
                         <DataGrid
                           rows={section.strainRows.map((row) => ({
                             ...row,
@@ -266,41 +414,89 @@ function HarvestReportPage({ harvests }) {
                           }}
                           disableRowSelectionOnClick
                           onRowClick={(params) => toggleExpandedRow(params.id)}
+                          sx={{
+                            borderRadius: 1.5,
+                            borderColor: "divider",
+                            "& .MuiDataGrid-columnHeaders": {
+                              backgroundColor: "rgba(25, 118, 210, 0.06)",
+                              fontWeight: 700,
+                            },
+                          }}
                         />
                       </Box>
 
                       {section.strainRows.map((row) => (
                         <Fragment key={`${row.key}-detail`}>
-                          {expandedRows[row.key] && (
-                            <Card variant="outlined" sx={{ mb: 1.5 }}>
+                          {expandedRowKey === row.key && (
+                            <Card
+                              variant="outlined"
+                              sx={{
+                                mb: 1.5,
+                                borderRadius: 2,
+                                borderColor: "divider",
+                              }}
+                            >
                               <CardContent>
-                                <Typography
-                                  variant="subtitle1"
-                                  sx={{ mb: 1, fontWeight: 700 }}
-                                >
-                                  {row.strainName} Details
-                                </Typography>
-                                <Stack spacing={0.5}>
-                                  <Typography variant="body2">
-                                    Wet Avg / Plant (g):{" "}
-                                    <strong>
-                                      {row.wetPlantAvgWeightGrams}
-                                    </strong>
+                                <Stack spacing={1.25}>
+                                  <Typography
+                                    variant="subtitle1"
+                                    sx={{ fontWeight: 800 }}
+                                  >
+                                    {row.strainName} Details
                                   </Typography>
-                                  <Typography variant="body2">
-                                    % Change Wet→Dry:{" "}
-                                    <strong>{row.percentChangeWetToDry}</strong>
-                                  </Typography>
-                                  <Typography variant="body2">
-                                    Tote Wet Weights:{" "}
-                                    <strong>
-                                      {row.totes.length === 0
-                                        ? "None"
-                                        : row.totes
-                                            .map((tote) => tote?.wetWeight ?? 0)
-                                            .join(", ")}
-                                    </strong>
-                                  </Typography>
+                                  <Divider />
+                                  <Grid container spacing={1.25}>
+                                    {[
+                                      [
+                                        "Wet Avg / Plant (g)",
+                                        row.wetPlantAvgWeightGrams,
+                                      ],
+                                      [
+                                        "% Change Wet→Dry",
+                                        row.percentChangeWetToDry,
+                                      ],
+                                      [
+                                        "Tote Wet Weights",
+                                        row.totes.length === 0
+                                          ? "None"
+                                          : row.totes
+                                              .map(
+                                                (tote) => tote?.wetWeight ?? 0,
+                                              )
+                                              .join(", "),
+                                      ],
+                                    ].map(([label, value]) => (
+                                      <Grid
+                                        key={`${row.key}-${label}`}
+                                        size={{ xs: 12, md: 4 }}
+                                      >
+                                        <Stack
+                                          spacing={0.25}
+                                          sx={{
+                                            p: 1,
+                                            borderRadius: 1.25,
+                                            border: "1px solid",
+                                            borderColor: "divider",
+                                            backgroundColor:
+                                              "rgba(250, 250, 250, 0.95)",
+                                          }}
+                                        >
+                                          <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                          >
+                                            {label}
+                                          </Typography>
+                                          <Typography
+                                            variant="body2"
+                                            sx={{ fontWeight: 700 }}
+                                          >
+                                            {value}
+                                          </Typography>
+                                        </Stack>
+                                      </Grid>
+                                    ))}
+                                  </Grid>
                                 </Stack>
                               </CardContent>
                             </Card>
