@@ -4,10 +4,9 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import { defineConfig, globalIgnores } from "eslint/config";
 
-// ESLint config used by `npm run lint`.
-// This keeps code style and common bug checks consistent.
+// ESLint rules for frontend source.
 export default defineConfig([
-  // Ignore generated build folder.
+  // Ignore build output.
   globalIgnores(["dist"]),
   {
     files: ["**/*.{js,jsx}"],

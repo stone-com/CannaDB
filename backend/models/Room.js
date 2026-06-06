@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
-// Room = a specific area inside a location (Flower, Veg, Drying, etc.).
+// A room inside a location (Flower, Veg, Drying, etc.).
 const roomSchema = new mongoose.Schema({
-  // ObjectId reference to Location collection.
+  // Parent location for this room.
   locationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Location",
@@ -30,18 +30,15 @@ const roomSchema = new mongoose.Schema({
   sqFoot: {
     type: Number,
     default: null,
-  },
-  // Optional current batch assigned to this room.
-  // This is used to answer: "What strains are in this room right now?"
-  batchId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Batch",
-    default: null,
+    min: 0,
   },
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
+
+roomSchema.index({ locationId: 1, name: 1 }, { unique: true });
+roomSchema.index({ locationId: 1, type: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Room", roomSchema);

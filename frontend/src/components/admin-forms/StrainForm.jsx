@@ -1,9 +1,16 @@
 import { useState } from "react";
+import {
+  Alert,
+  Button,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
-// `embedded={true}` renders just the form fields (for AdminPanel accordion use).
-// `embedded={false}` renders a standalone card with a heading.
+// `embedded` decides inline form vs standalone card view.
 function StrainForm({ embedded }) {
-  // All three fields in one state object.
+  // Form values.
   const [form, setForm] = useState({ name: "", type: "", status: "" });
   const [message, setMessage] = useState("");
 
@@ -29,7 +36,7 @@ function StrainForm({ embedded }) {
 
       const savedStrain = await res.json();
 
-      // Notify App.jsx to re-fetch strains.
+      // Notify app to refresh strain data.
       window.dispatchEvent(
         new CustomEvent("strain:created", { detail: savedStrain }),
       );
@@ -44,71 +51,61 @@ function StrainForm({ embedded }) {
 
   const formContent = (
     <>
-      <form onSubmit={handleSubmit}>
-        <div className="form-field">
-          <label className="form-label">
-            Name (required):
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-              className="form-input"
-            />
-          </label>
-        </div>
+      <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+        <TextField
+          label="Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
 
-        <div className="form-field">
-          <label className="form-label">
-            Type:
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="form-select"
-            >
-              <option value="">-- Select Type --</option>
-              <option value="indica">Indica</option>
-              <option value="sativa">Sativa</option>
-              <option value="hybrid">Hybrid</option>
-              <option value="CBD">CBD</option>
-            </select>
-          </label>
-        </div>
+        <TextField
+          select
+          label="Type"
+          value={form.type}
+          onChange={(e) => setForm({ ...form, type: e.target.value })}
+        >
+          <MenuItem value="">Select Type</MenuItem>
+          <MenuItem value="indica">Indica</MenuItem>
+          <MenuItem value="sativa">Sativa</MenuItem>
+          <MenuItem value="hybrid">Hybrid</MenuItem>
+          <MenuItem value="CBD">CBD</MenuItem>
+        </TextField>
 
-        <div className="form-field">
-          <label className="form-label">
-            Status:
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              className="form-select"
-            >
-              <option value="">-- Select Status --</option>
-              <option value="production">Production</option>
-              <option value="bench">Bench</option>
-              <option value="pheno">Pheno</option>
-            </select>
-          </label>
-        </div>
+        <TextField
+          select
+          label="Status"
+          value={form.status}
+          onChange={(e) => setForm({ ...form, status: e.target.value })}
+        >
+          <MenuItem value="">Select Status</MenuItem>
+          <MenuItem value="production">Production</MenuItem>
+          <MenuItem value="bench">Bench</MenuItem>
+          <MenuItem value="pheno">Pheno</MenuItem>
+        </TextField>
 
-        <button type="submit" className="submit-button">
+        <Button type="submit" variant="contained">
           Add Strain
-        </button>
-      </form>
+        </Button>
+      </Stack>
 
-      {message && <p className="status-message">{message}</p>}
+      {message && (
+        <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
+          {message}
+        </Alert>
+      )}
     </>
   );
 
-  // When embedded, just return the form content — no wrapper or heading.
+  // Inline mode for accordion panels.
   if (embedded) return formContent;
 
-  // Standalone mode: wrap in a card with a heading.
+  // Standalone page/card mode.
   return (
-    <div className="form-container">
-      <h2>Add Strain</h2>
+    <Stack spacing={2}>
+      <Typography variant="h6">Add Strain</Typography>
       {formContent}
-    </div>
+    </Stack>
   );
 }
 

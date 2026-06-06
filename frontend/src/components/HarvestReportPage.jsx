@@ -1,14 +1,23 @@
 import { Fragment, useMemo, useState } from "react";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import Grid from "@mui/material/Grid";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { DataGrid } from "@mui/x-data-grid";
+import { formatDate } from "../utils/formatDate";
 
-// Formats a date value, returning "N/A" for nulls or invalid dates.
-const formatDate = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return date.toLocaleDateString();
-};
-
-// Builds a readable dropdown label: "3/15/2024 — Harvest 42 — Denver Facility — Room A, Room B"
+// Build dropdown label for one harvest.
 const buildHarvestOptionLabel = (harvest) => {
   if (!harvest) return "N/A";
 
@@ -29,7 +38,7 @@ function HarvestReportPage({ harvests }) {
   const [selectedHarvestId, setSelectedHarvestId] = useState("");
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Sorted newest-first for the dropdown.
+  // Show newest harvests first.
   const sortedHarvests = useMemo(() => {
     if (!Array.isArray(harvests)) return [];
     return [...harvests].sort(
@@ -37,7 +46,7 @@ function HarvestReportPage({ harvests }) {
     );
   }, [harvests]);
 
-  // Keeps the user's selection if still valid; auto-selects the most recent harvest otherwise.
+  // Keep current selection, otherwise default to newest harvest.
   const effectiveSelectedHarvestId = useMemo(() => {
     if (sortedHarvests.length === 0) return "";
     const stillExists = sortedHarvests.some((h) => h._id === selectedHarvestId);
@@ -53,7 +62,7 @@ function HarvestReportPage({ harvests }) {
     [effectiveSelectedHarvestId, sortedHarvests],
   );
 
-  // Converts the selected harvest into display-ready room sections with strain rows.
+  // Build room sections and strain rows for display.
   const roomSections = useMemo(() => {
     if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) return [];
 
@@ -113,162 +122,200 @@ function HarvestReportPage({ harvests }) {
   };
 
   return (
-    <div className="form-container">
-      <h2>Harvest Report</h2>
-      <p>Select a harvest date to view full room + strain details.</p>
+    <Stack spacing={2}>
+      <Stack>
+        <Typography variant="h5">Harvest Report</Typography>
+        <Typography color="text.secondary" variant="body2">
+          Select a harvest date to view full room and strain details.
+        </Typography>
+      </Stack>
 
-      <div className="form-field">
-        <label className="form-label" htmlFor="harvest-report-select">
-          Harvest Date:
-        </label>
-        <select
-          id="harvest-report-select"
-          className="form-select"
-          value={effectiveSelectedHarvestId}
-          onChange={(e) => {
-            setSelectedHarvestId(e.target.value);
-            setExpandedRows({});
-          }}
-        >
-          {sortedHarvests.length === 0 && <option value="">No harvests</option>}
-          {sortedHarvests.map((harvest) => (
-            <option key={harvest._id} value={harvest._id}>
-              {buildHarvestOptionLabel(harvest)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <TextField
+        select
+        fullWidth
+        label="Harvest Date"
+        value={effectiveSelectedHarvestId}
+        onChange={(e) => {
+          setSelectedHarvestId(e.target.value);
+          setExpandedRows({});
+        }}
+      >
+        {sortedHarvests.length === 0 && (
+          <MenuItem value="">No harvests</MenuItem>
+        )}
+        {sortedHarvests.map((harvest) => (
+          <MenuItem key={harvest._id} value={harvest._id}>
+            {buildHarvestOptionLabel(harvest)}
+          </MenuItem>
+        ))}
+      </TextField>
 
       {!selectedHarvest ? (
-        <p>No harvest selected.</p>
+        <Alert severity="info">No harvest selected.</Alert>
       ) : (
         <>
-          <div className="harvest-summary-grid">
-            <div className="strain-card">
-              <h3>Harvest Number</h3>
-              <p>{selectedHarvest.harvestNumber || "N/A"}</p>
-            </div>
-            <div className="strain-card">
-              <h3>Location</h3>
-              <p>{locationName}</p>
-            </div>
-            <div className="strain-card">
-              <h3>Rooms</h3>
-              <p>{roomNamesSummary}</p>
-            </div>
-            <div className="strain-card">
-              <h3>Total Strains</h3>
-              <p>
-                {roomSections.reduce(
+          <Grid container spacing={2}>
+            {[
+              ["Harvest Number", selectedHarvest.harvestNumber || "N/A"],
+              ["Location", locationName],
+              ["Rooms", roomNamesSummary],
+              [
+                "Total Strains",
+                roomSections.reduce(
                   (total, section) => total + section.strainRows.length,
                   0,
-                )}
-              </p>
-            </div>
-            <div className="strain-card">
-              <h3>Total Plants</h3>
-              <p>{selectedHarvest.totalPlantCount ?? 0}</p>
-            </div>
-            <div className="strain-card">
-              <h3>Total Wet (g)</h3>
-              <p>{selectedHarvest.totalWetWeightGrams ?? 0}</p>
-            </div>
-            <div className="strain-card">
-              <h3>Total Dry (g)</h3>
-              <p>{selectedHarvest.totalDryWeightGrams ?? 0}</p>
-            </div>
-            <div className="strain-card">
-              <h3>Yield (g / sq ft)</h3>
-              <p>{selectedHarvest.totalYieldGramsPerSquareFoot ?? "N/A"}</p>
-            </div>
-          </div>
+                ),
+              ],
+              ["Total Plants", selectedHarvest.totalPlantCount ?? 0],
+              ["Total Wet (g)", selectedHarvest.totalWetWeightGrams ?? 0],
+              ["Total Dry (g)", selectedHarvest.totalDryWeightGrams ?? 0],
+              [
+                "Yield (g / sq ft)",
+                selectedHarvest.totalYieldGramsPerSquareFoot ?? "N/A",
+              ],
+            ].map(([label, value]) => (
+              <Grid key={label} size={{ xs: 12, sm: 6, lg: 3 }}>
+                <Card>
+                  <CardContent>
+                    <Typography color="text.secondary" variant="body2">
+                      {label}
+                    </Typography>
+                    <Typography variant="h6">{value}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
 
           {roomSections.length === 0 ? (
-            <p>No room/strain rows found for this harvest.</p>
+            <Alert severity="info">
+              No room/strain rows found for this harvest.
+            </Alert>
           ) : (
             roomSections.map((section) => (
-              <div
-                className="harvest-room-section"
-                key={section.roomSectionKey}
-              >
-                <h3>
-                  Room: {section.roomName} ({section.roomType})
-                </h3>
-                <p>Sq Ft: {section.roomSqFoot}</p>
+              <Accordion key={section.roomSectionKey} defaultExpanded>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Stack>
+                    <Typography sx={{ fontWeight: 700 }}>
+                      Room: {section.roomName} ({section.roomType})
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Sq Ft: {section.roomSqFoot}
+                    </Typography>
+                  </Stack>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {section.strainRows.length === 0 ? (
+                    <Alert severity="info">
+                      No strains found for this room.
+                    </Alert>
+                  ) : (
+                    <>
+                      <Box sx={{ height: 320, mb: 2 }}>
+                        <DataGrid
+                          rows={section.strainRows.map((row) => ({
+                            ...row,
+                            id: row.key,
+                          }))}
+                          columns={[
+                            {
+                              field: "strainName",
+                              headerName: "Strain",
+                              flex: 1,
+                              minWidth: 140,
+                            },
+                            {
+                              field: "plantCount",
+                              headerName: "Plant Count",
+                              type: "number",
+                              flex: 0.8,
+                              minWidth: 120,
+                            },
+                            {
+                              field: "totalWetWeightGrams",
+                              headerName: "Wet Weight (g)",
+                              type: "number",
+                              flex: 0.9,
+                              minWidth: 130,
+                            },
+                            {
+                              field: "totalDryWeightGrams",
+                              headerName: "Dry Weight (g)",
+                              type: "number",
+                              flex: 0.9,
+                              minWidth: 130,
+                            },
+                            {
+                              field: "yieldGramsPerSquareFoot",
+                              headerName: "Yield (g/sq ft)",
+                              flex: 0.9,
+                              minWidth: 130,
+                            },
+                            {
+                              field: "dryPlantAvgWeightGrams",
+                              headerName: "Dry Avg (g/plant)",
+                              flex: 1,
+                              minWidth: 140,
+                            },
+                          ]}
+                          pageSizeOptions={[5, 10]}
+                          initialState={{
+                            pagination: {
+                              paginationModel: { pageSize: 5, page: 0 },
+                            },
+                          }}
+                          disableRowSelectionOnClick
+                          onRowClick={(params) => toggleExpandedRow(params.id)}
+                        />
+                      </Box>
 
-                {section.strainRows.length === 0 ? (
-                  <p>No strains found for this room.</p>
-                ) : (
-                  <div className="harvest-table-wrap">
-                    <table className="harvest-table">
-                      <thead>
-                        <tr>
-                          <th>Expand</th>
-                          <th>Strain</th>
-                          <th>Plant Count</th>
-                          <th>Wet Weight (g)</th>
-                          <th>Dry Weight (g)</th>
-                          <th>Yield (g/sq ft)</th>
-                          <th>Dry Avg (g/plant)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {section.strainRows.map((row) => (
-                          <Fragment key={row.key}>
-                            <tr>
-                              <td>
-                                <button
-                                  type="button"
-                                  className="table-toggle-button"
-                                  onClick={() => toggleExpandedRow(row.key)}
+                      {section.strainRows.map((row) => (
+                        <Fragment key={`${row.key}-detail`}>
+                          {expandedRows[row.key] && (
+                            <Card variant="outlined" sx={{ mb: 1.5 }}>
+                              <CardContent>
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{ mb: 1, fontWeight: 700 }}
                                 >
-                                  {expandedRows[row.key] ? "−" : "+"}
-                                </button>
-                              </td>
-                              <td>{row.strainName}</td>
-                              <td>{row.plantCount}</td>
-                              <td>{row.totalWetWeightGrams}</td>
-                              <td>{row.totalDryWeightGrams}</td>
-                              <td>{row.yieldGramsPerSquareFoot}</td>
-                              <td>{row.dryPlantAvgWeightGrams}</td>
-                            </tr>
-
-                            {expandedRows[row.key] && (
-                              <tr className="harvest-detail-row">
-                                <td colSpan={7}>
-                                  <div className="harvest-detail-grid">
-                                    <p>
-                                      <strong>Wet Avg / Plant (g):</strong>{" "}
+                                  {row.strainName} Details
+                                </Typography>
+                                <Stack spacing={0.5}>
+                                  <Typography variant="body2">
+                                    Wet Avg / Plant (g):{" "}
+                                    <strong>
                                       {row.wetPlantAvgWeightGrams}
-                                    </p>
-                                    <p>
-                                      <strong>% Change Wet→Dry:</strong>{" "}
-                                      {row.percentChangeWetToDry}
-                                    </p>
-                                    <p>
-                                      <strong>Tote Wet Weights:</strong>{" "}
+                                    </strong>
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    % Change Wet→Dry:{" "}
+                                    <strong>{row.percentChangeWetToDry}</strong>
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    Tote Wet Weights:{" "}
+                                    <strong>
                                       {row.totes.length === 0
                                         ? "None"
                                         : row.totes
                                             .map((tote) => tote?.wetWeight ?? 0)
                                             .join(", ")}
-                                    </p>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                                    </strong>
+                                  </Typography>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </Fragment>
+                      ))}
+                    </>
+                  )}
+                </AccordionDetails>
+              </Accordion>
             ))
           )}
         </>
       )}
-    </div>
+    </Stack>
   );
 }
 

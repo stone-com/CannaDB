@@ -1,5 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import "./App.css";
+import {
+  Alert,
+  AppBar,
+  Box,
+  Card,
+  CardContent,
+  Checkbox,
+  Divider,
+  Drawer,
+  FormControlLabel,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
+  Snackbar,
+  Stack,
+  Toolbar,
+  Typography,
+} from "@mui/material";
+import Grid from "@mui/material/Grid";
+import InsightsIcon from "@mui/icons-material/Insights";
+import DatasetIcon from "@mui/icons-material/Dataset";
 import AdminPanel from "./components/AdminPanel";
 import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
@@ -9,11 +30,7 @@ import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
 import BatchForm from "./components/BatchForm";
-// In React, it's common to keep UI config in arrays/objects like this.
-// We later map over VIEW_OPTIONS to render checkboxes instead of hard-coding each one.
-// This array drives the checkbox menu on the right side.
-// Each object has a unique `key` and a display label.
-// Sidebar panel options mapped to checkboxes.
+
 const DATA_VIEWER_OPTIONS = [
   { key: "strains", label: "Strains" },
   { key: "harvestReport", label: "Harvest Report" },
@@ -25,15 +42,24 @@ const HARVEST_OPTIONS = [
   { key: "dryWeightForm", label: "Add Dry Weights" },
 ];
 
+const DATA_REFRESH_EVENTS = [
+  "company:created",
+  "location:created",
+  "room:created",
+  "roomAssignment:created",
+  "batch:created",
+  "batch:updated",
+  "strain:created",
+];
+
 function App() {
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
-  const [batches, setBatches] = useState([]);
+  const [roomAssignments, setRoomAssignments] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activePage, setActivePage] = useState("dashboard");
 
-  // Tracks which floating windows are open.
   const [selectedViews, setSelectedViews] = useState({
     strains: false,
     harvestReport: false,
@@ -42,7 +68,6 @@ function App() {
     dryWeightForm: false,
   });
 
-  // Tracks which open windows are minimized to the taskbar.
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
@@ -51,7 +76,12 @@ function App() {
     dryWeightForm: false,
   });
 
-  // Fetches a JSON array from `path` and stores it via `setter`.
+  const [toast, setToast] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
   const fetchCollection = useCallback(async (path, setter) => {
     try {
       const res = await fetch(path);
@@ -63,13 +93,12 @@ function App() {
     }
   }, []);
 
-  // Fetches all data in parallel.
   const fetchAllData = useCallback(async () => {
     setLoadingData(true);
     await Promise.all([
       fetchCollection("/api/strains", setStrains),
       fetchCollection("/api/rooms", setRooms),
-      fetchCollection("/api/batches", setBatches),
+      fetchCollection("/api/room-assignments", setRoomAssignments),
       fetchCollection("/api/harvests", setHarvests),
     ]);
     setLoadingData(false);
@@ -80,100 +109,224 @@ function App() {
   }, [fetchAllData]);
 
   useEffect(() => {
-    // Re-fetches all data when any form dispatches a create/update event.
     const handleDataCreated = () => fetchAllData();
 
-    window.addEventListener("company:created", handleDataCreated);
-    window.addEventListener("location:created", handleDataCreated);
-    window.addEventListener("room:created", handleDataCreated);
-    window.addEventListener("strain:created", handleDataCreated);
+    DATA_REFRESH_EVENTS.forEach((eventName) => {
+      window.addEventListener(eventName, handleDataCreated);
+    });
 
-    // Always clean up listeners to avoid duplicate handlers on re-renders/unmount.
     return () => {
-      window.removeEventListener("company:created", handleDataCreated);
-      window.removeEventListener("location:created", handleDataCreated);
-      window.removeEventListener("room:created", handleDataCreated);
-      window.removeEventListener("strain:created", handleDataCreated);
+      DATA_REFRESH_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, handleDataCreated);
+      });
     };
   }, [fetchAllData]);
 
-  // Toggles a window open/closed and clears its minimized state when closing.
   const toggleView = (key) => {
     setSelectedViews((prev) => ({ ...prev, [key]: !prev[key] }));
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
   };
 
-  // Toggles a window between minimized (taskbar) and restored.
   const toggleMinimize = (key) => {
     setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const openWindowCount = Object.values(selectedViews).filter(Boolean).length;
+  const totalPlants = roomAssignments.reduce((sum, assignment) => {
+    const plants = Array.isArray(assignment?.assignedPlants)
+      ? assignment.assignedPlants
+      : [];
+    return (
+      sum +
+      plants.reduce((inner, plant) => inner + (Number(plant?.count) || 0), 0)
+    );
+  }, 0);
+
+  const totalDryWeight = harvests.reduce(
+    (sum, harvest) => sum + (Number(harvest?.totalDryWeightGrams) || 0),
+    0,
+  );
+
   return (
-    <div className="app-root">
-      <header className="app-header">
-        <span className="app-header-title">CannaDB</span>
-      </header>
-
-      {/* Left sidebar — only visible on the dashboard page */}
-      {activePage === "dashboard" && (
-        <aside className="viewer-sidebar">
-          <h2 className="viewer-sidebar-title">Panels</h2>
-          <p className="viewer-sidebar-hint">
-            Open a panel as a floating window:
-          </p>
-          <div className="viewer-sections">
-            <section className="viewer-section">
-              <h3 className="viewer-section-title">Data Viewer</h3>
-              <div className="viewer-options">
-                {DATA_VIEWER_OPTIONS.map((option) => (
-                  <label key={option.key} className="viewer-option">
-                    <input
-                      type="checkbox"
-                      checked={selectedViews[option.key]}
-                      onChange={() => toggleView(option.key)}
-                    />
-                    {option.label}
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            <section className="viewer-section">
-              <h3 className="viewer-section-title">Harvest</h3>
-              <div className="viewer-options">
-                {HARVEST_OPTIONS.map((option) => (
-                  <label key={option.key} className="viewer-option">
-                    <input
-                      type="checkbox"
-                      checked={selectedViews[option.key]}
-                      onChange={() => toggleView(option.key)}
-                    />
-                    {option.label}
-                  </label>
-                ))}
-              </div>
-            </section>
-          </div>
-        </aside>
-      )}
-
-      <div
-        className={`main-content${activePage === "dashboard" ? " with-sidebar" : ""}`}
+    <Box sx={{ minHeight: "100vh", pb: 10 }}>
+      <AppBar
+        position="fixed"
+        color="inherit"
+        sx={{ borderBottom: "1px solid", borderColor: "divider" }}
       >
-        {/* Conditional rendering with && — only show content when on the matching page.
-           "activePage === 'dashboard'" evaluates to true or false.
-           If true → the dashboard div renders. If false → nothing renders. */}
+        <Toolbar sx={{ justifyContent: "space-between" }}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <InsightsIcon color="primary" />
+            <Typography variant="h6">CannaDB Operations Hub</Typography>
+          </Stack>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Typography variant="body2" color="text.secondary">
+              Open Panels: {openWindowCount}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Total Plants: {totalPlants.toLocaleString()}
+            </Typography>
+          </Stack>
+        </Toolbar>
+      </AppBar>
+
+      <Toolbar />
+
+      <Box sx={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
         {activePage === "dashboard" && (
-          <div className="dashboard-page">
-            {/* loadingData && <p>...</p> shows the loading message until data
-            arrives */}
-            {loadingData && <p>Loading data...</p>}
-          </div>
+          <Drawer
+            variant="permanent"
+            sx={{
+              width: 300,
+              flexShrink: 0,
+              "& .MuiDrawer-paper": {
+                width: 300,
+                boxSizing: "border-box",
+                top: 64,
+                height: "calc(100% - 64px - 64px)",
+                borderRight: "1px solid",
+                borderColor: "divider",
+                background:
+                  "linear-gradient(180deg, rgba(0,95,115,0.06), rgba(255,255,255,0.95))",
+              },
+            }}
+          >
+            <Box sx={{ p: 2 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Dashboard Panels
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Launch viewers and workflows in floating workspace windows.
+              </Typography>
+
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Data Viewer
+              </Typography>
+              <List dense>
+                {DATA_VIEWER_OPTIONS.map((option) => (
+                  <ListItem key={option.key} disableGutters>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={selectedViews[option.key]}
+                          onChange={() => toggleView(option.key)}
+                        />
+                      }
+                      label={<ListItemText primary={option.label} />}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+
+              <Divider sx={{ my: 1.5 }} />
+
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Harvest Workflows
+              </Typography>
+              <List dense>
+                {HARVEST_OPTIONS.map((option) => (
+                  <ListItem key={option.key} disableGutters>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={selectedViews[option.key]}
+                          onChange={() => toggleView(option.key)}
+                        />
+                      }
+                      label={<ListItemText primary={option.label} />}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          </Drawer>
         )}
 
-        {/* AdminPanel is only rendered when the user is on the admin page */}
-        {activePage === "admin" && <AdminPanel />}
-      </div>
+        <Box
+          sx={{ flex: 1, p: 3, ml: activePage === "dashboard" ? "300px" : 0 }}
+        >
+          {loadingData && <LinearProgress />}
+
+          {activePage === "dashboard" && (
+            <Stack spacing={2}>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Card>
+                    <CardContent>
+                      <Typography color="text.secondary" variant="body2">
+                        Strains
+                      </Typography>
+                      <Typography variant="h4">{strains.length}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Card>
+                    <CardContent>
+                      <Typography color="text.secondary" variant="body2">
+                        Rooms
+                      </Typography>
+                      <Typography variant="h4">{rooms.length}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Card>
+                    <CardContent>
+                      <Typography color="text.secondary" variant="body2">
+                        Harvests
+                      </Typography>
+                      <Typography variant="h4">{harvests.length}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Card>
+                    <CardContent>
+                      <Typography color="text.secondary" variant="body2">
+                        Dry Weight (g)
+                      </Typography>
+                      <Typography variant="h4">
+                        {Math.round(totalDryWeight).toLocaleString()}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              <Card
+                sx={{
+                  background:
+                    "linear-gradient(120deg, rgba(0,95,115,0.94), rgba(10,147,150,0.9))",
+                  color: "#fff",
+                }}
+              >
+                <CardContent>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ mb: 1 }}
+                  >
+                    <DatasetIcon />
+                    <Typography variant="h5">Operations Workspace</Typography>
+                  </Stack>
+                  <Typography
+                    variant="body1"
+                    sx={{ maxWidth: 780, opacity: 0.95 }}
+                  >
+                    Open any panel from the left rail to run analytics, room
+                    analysis, and harvest workflows in parallel draggable
+                    windows.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Stack>
+          )}
+
+          {activePage === "admin" && <AdminPanel />}
+        </Box>
+      </Box>
 
       {!loadingData && activePage === "dashboard" && (
         <>
@@ -188,7 +341,11 @@ function App() {
               defaultW={1000}
               defaultH={520}
             >
-              <StrainDataViewer strains={strains} rooms={rooms} />
+              <StrainDataViewer
+                strains={strains}
+                roomAssignments={roomAssignments}
+                harvests={harvests}
+              />
             </DraggableWindow>
           )}
           {selectedViews.harvestReport && (
@@ -216,7 +373,7 @@ function App() {
               defaultW={700}
               defaultH={440}
             >
-              <RoomViewer rooms={rooms} batches={batches} />
+              <RoomViewer rooms={rooms} roomAssignments={roomAssignments} />
             </DraggableWindow>
           )}
           {selectedViews.harvestForm && (
@@ -234,7 +391,11 @@ function App() {
                 onComplete={async () => {
                   await fetchAllData();
                   toggleView("harvestForm");
-                  window.alert("Harvest created successfully.");
+                  setToast({
+                    open: true,
+                    message: "Harvest created successfully.",
+                    severity: "success",
+                  });
                 }}
               />
             </DraggableWindow>
@@ -255,7 +416,11 @@ function App() {
                 onComplete={async () => {
                   await fetchAllData();
                   toggleView("dryWeightForm");
-                  window.alert("Dry weights saved successfully.");
+                  setToast({
+                    open: true,
+                    message: "Dry weights saved successfully.",
+                    severity: "success",
+                  });
                 }}
               />
             </DraggableWindow>
@@ -263,10 +428,6 @@ function App() {
         </>
       )}
 
-      {/* ── Taskbar — minimized windows appear here as tabs ────────────────────── */}
-      {/* Each tab object has: key, label, visible (bool), and onClick.     */}
-      {/* Taskbar renders nothing when all tabs are hidden.                  */}
-      <BatchForm />
       <Taskbar
         activePage={activePage}
         onNavigate={setActivePage}
@@ -308,7 +469,21 @@ function App() {
           },
         ]}
       />
-    </div>
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+      >
+        <Alert
+          severity={toast.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 }
 

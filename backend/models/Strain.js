@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// Strain = reusable genetics record used by batches and harvests.
+// Reusable strain record used by batches and harvests.
 const strainSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -13,7 +13,7 @@ const strainSchema = new mongoose.Schema({
     enum: ["indica", "sativa", "hybrid", "CBD"],
     default: null,
   },
-  // Current lifecycle state for this strain.
+  // Current status for this strain.
   status: {
     type: String,
     enum: ["production", "bench", "pheno"],

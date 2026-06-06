@@ -1,26 +1,60 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 function DryWeightForm({ harvests, onComplete }) {
-  // Selected harvest ID and currently highlighted strain key.
-  const [selectedHarvestId, setSelectedHarvestId] = useState("");
+  // Current selected batch/strain row.
+  const [selectedBatchId, setSelectedBatchId] = useState("");
   const [selectedStrainKey, setSelectedStrainKey] = useState(null);
-  // Current dry weight input and the committed values map.
+  // Input value and saved dry weights.
   const [dryWeightInput, setDryWeightInput] = useState("");
   const [dryWeightsByKey, setDryWeightsByKey] = useState({});
 
-  // Sort newest-first.
-  const sortedHarvests = Array.isArray(harvests)
-    ? [...harvests].sort(
-        (a, b) => new Date(b.harvestDate) - new Date(a.harvestDate),
-      )
-    : [];
+  const sortedHarvests = useMemo(
+    () =>
+      Array.isArray(harvests)
+        ? [...harvests].sort(
+            (a, b) => new Date(b.harvestDate) - new Date(a.harvestDate),
+          )
+        : [],
+    [harvests],
+  );
 
-  const selectedHarvest =
-    sortedHarvests.find((harvest) => harvest._id === selectedHarvestId) || null;
+  const batchesForSelection = useMemo(
+    () =>
+      sortedHarvests.map((harvest) => ({
+        batchId: harvest?.batchId?._id || "",
+        batchNumber: harvest?.batchId?.batchNumber || "Unknown Batch",
+        harvest,
+      })),
+    [sortedHarvests],
+  );
 
-  // Flatten all room/strain entries into a key-indexed list for the picker.
-  const harvestStrains = [];
-  if (selectedHarvest && Array.isArray(selectedHarvest.rooms)) {
+  const selectedHarvest = useMemo(
+    () =>
+      batchesForSelection.find(
+        (entry) => String(entry.batchId) === String(selectedBatchId),
+      )?.harvest || null,
+    [batchesForSelection, selectedBatchId],
+  );
+
+  const harvestStrains = useMemo(() => {
+    if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) {
+      return [];
+    }
+
+    const rows = [];
+
     selectedHarvest.rooms.forEach((roomEntry, roomIndex) => {
       const roomName = roomEntry?.roomId?.name || "Unknown";
       const strains = Array.isArray(roomEntry?.strains)
@@ -28,7 +62,7 @@ function DryWeightForm({ harvests, onComplete }) {
         : [];
 
       strains.forEach((strainEntry, strainIndex) => {
-        harvestStrains.push({
+        rows.push({
           key: `${roomIndex}-${strainIndex}`,
           roomName,
           strainName: strainEntry?.strainId?.name || "Unknown",
@@ -36,14 +70,19 @@ function DryWeightForm({ harvests, onComplete }) {
         });
       });
     });
-  }
 
-  const selectedStrain =
-    harvestStrains.find((entry) => entry.key === selectedStrainKey) || null;
+    return rows;
+  }, [selectedHarvest]);
 
-  // Resets all sub-state when a new harvest is chosen.
-  const handleHarvestChange = (e) => {
-    setSelectedHarvestId(e.target.value);
+  const selectedStrain = useMemo(
+    () =>
+      harvestStrains.find((entry) => entry.key === selectedStrainKey) || null,
+    [harvestStrains, selectedStrainKey],
+  );
+
+  // Reset form state when batch changes.
+  const handleBatchChange = (e) => {
+    setSelectedBatchId(e.target.value);
     setSelectedStrainKey(null);
     setDryWeightInput("");
     setDryWeightsByKey({});
@@ -69,7 +108,7 @@ function DryWeightForm({ harvests, onComplete }) {
     }));
   };
 
-  // PATCHes the harvest with updated dry weights for every strain.
+  // Save dry weights back to the harvest.
   const handleSubmit = async () => {
     if (!selectedHarvest) {
       window.alert("Please select a harvest.");
@@ -102,7 +141,10 @@ function DryWeightForm({ harvests, onComplete }) {
       const res = await fetch(`/api/harvests/${selectedHarvest._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rooms: updatedRooms }),
+        body: JSON.stringify({
+          rooms: updatedRooms,
+          finalizeDryWeights: true,
+        }),
       });
 
       if (!res.ok) {
@@ -120,143 +162,143 @@ function DryWeightForm({ harvests, onComplete }) {
     }
   };
 
-  const activeDryWeight = selectedStrain
-    ? dryWeightsByKey[selectedStrain.key]
-    : undefined;
+  const activeDryWeight = useMemo(
+    () => (selectedStrain ? dryWeightsByKey[selectedStrain.key] : undefined),
+    [dryWeightsByKey, selectedStrain],
+  );
 
   return (
-    <div className="harvest-intake-form">
-      <div className="harvest-intake-left">
-        <h3 className="harvest-intake-title">Dry Weight Entry</h3>
+    <Stack
+      direction={{ xs: "column", md: "row" }}
+      spacing={2}
+      sx={{ height: "100%" }}
+    >
+      <Stack spacing={2} sx={{ width: { xs: "100%", md: 420 } }}>
+        <Typography variant="h6">Dry Weight Entry</Typography>
 
-        <div className="form-field">
-          <label className="form-label">Harvest</label>
-          <select
-            className="form-select"
-            value={selectedHarvestId}
-            onChange={handleHarvestChange}
-          >
-            <option value="">-- Select Harvest --</option>
-            {sortedHarvests.map((harvest) => {
-              const date = new Date(harvest?.harvestDate);
-              const dateText = Number.isNaN(date.getTime())
-                ? "N/A"
-                : date.toLocaleDateString();
-              const harvestNumberText = harvest?.harvestNumber || "No Number";
-              const locationText =
-                harvest?.locationId?.nickname || "No Location";
-              const roomNames = (harvest?.rooms || [])
-                .map((roomEntry) => roomEntry?.roomId?.name)
-                .filter(Boolean)
-                .join(", ");
-              const label = `${dateText} - ${harvestNumberText} - ${locationText} - ${roomNames || "No Rooms"}`;
+        <TextField
+          select
+          label="Batch"
+          value={selectedBatchId}
+          onChange={handleBatchChange}
+        >
+          <MenuItem value="">Select Batch</MenuItem>
+          {batchesForSelection.map(({ batchId, batchNumber, harvest }) => {
+            const date = new Date(harvest?.harvestDate);
+            const dateText = Number.isNaN(date.getTime())
+              ? "N/A"
+              : date.toLocaleDateString();
+            const harvestNumberText = harvest?.harvestNumber || "No Number";
+            const locationText = harvest?.locationId?.nickname || "No Location";
+            const roomNames = (harvest?.rooms || [])
+              .map((roomEntry) => roomEntry?.roomId?.name)
+              .filter(Boolean)
+              .join(", ");
+            const label = `${batchNumber} - ${dateText} - ${harvestNumberText} - ${locationText} - ${roomNames || "No Rooms"}`;
 
-              return (
-                <option key={harvest._id} value={harvest._id}>
-                  {label}
-                </option>
-              );
-            })}
-          </select>
-        </div>
+            return (
+              <MenuItem key={harvest._id} value={batchId}>
+                {label}
+              </MenuItem>
+            );
+          })}
+        </TextField>
 
         {selectedHarvest && (
-          <div className="harvest-strains-panel">
-            <p className="harvest-strains-heading">
-              {selectedHarvest.harvestNumber || "Harvest"} Strains
-            </p>
-            <div className="harvest-strains-list">
-              {harvestStrains.map((entry) => {
-                const isActive = selectedStrainKey === entry.key;
-                const hasInputDryWeight =
-                  dryWeightsByKey[entry.key] !== undefined;
-                const dryWeight = hasInputDryWeight
-                  ? `${dryWeightsByKey[entry.key]} g`
-                  : "Not set";
+          <Card variant="outlined">
+            <CardContent>
+              <Typography
+                variant="subtitle2"
+                color="text.secondary"
+                sx={{ mb: 1 }}
+              >
+                {selectedHarvest.harvestNumber || "Harvest"} Strains
+              </Typography>
+              <Stack spacing={1}>
+                {harvestStrains.map((entry) => {
+                  const isActive = selectedStrainKey === entry.key;
+                  const hasInputDryWeight =
+                    dryWeightsByKey[entry.key] !== undefined;
+                  const dryWeight = hasInputDryWeight
+                    ? `${dryWeightsByKey[entry.key]} g`
+                    : "Not set";
 
-                return (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    className={`harvest-strain-row${isActive ? " active" : ""}`}
-                    onClick={() => handleStrainClick(entry.key)}
-                  >
-                    <span>
-                      {entry.strainName} ({entry.roomName}) - {entry.plantCount}{" "}
-                      Plants
-                    </span>
-                    <span className="tote-badge">{dryWeight}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                  return (
+                    <Button
+                      key={entry.key}
+                      variant={isActive ? "contained" : "outlined"}
+                      color={isActive ? "primary" : "inherit"}
+                      onClick={() => handleStrainClick(entry.key)}
+                      sx={{ justifyContent: "space-between" }}
+                    >
+                      <span>
+                        {entry.strainName} ({entry.roomName}) -{" "}
+                        {entry.plantCount} Plants
+                      </span>
+                      <Chip size="small" color="secondary" label={dryWeight} />
+                    </Button>
+                  );
+                })}
+              </Stack>
+            </CardContent>
+          </Card>
         )}
 
-        {selectedHarvestId && (
-          <button
-            type="button"
-            className="submit-button"
-            onClick={handleSubmit}
-          >
+        {selectedBatchId && (
+          <Button variant="contained" size="large" onClick={handleSubmit}>
             Save Dry Weights
-          </button>
+          </Button>
         )}
-      </div>
+      </Stack>
 
-      <div className="harvest-intake-right">
-        {selectedStrain ? (
-          <>
-            <p className="harvest-active-strain">
-              {selectedStrain.strainName} ({selectedStrain.roomName})
-            </p>
+      <Box sx={{ flex: 1 }}>
+        <Card variant="outlined" sx={{ height: "100%" }}>
+          <CardContent>
+            {selectedStrain ? (
+              <Stack spacing={2}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  {selectedStrain.strainName} ({selectedStrain.roomName})
+                </Typography>
 
-            <div className="form-field">
-              <label className="form-label">Total Dry Weight (grams)</label>
-              <div className="harvest-tote-input-row">
-                <input
-                  className="form-input"
-                  type="number"
-                  min="0"
-                  value={dryWeightInput}
-                  onChange={(e) => setDryWeightInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleSetDryWeight();
-                    }
-                  }}
-                  placeholder="e.g. 1420"
-                />
-                <button
-                  type="button"
-                  className="submit-button"
-                  onClick={handleSetDryWeight}
-                >
-                  Set
-                </button>
-              </div>
-            </div>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    type="number"
+                    fullWidth
+                    label="Total Dry Weight (grams)"
+                    value={dryWeightInput}
+                    onChange={(e) => setDryWeightInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSetDryWeight();
+                      }
+                    }}
+                    placeholder="e.g. 1420"
+                  />
+                  <Button variant="contained" onClick={handleSetDryWeight}>
+                    Set
+                  </Button>
+                </Stack>
 
-            <div className="harvest-totes-list">
-              <p className="harvest-tote-total">
-                Current Dry Weight:{" "}
-                <strong>
-                  {activeDryWeight === undefined
-                    ? "Not set"
-                    : `${activeDryWeight} g`}
-                </strong>
-              </p>
-            </div>
-          </>
-        ) : (
-          <p className="harvest-intake-hint">
-            {selectedHarvest
-              ? "Click a strain on the left to enter dry weight."
-              : "Select a harvest to get started."}
-          </p>
-        )}
-      </div>
-    </div>
+                <Typography variant="body1">
+                  Current Dry Weight:{" "}
+                  <strong>
+                    {activeDryWeight === undefined
+                      ? "Not set"
+                      : `${activeDryWeight} g`}
+                  </strong>
+                </Typography>
+              </Stack>
+            ) : (
+              <Alert severity="info">
+                {selectedHarvest
+                  ? "Click a strain on the left to enter dry weight."
+                  : "Select a batch to get started."}
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
+    </Stack>
   );
 }
 

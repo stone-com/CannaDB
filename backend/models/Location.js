@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
-// Location = physical site linked to a company.
+// Physical grow site linked to a company.
 const locationSchema = new mongoose.Schema({
-  // ObjectId reference to Company collection.
+  // Company that owns this location.
   companyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Company",
@@ -21,5 +21,8 @@ const locationSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+locationSchema.index({ companyId: 1, nickname: 1 }, { unique: true });
+locationSchema.index({ companyId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Location", locationSchema);

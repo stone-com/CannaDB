@@ -1,14 +1,12 @@
 const Room = require("../models/Room");
 
-// Helper: safely converts values into numbers.
-// Useful when form payloads send strings like "12" instead of number 12.
+// Convert unknown input to a safe number.
 const toNumber = (value, fallback = 0) => {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
 };
 
-// Helper: average weight per plant.
-// Returns null when plantCount is 0 to avoid divide-by-zero.
+// Average weight per plant.
 const averagePerPlant = (weight, plantCount) => {
   if (plantCount <= 0) {
     return null;
@@ -16,8 +14,7 @@ const averagePerPlant = (weight, plantCount) => {
   return weight / plantCount;
 };
 
-// Helper: percent change from wet -> dry.
-// Formula: ((dry - wet) / wet) * 100
+// Percent change from wet to dry weight.
 const percentChangeWetToDry = (wetWeight, dryWeight) => {
   if (wetWeight <= 0) {
     return null;
@@ -25,10 +22,7 @@ const percentChangeWetToDry = (wetWeight, dryWeight) => {
   return ((dryWeight - wetWeight) / wetWeight) * 100;
 };
 
-// Helper: Justin's yield formula for one strain entry.
-// x = strainPlantCount / totalPlantCount
-// y = x * totalRoomSquareFeet
-// yield = dryWeight / y
+// Yield formula for one strain entry.
 const justinYieldForStrain = ({
   strainPlantCount,
   totalPlantCount,
@@ -49,7 +43,7 @@ const justinYieldForStrain = ({
   return dryWeight / y;
 };
 
-// Fetches all referenced rooms and sums up square footage.
+// Sum square footage for all selected rooms.
 const getTotalRoomSquareFeet = async (rooms) => {
   const roomIds = Array.isArray(rooms)
     ? rooms.map((entry) => entry?.roomId).filter(Boolean)
@@ -66,21 +60,18 @@ const getTotalRoomSquareFeet = async (rooms) => {
   );
 };
 
-// Main function to apply all harvest calculations and update the document accordingly
-// Recalculates every derived field on a Harvest document.
-// This function mutates the incoming Mongoose document directly.
-// Imported into the harvest Model and called in a pre-validation hook to ensure all calculations run before saving.
+// Recalculate all derived harvest fields before save.
 const applyHarvestCalculations = async (harvestDoc) => {
-  // 1) Get total square footage from all referenced rooms.
+  // 1) Load total room size.
   const rooms = Array.isArray(harvestDoc.rooms) ? harvestDoc.rooms : [];
   const totalRoomSquareFeet = await getTotalRoomSquareFeet(rooms);
 
-  // 2) Flatten all nested room strains into one list for harvest-level totals.
+  // 2) Flatten room strains for harvest-level totals.
   const allStrains = rooms.flatMap((roomEntry) =>
     Array.isArray(roomEntry?.strains) ? roomEntry.strains : [],
   );
 
-  // 3) Harvest total plants = sum of strain plantCount across all rooms.
+  // 3) Total plant count across all rooms.
   harvestDoc.totalPlantCount = allStrains.reduce(
     (sum, strain) => sum + toNumber(strain.plantCount, 0),
     0,
@@ -89,14 +80,14 @@ const applyHarvestCalculations = async (harvestDoc) => {
   let totalWetWeightGrams = 0;
   let totalDryWeightGrams = 0;
 
-  // 4) Recompute all per-strain derived values.
+  // 4) Recompute each strain's derived fields.
   rooms.forEach((roomEntry) => {
     const roomStrains = Array.isArray(roomEntry?.strains)
       ? roomEntry.strains
       : [];
 
     roomStrains.forEach((strain) => {
-      // Parse raw input values.
+      // Parse input values.
       const plantCount = toNumber(strain.plantCount, 0);
       const wetWeight = Array.isArray(strain.totes)
         ? strain.totes.reduce(
@@ -106,7 +97,7 @@ const applyHarvestCalculations = async (harvestDoc) => {
         : 0;
       const dryWeight = toNumber(strain.totalDryWeightGrams, 0);
 
-      // Set per-strain formulas.
+      // Save per-strain calculations.
       strain.totalWetWeightGrams = wetWeight;
       strain.totalDryWeightGrams = dryWeight;
       strain.wetPlantAvgWeightGrams = averagePerPlant(wetWeight, plantCount);
@@ -122,13 +113,13 @@ const applyHarvestCalculations = async (harvestDoc) => {
         dryWeight,
       });
 
-      // Build harvest-level totals while iterating.
+      // Add to harvest totals.
       totalWetWeightGrams += wetWeight;
       totalDryWeightGrams += dryWeight;
     });
   });
 
-  // 5) Save final harvest-level totals + formulas.
+  // 5) Save final harvest totals.
   harvestDoc.totalWetWeightGrams = totalWetWeightGrams;
   harvestDoc.totalDryWeightGrams = totalDryWeightGrams;
   harvestDoc.totalPercentChangeWetToDry = percentChangeWetToDry(

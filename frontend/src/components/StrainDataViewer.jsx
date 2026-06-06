@@ -1,23 +1,27 @@
 ﻿import { Fragment, useMemo, useState } from "react";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Chip,
+  Stack,
+  Typography,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { DataGrid } from "@mui/x-data-grid";
+import { formatDate } from "../utils/formatDate";
 
-// Formats a date value, returning "N/A" for nulls or invalid dates.
-const formatDate = (value) => {
-  if (!value) return "N/A";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return date.toLocaleDateString();
-};
-
-// Aggregates plant counts from active room batches, grouped by strain.
-function StrainDataViewer({ strains, rooms }) {
-  // Tracks which rows are expanded. { strainId: true } = expanded.
+// Show strain totals and yield metrics.
+function StrainDataViewer({ strains, roomAssignments, harvests }) {
+  // Expanded table rows by strain ID.
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Builds one row per strain with total plant counts aggregated across all rooms.
+  // Build one summary row per strain.
   const strainRows = useMemo(() => {
     if (!Array.isArray(strains)) return [];
 
-    // strainId → row data lookup map.
+    // Map by strain ID.
     const rowMap = new Map();
 
     strains.forEach((strain) => {
@@ -27,30 +31,30 @@ function StrainDataViewer({ strains, rooms }) {
         type: strain.type || "N/A",
         status: strain.status || "N/A",
         totalPlants: 0,
-        totalDrying: "Coming Soon",
-        totalInventory: "Coming Soon",
+        totalWetWeightGrams: 0,
+        totalDryWeightGrams: 0,
+        totalHarvestPlantCount: 0,
         nextHarvestDate: null,
         plantsByRoom: [],
       });
     });
 
-    // Fill in plant data from each room's active batch.
-    if (Array.isArray(rooms)) {
-      rooms.forEach((room) => {
+    if (Array.isArray(roomAssignments)) {
+      roomAssignments.forEach((assignment) => {
+        const room = assignment?.roomId;
+        const batch = assignment?.batchId;
         const roomName = room?.name || "N/A";
         const locationName = room?.locationId?.nickname || "N/A";
-        const batch = room?.batchId;
+        const assignedPlants = Array.isArray(assignment?.assignedPlants)
+          ? assignment.assignedPlants
+          : [];
 
-        if (!batch || !Array.isArray(batch?.rooms)) return;
+        if (!room || !batch || assignedPlants.length === 0) return;
 
-        // Find the entry in this batch's rooms that corresponds to the current room.
-        const roomEntry = batch.rooms.find(
-          (r) => String(r.roomId) === String(room._id),
-        );
-        if (!roomEntry || !Array.isArray(roomEntry.plants)) return;
-
-        roomEntry.plants.forEach((plantEntry) => {
-          const strainId = plantEntry?.strainId?._id;
+        assignedPlants.forEach((plantEntry) => {
+          const strainId = String(
+            plantEntry?.strainId?._id || plantEntry?.strainId || "",
+          );
           if (!strainId || !rowMap.has(strainId)) return;
 
           const row = rowMap.get(strainId);
@@ -62,10 +66,10 @@ function StrainDataViewer({ strains, rooms }) {
             locationName,
             plantCount,
             batchNumber: batch?.batchNumber || "N/A",
+            batchType: batch?.batchType || "production",
             batchHarvestDate: batch?.harvestDate || null,
           });
 
-          // Track the nearest upcoming harvest date for this strain.
           const harvestDateValue = batch?.harvestDate
             ? new Date(batch.harvestDate)
             : null;
@@ -85,121 +89,210 @@ function StrainDataViewer({ strains, rooms }) {
       });
     }
 
-    // Sort alphabetically and attach the formatted nextHarvest string.
+    if (Array.isArray(harvests)) {
+      harvests.forEach((harvest) => {
+        const rooms = Array.isArray(harvest?.rooms) ? harvest.rooms : [];
+
+        rooms.forEach((roomEntry) => {
+          const strainsInRoom = Array.isArray(roomEntry?.strains)
+            ? roomEntry.strains
+            : [];
+
+          strainsInRoom.forEach((strainEntry) => {
+            const strainId = String(
+              strainEntry?.strainId?._id || strainEntry?.strainId || "",
+            );
+            if (!strainId || !rowMap.has(strainId)) return;
+
+            const row = rowMap.get(strainId);
+            row.totalWetWeightGrams +=
+              Number(strainEntry?.totalWetWeightGrams) || 0;
+            row.totalDryWeightGrams +=
+              Number(strainEntry?.totalDryWeightGrams) || 0;
+            row.totalHarvestPlantCount += Number(strainEntry?.plantCount) || 0;
+          });
+        });
+      });
+    }
+
+    // Add calculated display fields and sort.
     return Array.from(rowMap.values())
       .map((row) => ({
         ...row,
+        avgDryWeightPerPlant:
+          row.totalHarvestPlantCount > 0
+            ? (row.totalDryWeightGrams / row.totalHarvestPlantCount).toFixed(2)
+            : "N/A",
+        wetToDryPercentChange:
+          row.totalWetWeightGrams > 0
+            ? (
+                ((row.totalWetWeightGrams - row.totalDryWeightGrams) /
+                  row.totalWetWeightGrams) *
+                100
+              ).toFixed(2)
+            : "N/A",
         nextHarvest: row.nextHarvestDate
           ? formatDate(row.nextHarvestDate)
           : "N/A",
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [strains, rooms]);
+  }, [strains, roomAssignments, harvests]);
 
   const toggleExpandedRow = (strainId) => {
     setExpandedRows((prev) => ({ ...prev, [strainId]: !prev[strainId] }));
   };
 
   if (strainRows.length === 0) {
-    return <p>No strains yet.</p>;
+    return <Typography color="text.secondary">No strains yet.</Typography>;
   }
 
+  const columns = [
+    {
+      field: "name",
+      headerName: "Strain",
+      flex: 1.1,
+      minWidth: 160,
+    },
+    {
+      field: "type",
+      headerName: "Type",
+      flex: 0.8,
+      minWidth: 120,
+      renderCell: ({ value }) => (
+        <Chip size="small" label={value} variant="outlined" />
+      ),
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      flex: 0.9,
+      minWidth: 130,
+    },
+    {
+      field: "totalPlants",
+      headerName: "Plants",
+      type: "number",
+      minWidth: 100,
+      flex: 0.7,
+    },
+    {
+      field: "avgDryWeightPerPlant",
+      headerName: "Avg Dry g/plant",
+      minWidth: 140,
+      flex: 0.9,
+    },
+    {
+      field: "wetToDryPercentChange",
+      headerName: "Wet→Dry %",
+      minWidth: 120,
+      flex: 0.8,
+      renderCell: ({ value }) => (value === "N/A" ? "N/A" : `${value}%`),
+    },
+    {
+      field: "nextHarvest",
+      headerName: "Next Harvest",
+      minWidth: 140,
+      flex: 1,
+    },
+  ];
+
   return (
-    <div className="strain-viewer-wrap">
-      <div className="harvest-table-wrap">
-        <table className="harvest-table strain-viewer-table">
-          <thead>
-            <tr>
-              <th>Expand</th>
-              <th>Strain</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Total Plants</th>
-              <th>Total Drying</th>
-              <th>Total Inventory</th>
-              <th>Next Harvest</th>
-            </tr>
-          </thead>
-          <tbody>
-            {strainRows.map((row) => (
-              <Fragment key={row.strainId}>
-                <tr>
-                  <td>
-                    <button
-                      type="button"
-                      className="table-toggle-button"
-                      onClick={() => toggleExpandedRow(row.strainId)}
-                    >
-                      {expandedRows[row.strainId] ? "−" : "+"}
-                    </button>
-                  </td>
-                  <td>{row.name}</td>
-                  <td>{row.type}</td>
-                  <td>{row.status}</td>
-                  <td>{row.totalPlants}</td>
-                  <td>{row.totalDrying}</td>
-                  <td>{row.totalInventory}</td>
-                  <td>{row.nextHarvest}</td>
-                </tr>
+    <Stack spacing={2} sx={{ width: "100%" }}>
+      <Box sx={{ height: 360, width: "100%" }}>
+        <DataGrid
+          rows={strainRows.map((row) => ({ ...row, id: row.strainId }))}
+          columns={columns}
+          disableRowSelectionOnClick
+          pageSizeOptions={[5, 10, 25]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          }}
+          onRowClick={(params) => toggleExpandedRow(params.id)}
+        />
+      </Box>
 
-                {expandedRows[row.strainId] && (
-                  <tr className="harvest-detail-row">
-                    <td colSpan={8}>
-                      <div className="strain-expand-grid">
-                        <div className="strain-expand-section">
-                          <h4>Plants</h4>
-                          {row.plantsByRoom.length === 0 ? (
-                            <p>No plant/room data available yet.</p>
-                          ) : (
-                            <div className="harvest-table-wrap">
-                              <table className="harvest-table">
-                                <thead>
-                                  <tr>
-                                    <th>Room</th>
-                                    <th>Location</th>
-                                    <th>Batch</th>
-                                    <th>Plant Count</th>
-                                    <th>Batch Harvest Date</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.plantsByRoom.map((item, index) => (
-                                    <tr
-                                      key={`${row.strainId}-plant-row-${index}`}
-                                    >
-                                      <td>{item.roomName}</td>
-                                      <td>{item.locationName}</td>
-                                      <td>{item.batchNumber}</td>
-                                      <td>{item.plantCount}</td>
-                                      <td>
-                                        {formatDate(item.batchHarvestDate)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
+      {strainRows.map((row) => (
+        <Fragment key={row.strainId}>
+          {expandedRows[row.strainId] && (
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {row.name} Details
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={1} sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Historical average dry weight per plant:{" "}
+                    <strong>{row.avgDryWeightPerPlant}</strong>
+                    {row.avgDryWeightPerPlant !== "N/A" ? " g" : ""}
+                  </Typography>
+                  <Typography variant="body2">
+                    Historical wet-to-dry change:{" "}
+                    <strong>
+                      {row.wetToDryPercentChange === "N/A"
+                        ? "N/A"
+                        : `${row.wetToDryPercentChange}%`}
+                    </strong>
+                  </Typography>
+                </Stack>
 
-                        <div className="strain-expand-section">
-                          <h4>Inventory</h4>
-                          <p>
-                            Inventory tracking columns are placeholders for now.
-                            This section will be connected once inventory
-                            endpoints are implemented.
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
+                {row.plantsByRoom.length === 0 ? (
+                  <Typography color="text.secondary">
+                    No plant/room data available yet.
+                  </Typography>
+                ) : (
+                  <Box sx={{ height: 300 }}>
+                    <DataGrid
+                      rows={row.plantsByRoom.map((item, index) => ({
+                        ...item,
+                        id: `${row.strainId}-${index}`,
+                        batchHarvestDate: formatDate(item.batchHarvestDate),
+                      }))}
+                      columns={[
+                        {
+                          field: "roomName",
+                          headerName: "Room",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "locationName",
+                          headerName: "Location",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "batchNumber",
+                          headerName: "Batch",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "plantCount",
+                          headerName: "Plant Count",
+                          type: "number",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "batchHarvestDate",
+                          headerName: "Batch Harvest Date",
+                          flex: 1.2,
+                          minWidth: 160,
+                        },
+                      ]}
+                      hideFooter
+                      disableRowSelectionOnClick
+                    />
+                  </Box>
                 )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              </AccordionDetails>
+            </Accordion>
+          )}
+        </Fragment>
+      ))}
+    </Stack>
   );
 }
 
