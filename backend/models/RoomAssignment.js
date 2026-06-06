@@ -66,7 +66,7 @@ roomAssignmentSchema.index(
 roomAssignmentSchema.index({ active: 1, roomId: 1, createdAt: -1 });
 roomAssignmentSchema.index({ active: 1, batchId: 1, createdAt: -1 });
 
-roomAssignmentSchema.pre("validate", function (next) {
+roomAssignmentSchema.pre("validate", function () {
   if (this.active === false && !this.endedAt) {
     this.endedAt = new Date();
   }
@@ -74,8 +74,6 @@ roomAssignmentSchema.pre("validate", function (next) {
   if (this.active === true) {
     this.endedAt = null;
   }
-
-  next();
 });
 
 module.exports = mongoose.model("RoomAssignment", roomAssignmentSchema);

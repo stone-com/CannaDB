@@ -41,10 +41,14 @@ function CreateMomsForm({ embedded }) {
     fetchData();
   }, []);
 
-  const productionBatches = useMemo(
+  const vegProductionBatches = useMemo(
     () =>
       batches
-        .filter((batch) => batch.batchType === "production")
+        .filter(
+          (batch) =>
+            batch.batchType === "production" &&
+            String(batch.lifecycleStage || "").toLowerCase() === "veg",
+        )
         .sort((a, b) =>
           (a.batchNumber || "").localeCompare(b.batchNumber || ""),
         ),
@@ -53,10 +57,10 @@ function CreateMomsForm({ embedded }) {
 
   const selectedBatch = useMemo(
     () =>
-      productionBatches.find(
+      vegProductionBatches.find(
         (batch) => String(batch._id) === String(selectedBatchId),
       ) || null,
-    [productionBatches, selectedBatchId],
+    [vegProductionBatches, selectedBatchId],
   );
 
   const availablePlantsByStrain = useMemo(() => {
@@ -99,7 +103,7 @@ function CreateMomsForm({ embedded }) {
     setSelectedBatchId(batchId);
     setMessage("");
 
-    const chosenBatch = productionBatches.find(
+    const chosenBatch = vegProductionBatches.find(
       (batch) => String(batch._id) === String(batchId),
     );
 
@@ -141,7 +145,7 @@ function CreateMomsForm({ embedded }) {
     setMessage("");
 
     if (!selectedBatch) {
-      setMessage("Please select a source production batch.");
+      setMessage("Please select a source production batch in Veg stage.");
       return;
     }
 
@@ -224,12 +228,12 @@ function CreateMomsForm({ embedded }) {
       <Stack component="form" spacing={2} onSubmit={handleSubmit}>
         <TextField
           select
-          label="Source Production Batch"
+          label="Source Production Batch (Veg Only)"
           value={selectedBatchId}
           onChange={(e) => handleBatchChange(e.target.value)}
         >
           <MenuItem value="">Select Batch</MenuItem>
-          {productionBatches.map((batch) => (
+          {vegProductionBatches.map((batch) => (
             <MenuItem key={batch._id} value={batch._id}>
               {batch.batchNumber} ({batch.lifecycleStage})
             </MenuItem>

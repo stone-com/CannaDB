@@ -53,7 +53,7 @@ async function getCurrentBatchTotals(batchId, fallbackRooms, session = null) {
   const assignmentQuery = RoomAssignment.find({
     batchId,
     active: true,
-  }).select("assignedPlants");
+  }).select("roomId assignedPlants");
 
   if (session) assignmentQuery.session(session);
 
@@ -556,6 +556,13 @@ router.post("/:id/create-moms", async (req, res) => {
     if (sourceBatch.batchType !== "production") {
       return res.status(400).json({
         error: "Only production batches can be used to create mom batches",
+      });
+    }
+
+    if (sourceBatch.lifecycleStage !== "Veg") {
+      return res.status(400).json({
+        error:
+          "Only production batches in Veg stage can be used to create mom batches",
       });
     }
 
