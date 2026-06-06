@@ -18,6 +18,21 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "batchId is required" });
     }
 
+    await Batch.updateMany(
+      {
+        batchType: "production",
+        harvestId: null,
+        harvestDate: { $ne: null, $lte: new Date() },
+        lifecycleStage: { $in: ["Clone", "Veg", "Flower"] },
+      },
+      {
+        $set: {
+          lifecycleStage: "HarvestReady",
+          stageStartedAt: new Date(),
+        },
+      },
+    );
+
     const result = await runWithOptionalTransaction(
       mongoose,
       async (session) => {
@@ -35,6 +50,16 @@ router.post("/", async (req, res) => {
           return {
             status: 409,
             body: { error: "This batch already has a harvest record" },
+          };
+        }
+
+        if (batch.lifecycleStage !== "HarvestReady") {
+          return {
+            status: 400,
+            body: {
+              error:
+                "Only batches in HarvestReady lifecycle stage can be harvested",
+            },
           };
         }
 
@@ -260,6 +285,26 @@ router.patch("/:id", async (req, res) => {
         );
 
         if (finalizeDryWeights === true) {
+          const batchQuery = Batch.findById(harvest.batchId).select(
+            "lifecycleStage",
+          );
+          if (session) batchQuery.session(session);
+          const sourceBatch = await batchQuery;
+
+          if (!sourceBatch) {
+            return { status: 404, body: { error: "Batch not found" } };
+          }
+
+          if (sourceBatch.lifecycleStage !== "Drying") {
+            return {
+              status: 400,
+              body: {
+                error:
+                  "Dry weights can only be finalized for batches currently in Drying stage",
+              },
+            };
+          }
+
           // Once dry weights are finalized, mark the source batch as completed.
           await Batch.findByIdAndUpdate(
             harvest.batchId,

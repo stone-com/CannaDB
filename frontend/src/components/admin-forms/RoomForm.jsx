@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Divider,
   FormControlLabel,
   MenuItem,
@@ -695,8 +696,24 @@ function RoomForm({ embedded, section }) {
         <MenuItem value="">Select Batch</MenuItem>
         {selectableBatches.map((batch) => (
           <MenuItem key={batch._id} value={batch._id}>
-            {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
-            Harvest: {formatDate(batch.harvestDate)}
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ width: "100%" }}
+            >
+              <Typography variant="body2">
+                {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
+                Harvest: {formatDate(batch.harvestDate)}
+              </Typography>
+              <Chip
+                size="small"
+                label={batch.lifecycleStage || "N/A"}
+                color="primary"
+                variant="outlined"
+              />
+            </Stack>
           </MenuItem>
         ))}
       </TextField>

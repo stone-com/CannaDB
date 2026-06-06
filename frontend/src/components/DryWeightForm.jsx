@@ -36,11 +36,17 @@ function DryWeightForm({ harvests, onComplete }) {
 
   const batchesForSelection = useMemo(
     () =>
-      sortedHarvests.map((harvest) => ({
-        batchId: harvest?.batchId?._id || "",
-        batchNumber: harvest?.batchId?.batchNumber || "Unknown Batch",
-        harvest,
-      })),
+      sortedHarvests
+        .filter(
+          (harvest) =>
+            String(harvest?.batchId?.lifecycleStage || "").toLowerCase() ===
+            "drying",
+        )
+        .map((harvest) => ({
+          batchId: harvest?.batchId?._id || "",
+          batchNumber: harvest?.batchId?.batchNumber || "Unknown Batch",
+          harvest,
+        })),
     [sortedHarvests],
   );
 
@@ -182,7 +188,7 @@ function DryWeightForm({ harvests, onComplete }) {
 
         <TextField
           select
-          label="Batch"
+          label="Batch (Drying Only)"
           value={selectedBatchId}
           onChange={handleBatchChange}
           SelectProps={{ MenuProps: SELECT_MENU_PROPS }}

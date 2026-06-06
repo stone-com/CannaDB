@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -190,7 +191,21 @@ function DestroyPlantsForm({ embedded }) {
         <MenuItem value="">Select Batch</MenuItem>
         {batches.map((batch) => (
           <MenuItem key={batch._id} value={batch._id}>
-            {batch.batchNumber} {batch.batchType ? `(${batch.batchType})` : ""}
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ width: "100%" }}
+            >
+              <Typography variant="body2">{batch.batchNumber}</Typography>
+              <Chip
+                size="small"
+                label={batch.lifecycleStage || "N/A"}
+                color="primary"
+                variant="outlined"
+              />
+            </Stack>
           </MenuItem>
         ))}
       </TextField>

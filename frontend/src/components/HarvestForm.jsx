@@ -54,7 +54,12 @@ function HarvestForm({ onComplete }) {
   }, []);
 
   const unharvestedBatches = useMemo(
-    () => batches.filter((batch) => !batch.harvestId),
+    () =>
+      batches.filter(
+        (batch) =>
+          !batch.harvestId &&
+          String(batch.lifecycleStage || "").toLowerCase() === "harvestready",
+      ),
     [batches],
   );
 
@@ -226,7 +231,7 @@ function HarvestForm({ onComplete }) {
 
         <TextField
           select
-          label="Batch"
+          label="Batch (HarvestReady Only)"
           value={selectedBatchId}
           onChange={handleBatchChange}
           SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
@@ -238,11 +243,31 @@ function HarvestForm({ onComplete }) {
               : "No date set";
             return (
               <MenuItem key={batch._id} value={batch._id}>
-                {batch.batchNumber} - {dateStr}
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{ width: "100%" }}
+                >
+                  <Typography variant="body2">
+                    {batch.batchNumber} - {dateStr}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={batch.lifecycleStage || "N/A"}
+                    variant="outlined"
+                  />
+                </Stack>
               </MenuItem>
             );
           })}
         </TextField>
+
+        <Typography variant="caption" color="text.secondary">
+          Only batches in HarvestReady stage can be selected for intake.
+        </Typography>
 
         <TextField
           select

@@ -46,6 +46,31 @@ const NEXT_STAGE_BY_BATCH_TYPE = {
   },
 };
 
+// Promote production batches to HarvestReady once their harvest date is due.
+async function autoPromoteDueBatchesToHarvestReady(session = null) {
+  const now = new Date();
+  const query = {
+    batchType: "production",
+    harvestId: null,
+    harvestDate: { $ne: null, $lte: now },
+    lifecycleStage: { $in: ["Clone", "Veg", "Flower"] },
+  };
+
+  const update = {
+    $set: {
+      lifecycleStage: "HarvestReady",
+      stageStartedAt: now,
+    },
+  };
+
+  if (session) {
+    await Batch.updateMany(query, update, { session });
+    return;
+  }
+
+  await Batch.updateMany(query, update);
+}
+
 // Get the current total plants for a batch by strain.
 // Active room assignments are the main source of truth.
 // If none exist yet, fall back to the batch's stored room data.
@@ -168,6 +193,8 @@ router.post("/", async (req, res) => {
 // List batches.
 router.get("/", async (req, res) => {
   try {
+    await autoPromoteDueBatchesToHarvestReady();
+
     // Load saved batch data, then swap in live room state from active assignments.
     const batches = await Batch.find().populate(BATCH_POPULATE);
     const hydrated = await attachDerivedRoomsToBatches(batches);
@@ -974,6 +1001,8 @@ router.post("/:id/destroy-plants", async (req, res) => {
 // Get one batch.
 router.get("/:id", async (req, res) => {
   try {
+    await autoPromoteDueBatchesToHarvestReady();
+
     const batchDoc = await Batch.findById(req.params.id).populate(
       BATCH_POPULATE,
     );
