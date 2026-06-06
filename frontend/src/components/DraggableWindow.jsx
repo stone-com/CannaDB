@@ -149,7 +149,7 @@ export default function DraggableWindow({
           height: "100%",
           border: "1px solid",
           borderColor: "divider",
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <Stack

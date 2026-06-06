@@ -12,6 +12,10 @@ import {
   Typography,
 } from "@mui/material";
 
+const SELECT_MENU_PROPS = {
+  disablePortal: true,
+};
+
 function DryWeightForm({ harvests, onComplete }) {
   // Current selected batch/strain row.
   const [selectedBatchId, setSelectedBatchId] = useState("");
@@ -181,6 +185,7 @@ function DryWeightForm({ harvests, onComplete }) {
           label="Batch"
           value={selectedBatchId}
           onChange={handleBatchChange}
+          SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
         >
           <MenuItem value="">Select Batch</MenuItem>
           {batchesForSelection.map(({ batchId, batchNumber, harvest }) => {

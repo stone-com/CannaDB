@@ -13,6 +13,10 @@ import {
   Typography,
 } from "@mui/material";
 
+const SELECT_MENU_PROPS = {
+  disablePortal: true,
+};
+
 function HarvestForm({ onComplete }) {
   // Data used by dropdowns and lookups.
   const [batches, setBatches] = useState([]);
@@ -225,6 +229,7 @@ function HarvestForm({ onComplete }) {
           label="Batch"
           value={selectedBatchId}
           onChange={handleBatchChange}
+          SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
         >
           <MenuItem value="">Select Batch</MenuItem>
           {unharvestedBatches.map((batch) => {
@@ -244,6 +249,7 @@ function HarvestForm({ onComplete }) {
           label="Harvest Room"
           value={selectedRoomId}
           onChange={(e) => setSelectedRoomId(e.target.value)}
+          SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
         >
           <MenuItem value="">Select Room</MenuItem>
           {availableRooms.map((room) => (
