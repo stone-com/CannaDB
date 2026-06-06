@@ -54,6 +54,8 @@ function RoomForm({ embedded, section }) {
     type: "",
     sqFoot: "",
   });
+  const [roomMode, setRoomMode] = useState("add");
+  const [selectedManageRoomId, setSelectedManageRoomId] = useState("");
 
   const [assignmentData, setAssignmentData] = useState({
     roomId: "",
@@ -61,11 +63,23 @@ function RoomForm({ embedded, section }) {
   });
   const [assignmentMode, setAssignmentMode] = useState("whole");
   const [wholeRoomId, setWholeRoomId] = useState("");
+  const [wholeMoveCounts, setWholeMoveCounts] = useState({});
   const [splitDestinations, setSplitDestinations] = useState([]);
   const [shouldAdvanceStage, setShouldAdvanceStage] = useState(false);
+  const [destroyUnallocatedPlants, setDestroyUnallocatedPlants] =
+    useState(false);
 
   const [message, setMessage] = useState("");
   const [assignmentMessage, setAssignmentMessage] = useState("");
+
+  const resetRoomForm = () => {
+    setFormData({ locationId: "", name: "", type: "", sqFoot: "" });
+    setSelectedManageRoomId("");
+  };
+
+  const notifyRoomChange = (detail = null) => {
+    window.dispatchEvent(new CustomEvent("room:created", { detail }));
+  };
 
   const fetchLocations = async () => {
     try {
@@ -210,7 +224,10 @@ function RoomForm({ embedded, section }) {
   const handleBatchSelection = (batchId) => {
     setAssignmentData({ roomId: "", batchId });
     setWholeRoomId("");
+    setAssignmentMode("whole");
     setShouldAdvanceStage(false);
+    setDestroyUnallocatedPlants(false);
+    setWholeMoveCounts({});
     setSplitDestinations(
       batchId
         ? [
@@ -221,6 +238,32 @@ function RoomForm({ embedded, section }) {
           ]
         : [],
     );
+  };
+
+  useEffect(() => {
+    if (!selectedBatch) {
+      setWholeMoveCounts({});
+      return;
+    }
+
+    setWholeMoveCounts(
+      Object.fromEntries(
+        batchPlantTotals.map((plant) => [
+          plant.strainId,
+          String(plant.totalCount),
+        ]),
+      ),
+    );
+  }, [selectedBatch, batchPlantTotals]);
+
+  const handleWholeMoveCountChange = (strainId, value) => {
+    const normalizedValue =
+      value === "" ? "" : String(Math.max(0, Number(value) || 0));
+
+    setWholeMoveCounts((prev) => ({
+      ...prev,
+      [strainId]: normalizedValue,
+    }));
   };
 
   const handleAddSplitDestination = () => {
@@ -271,6 +314,30 @@ function RoomForm({ embedded, section }) {
       0,
     );
 
+  const handleRoomModeChange = (nextMode) => {
+    setRoomMode(nextMode);
+    setMessage("");
+    resetRoomForm();
+  };
+
+  const handleManageRoomSelection = (roomId) => {
+    setSelectedManageRoomId(roomId);
+
+    const selectedRoom = rooms.find(
+      (room) => String(room._id) === String(roomId),
+    );
+
+    setFormData({
+      locationId: selectedRoom?.locationId?._id || "",
+      name: selectedRoom?.name || "",
+      type: selectedRoom?.type || "",
+      sqFoot:
+        selectedRoom?.sqFoot === null || selectedRoom?.sqFoot === undefined
+          ? ""
+          : String(selectedRoom.sqFoot),
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -308,6 +375,63 @@ function RoomForm({ embedded, section }) {
     }
   };
 
+  const handleManageRoomSubmit = async (e) => {
+    e.preventDefault();
+    setMessage("");
+
+    try {
+      if (roomMode === "add") {
+        return handleSubmit(e);
+      }
+
+      if (!selectedManageRoomId) {
+        throw new Error("Please select a room");
+      }
+
+      if (roomMode === "edit") {
+        const res = await fetch(`/api/rooms/${selectedManageRoomId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            locationId: formData.locationId,
+            name: formData.name,
+            type: formData.type,
+            sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
+          }),
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || "Failed to update room");
+        }
+
+        const updatedRoom = await res.json();
+        notifyRoomChange(updatedRoom);
+        await fetchRooms();
+        setMessage("Room updated successfully.");
+        return;
+      }
+
+      if (roomMode === "remove") {
+        const res = await fetch(`/api/rooms/${selectedManageRoomId}`, {
+          method: "DELETE",
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || "Failed to remove room");
+        }
+
+        notifyRoomChange({ _id: selectedManageRoomId });
+        resetRoomForm();
+        await fetchRooms();
+        setMessage("Room removed successfully.");
+      }
+    } catch (error) {
+      setMessage(`Error: ${error.message}`);
+    }
+  };
+
   const handleAssignmentSubmit = async (e) => {
     e.preventDefault();
     setAssignmentMessage("");
@@ -321,6 +445,7 @@ function RoomForm({ embedded, section }) {
         mode: assignmentMode,
         notes: null,
         advanceStage: shouldAdvanceStage,
+        destroyUnallocated: destroyUnallocatedPlants,
       };
 
       if (assignmentMode === "whole") {
@@ -328,6 +453,40 @@ function RoomForm({ embedded, section }) {
           throw new Error("Please select a destination room");
         }
         payload.roomId = wholeRoomId;
+
+        if (destroyUnallocatedPlants) {
+          const plannedPlants = batchPlantTotals
+            .map((plant) => {
+              const planned = Number(wholeMoveCounts?.[plant.strainId]) || 0;
+              return {
+                strainId: plant.strainId,
+                count: planned,
+                max: plant.totalCount,
+              };
+            })
+            .filter((plant) => plant.count > 0);
+
+          const hasExceeded = batchPlantTotals.some(
+            (plant) =>
+              (Number(wholeMoveCounts?.[plant.strainId]) || 0) >
+              plant.totalCount,
+          );
+
+          if (hasExceeded) {
+            throw new Error(
+              "Move counts cannot exceed available plants by strain",
+            );
+          }
+
+          if (plannedPlants.length === 0) {
+            throw new Error("Set at least one plant count to move");
+          }
+
+          payload.plants = plannedPlants.map((plant) => ({
+            strainId: plant.strainId,
+            count: plant.count,
+          }));
+        }
       } else {
         const normalizedAssignments = splitDestinations
           .filter((destination) => destination.roomId)
@@ -356,13 +515,17 @@ function RoomForm({ embedded, section }) {
           });
         });
 
-        const hasMismatch = batchPlantTotals.some(
-          (plant) => totalsByStrain[plant.strainId] !== plant.totalCount,
+        const hasMismatch = batchPlantTotals.some((plant) =>
+          destroyUnallocatedPlants
+            ? totalsByStrain[plant.strainId] > plant.totalCount
+            : totalsByStrain[plant.strainId] !== plant.totalCount,
         );
 
         if (hasMismatch) {
           throw new Error(
-            "Split counts must exactly match the full batch totals for each strain",
+            destroyUnallocatedPlants
+              ? "Split counts cannot exceed the available total for any strain"
+              : "Split counts must exactly match the full batch totals for each strain",
           );
         }
 
@@ -397,8 +560,10 @@ function RoomForm({ embedded, section }) {
       setAssignmentMessage("Batch room allocation saved.");
       setAssignmentData({ roomId: "", batchId: "" });
       setWholeRoomId("");
+      setWholeMoveCounts({});
       setSplitDestinations([]);
       setShouldAdvanceStage(false);
+      setDestroyUnallocatedPlants(false);
       fetchBatches();
     } catch (error) {
       setAssignmentMessage(`Error: ${error.message}`);
@@ -406,55 +571,108 @@ function RoomForm({ embedded, section }) {
   };
 
   const addRoomForm = (
-    <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+    <Stack component="form" spacing={2} onSubmit={handleManageRoomSubmit}>
       <TextField
         select
-        label="Location"
-        value={formData.locationId}
-        onChange={(e) =>
-          setFormData({ ...formData, locationId: e.target.value })
-        }
-        required
+        label="Mode"
+        value={roomMode}
+        onChange={(e) => handleRoomModeChange(e.target.value)}
       >
-        <MenuItem value="">Select Location</MenuItem>
-        {locations.map((loc) => (
-          <MenuItem key={loc._id} value={loc._id}>
-            {loc.nickname}
-          </MenuItem>
-        ))}
+        <MenuItem value="add">Add Room</MenuItem>
+        <MenuItem value="edit">Edit Room</MenuItem>
+        <MenuItem value="remove">Remove Room</MenuItem>
       </TextField>
 
-      <TextField
-        label="Room Name"
-        value={formData.name}
-        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-        required
-      />
+      {roomMode !== "add" && (
+        <TextField
+          select
+          label="Room"
+          value={selectedManageRoomId}
+          onChange={(e) => handleManageRoomSelection(e.target.value)}
+          required
+        >
+          <MenuItem value="">Select Room</MenuItem>
+          {rooms
+            .slice()
+            .sort((a, b) => (a?.name || "").localeCompare(b?.name || ""))
+            .map((room) => (
+              <MenuItem key={room._id} value={room._id}>
+                {room.locationId?.nickname || "Unknown Location"} - {room.name}
+                {room.type ? ` (${room.type})` : ""}
+              </MenuItem>
+            ))}
+        </TextField>
+      )}
 
-      <TextField
-        select
-        label="Room Type"
-        value={formData.type}
-        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-        required
+      <Divider />
+
+      {roomMode !== "remove" && (
+        <>
+          <TextField
+            select
+            label="Location"
+            value={formData.locationId}
+            onChange={(e) =>
+              setFormData({ ...formData, locationId: e.target.value })
+            }
+            required
+          >
+            <MenuItem value="">Select Location</MenuItem>
+            {locations.map((loc) => (
+              <MenuItem key={loc._id} value={loc._id}>
+                {loc.nickname}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            label="Room Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+          />
+
+          <TextField
+            select
+            label="Room Type"
+            value={formData.type}
+            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+            required
+          >
+            <MenuItem value="">Select Room Type</MenuItem>
+            {ROOM_TYPES.map((t) => (
+              <MenuItem key={t} value={t}>
+                {t}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            label="Square Feet"
+            type="number"
+            value={formData.sqFoot}
+            onChange={(e) =>
+              setFormData({ ...formData, sqFoot: e.target.value })
+            }
+          />
+        </>
+      )}
+
+      {roomMode === "remove" && (
+        <Alert severity="warning">
+          This will permanently remove the selected room if it is not referenced
+          by existing records.
+        </Alert>
+      )}
+
+      <Button
+        variant="contained"
+        color={roomMode === "remove" ? "error" : "primary"}
+        type="submit"
       >
-        <MenuItem value="">Select Room Type</MenuItem>
-        {ROOM_TYPES.map((t) => (
-          <MenuItem key={t} value={t}>
-            {t}
-          </MenuItem>
-        ))}
-      </TextField>
-
-      <TextField
-        label="Square Feet"
-        type="number"
-        value={formData.sqFoot}
-        onChange={(e) => setFormData({ ...formData, sqFoot: e.target.value })}
-      />
-
-      <Button variant="contained" type="submit">
-        Add Room
+        {roomMode === "add" && "Add Room"}
+        {roomMode === "edit" && "Save Room Changes"}
+        {roomMode === "remove" && "Remove Room"}
       </Button>
 
       {message && (
@@ -547,27 +765,72 @@ function RoomForm({ embedded, section }) {
                 }
                 label="Advance to next stage when saving"
               />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={destroyUnallocatedPlants}
+                    onChange={(e) =>
+                      setDestroyUnallocatedPlants(e.target.checked)
+                    }
+                  />
+                }
+                label="Destroy plants that are not allocated in this move"
+              />
             </Stack>
           </CardContent>
         </Card>
       )}
 
       {selectedBatch && assignmentMode === "whole" && (
-        <TextField
-          select
-          label="Destination Room"
-          value={wholeRoomId}
-          onChange={(e) => setWholeRoomId(e.target.value)}
-          required
-        >
-          <MenuItem value="">Select Room</MenuItem>
-          {assignableRooms.map((room) => (
-            <MenuItem key={room._id} value={room._id}>
-              {room.locationId?.nickname || "Unknown Location"} - {room.name} (
-              {room.type})
-            </MenuItem>
-          ))}
-        </TextField>
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={1.5}>
+              <TextField
+                select
+                label="Destination Room"
+                value={wholeRoomId}
+                onChange={(e) => setWholeRoomId(e.target.value)}
+                required
+              >
+                <MenuItem value="">Select Room</MenuItem>
+                {assignableRooms.map((room) => (
+                  <MenuItem key={room._id} value={room._id}>
+                    {room.locationId?.nickname || "Unknown Location"} -{" "}
+                    {room.name} ({room.type})
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              {destroyUnallocatedPlants && (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Enter how many plants to move per strain. Any remainder will
+                    be destroyed.
+                  </Typography>
+                  {batchPlantTotals.map((plant) => (
+                    <TextField
+                      key={`whole-${plant.strainId}`}
+                      type="number"
+                      label={`${plant.strainName} To Move`}
+                      value={
+                        wholeMoveCounts?.[plant.strainId] ??
+                        String(plant.totalCount)
+                      }
+                      onChange={(e) =>
+                        handleWholeMoveCountChange(
+                          plant.strainId,
+                          e.target.value,
+                        )
+                      }
+                      helperText={`Available: ${plant.totalCount}`}
+                    />
+                  ))}
+                </>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
       )}
 
       {selectedBatch && assignmentMode === "split" && (
@@ -575,8 +838,10 @@ function RoomForm({ embedded, section }) {
           <CardContent>
             <Stack spacing={1.5}>
               <Typography variant="body2" color="text.secondary">
-                Set plant counts per strain for each destination room. Totals
-                must match the full batch.
+                Set plant counts per strain for each destination room.
+                {destroyUnallocatedPlants
+                  ? " Any unallocated remainder is destroyed."
+                  : " Totals must match the full batch."}
               </Typography>
 
               {batchPlantTotals.map((plant) => (
@@ -669,7 +934,7 @@ function RoomForm({ embedded, section }) {
   return (
     <Stack spacing={3}>
       <Stack spacing={1}>
-        <Typography variant="h6">Add Room</Typography>
+        <Typography variant="h6">Room Management</Typography>
         {addRoomForm}
       </Stack>
 

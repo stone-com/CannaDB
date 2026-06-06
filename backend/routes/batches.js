@@ -279,7 +279,15 @@ router.post("/:id/move", async (req, res) => {
 // Assign batch to one room or split across rooms.
 router.post("/:id/assign-rooms", async (req, res) => {
   try {
-    const { mode, roomId, assignments, notes, advanceStage } = req.body;
+    const {
+      mode,
+      roomId,
+      assignments,
+      plants,
+      notes,
+      advanceStage,
+      destroyUnallocated,
+    } = req.body;
 
     const batch = await Batch.findById(req.params.id);
     if (!batch) {
@@ -297,18 +305,65 @@ router.post("/:id/assign-rooms", async (req, res) => {
         return res.status(400).json({ error: "roomId is required" });
       }
 
-      // Whole mode sends the full batch into one room.
-      normalizedAssignments = [
-        {
-          roomId,
-          plants: Array.from(currentTotals.entries()).map(
-            ([strainId, count]) => ({
-              strainId,
-              count,
-            }),
-          ),
-        },
-      ];
+      if (destroyUnallocated === true) {
+        const requestedPlants = (Array.isArray(plants) ? plants : [])
+          .map((plant) => ({
+            strainId: String(plant?.strainId || ""),
+            count: Number(plant?.count) || 0,
+          }))
+          .filter((plant) => plant.strainId && plant.count > 0);
+
+        if (requestedPlants.length === 0) {
+          return res.status(400).json({
+            error:
+              "plants are required when destroyUnallocated is enabled in whole mode",
+          });
+        }
+
+        const requestedTotals = new Map();
+        requestedPlants.forEach((plant) => {
+          requestedTotals.set(
+            plant.strainId,
+            (requestedTotals.get(plant.strainId) || 0) + plant.count,
+          );
+        });
+
+        const exceedsAvailable = Array.from(requestedTotals.entries()).find(
+          ([strainId, count]) => count > (currentTotals.get(strainId) || 0),
+        );
+
+        if (exceedsAvailable) {
+          return res.status(400).json({
+            error:
+              "Requested move count cannot exceed available plants for any strain",
+          });
+        }
+
+        normalizedAssignments = [
+          {
+            roomId,
+            plants: Array.from(requestedTotals.entries()).map(
+              ([strainId, count]) => ({
+                strainId,
+                count,
+              }),
+            ),
+          },
+        ];
+      } else {
+        // Whole mode sends the full batch into one room.
+        normalizedAssignments = [
+          {
+            roomId,
+            plants: Array.from(currentTotals.entries()).map(
+              ([strainId, count]) => ({
+                strainId,
+                count,
+              }),
+            ),
+          },
+        ];
+      }
     } else {
       // Split mode lets the user divide the batch across multiple rooms.
       if (!Array.isArray(assignments) || assignments.length === 0) {
@@ -334,7 +389,7 @@ router.post("/:id/assign-rooms", async (req, res) => {
         return res.status(400).json({ error: "No split allocations were set" });
       }
 
-      // Make sure the split still accounts for every plant.
+      // Validate split against available totals. By default it must account for everything.
       const proposedTotals = new Map();
       normalizedAssignments.forEach((entry) => {
         entry.plants.forEach((plant) => {
@@ -345,16 +400,29 @@ router.post("/:id/assign-rooms", async (req, res) => {
         });
       });
 
-      const sameKeyCount = proposedTotals.size === currentTotals.size;
-      const sameCounts = Array.from(currentTotals.entries()).every(
-        ([strainId, count]) => proposedTotals.get(strainId) === count,
+      const exceedsAvailable = Array.from(proposedTotals.entries()).find(
+        ([strainId, count]) => count > (currentTotals.get(strainId) || 0),
       );
 
-      if (!sameKeyCount || !sameCounts) {
+      if (exceedsAvailable) {
         return res.status(400).json({
           error:
-            "Split allocation must account for every strain and match current total plant counts",
+            "Split allocation cannot exceed current total plant counts for any strain",
         });
+      }
+
+      if (destroyUnallocated !== true) {
+        const sameKeyCount = proposedTotals.size === currentTotals.size;
+        const sameCounts = Array.from(currentTotals.entries()).every(
+          ([strainId, count]) => proposedTotals.get(strainId) === count,
+        );
+
+        if (!sameKeyCount || !sameCounts) {
+          return res.status(400).json({
+            error:
+              "Split allocation must account for every strain and match current total plant counts",
+          });
+        }
       }
     }
 
@@ -683,6 +751,215 @@ router.post("/:id/create-moms", async (req, res) => {
       });
     }
 
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove (destroy) plants from a batch for one strain.
+router.post("/:id/destroy-plants", async (req, res) => {
+  try {
+    const { strainId, count, notes } = req.body;
+
+    const normalizedStrainId = String(strainId || "").trim();
+    const removeCount = Number(count);
+
+    if (!normalizedStrainId) {
+      return res.status(400).json({ error: "strainId is required" });
+    }
+
+    if (!Number.isFinite(removeCount) || removeCount <= 0) {
+      return res.status(400).json({ error: "count must be a positive number" });
+    }
+
+    const batch = await Batch.findById(req.params.id).populate(BATCH_POPULATE);
+    if (!batch) {
+      return res.status(404).json({ error: "Batch not found" });
+    }
+
+    const currentTotals = await getCurrentBatchTotals(batch._id, batch.rooms);
+    const available = currentTotals.get(normalizedStrainId) || 0;
+
+    if (available < removeCount) {
+      return res.status(400).json({
+        error: `Cannot remove ${removeCount}. Only ${available} available for selected strain.`,
+      });
+    }
+
+    const { changedAssignmentIds } = await runWithOptionalTransaction(
+      mongoose,
+      async (session) => {
+        const now = new Date();
+
+        const activeAssignmentsQuery = RoomAssignment.find({
+          batchId: batch._id,
+          active: true,
+        }).sort({ createdAt: 1 });
+
+        if (session) activeAssignmentsQuery.session(session);
+        const activeAssignments = await activeAssignmentsQuery;
+
+        let remaining = removeCount;
+        const changedAssignmentIdsLocal = [];
+
+        if (activeAssignments.length > 0) {
+          const bulkUpdates = [];
+
+          activeAssignments.forEach((assignment) => {
+            if (remaining <= 0) return;
+
+            const assignedPlants = Array.isArray(assignment.assignedPlants)
+              ? assignment.assignedPlants.map((plant) => ({
+                  strainId: plant.strainId,
+                  count: Number(plant.count) || 0,
+                }))
+              : [];
+
+            let assignmentChanged = false;
+
+            const updatedPlants = assignedPlants
+              .map((plant) => {
+                const thisStrainId = String(plant.strainId || "");
+                if (thisStrainId !== normalizedStrainId || remaining <= 0) {
+                  return plant;
+                }
+
+                const removable = Math.min(plant.count, remaining);
+                remaining -= removable;
+                assignmentChanged = true;
+
+                return {
+                  ...plant,
+                  count: plant.count - removable,
+                };
+              })
+              .filter((plant) => plant.count > 0);
+
+            if (!assignmentChanged) return;
+
+            changedAssignmentIdsLocal.push(assignment._id);
+
+            if (updatedPlants.length === 0) {
+              bulkUpdates.push({
+                updateOne: {
+                  filter: { _id: assignment._id },
+                  update: {
+                    $set: {
+                      assignedPlants: [],
+                      active: false,
+                      endedAt: now,
+                      notes:
+                        notes ||
+                        "Automatically closed after plant destruction removed all plants",
+                    },
+                  },
+                },
+              });
+              return;
+            }
+
+            bulkUpdates.push({
+              updateOne: {
+                filter: { _id: assignment._id },
+                update: {
+                  $set: {
+                    assignedPlants: updatedPlants,
+                    notes: notes || assignment.notes || null,
+                  },
+                },
+              },
+            });
+          });
+
+          if (remaining > 0) {
+            throw new Error("Unable to allocate requested destruction amount");
+          }
+
+          if (bulkUpdates.length > 0) {
+            await RoomAssignment.bulkWrite(
+              bulkUpdates,
+              session ? { session } : undefined,
+            );
+          }
+
+          const refreshedAssignmentsQuery = RoomAssignment.find({
+            batchId: batch._id,
+            active: true,
+          }).select("roomId assignedPlants");
+          if (session) refreshedAssignmentsQuery.session(session);
+          const refreshedAssignments = await refreshedAssignmentsQuery;
+
+          batch.rooms = roomEntriesFromAssignments(refreshedAssignments);
+          await batch.save(session ? { session } : undefined);
+
+          return { changedAssignmentIds: changedAssignmentIdsLocal };
+        }
+
+        const updatedRooms = normalizeRoomPlants(batch.rooms)
+          .map((roomEntry) => {
+            const nextPlants = (
+              Array.isArray(roomEntry?.plants) ? roomEntry.plants : []
+            )
+              .map((plantEntry) => {
+                const thisStrainId = String(
+                  plantEntry?.strainId?._id || plantEntry?.strainId || "",
+                );
+
+                if (thisStrainId !== normalizedStrainId || remaining <= 0) {
+                  return {
+                    strainId: plantEntry.strainId,
+                    count: Number(plantEntry.count) || 0,
+                  };
+                }
+
+                const plantCount = Number(plantEntry.count) || 0;
+                const removable = Math.min(plantCount, remaining);
+                remaining -= removable;
+
+                return {
+                  strainId: plantEntry.strainId,
+                  count: plantCount - removable,
+                };
+              })
+              .filter((plant) => plant.count > 0);
+
+            return {
+              roomId: roomEntry.roomId,
+              plants: nextPlants,
+            };
+          })
+          .filter((roomEntry) => roomEntry.plants.length > 0);
+
+        if (remaining > 0) {
+          throw new Error("Unable to allocate requested destruction amount");
+        }
+
+        batch.rooms = updatedRooms;
+        await batch.save(session ? { session } : undefined);
+
+        return { changedAssignmentIds: [] };
+      },
+    );
+
+    const [updatedBatchDoc, changedAssignments] = await Promise.all([
+      Batch.findById(batch._id).populate(BATCH_POPULATE),
+      changedAssignmentIds.length > 0
+        ? RoomAssignment.find({ _id: { $in: changedAssignmentIds } }).populate(
+            ROOM_ASSIGNMENT_POPULATE,
+          )
+        : Promise.resolve([]),
+    ]);
+
+    const [updatedBatch] = await attachDerivedRoomsToBatches([updatedBatchDoc]);
+
+    res.status(200).json({
+      batch: updatedBatch,
+      assignments: changedAssignments,
+      removed: {
+        strainId: normalizedStrainId,
+        count: removeCount,
+      },
+    });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });

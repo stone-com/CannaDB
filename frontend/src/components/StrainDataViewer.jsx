@@ -17,8 +17,8 @@ import { formatDate } from "../utils/formatDate";
 
 // Show strain totals and yield metrics.
 function StrainDataViewer({ strains, roomAssignments, harvests }) {
-  // Expanded table rows by strain ID.
-  const [expandedRows, setExpandedRows] = useState({});
+  // Only one strain details panel can be open at a time.
+  const [expandedStrainId, setExpandedStrainId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Build one summary row per strain.
@@ -143,7 +143,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   }, [strains, roomAssignments, harvests]);
 
   const toggleExpandedRow = (strainId) => {
-    setExpandedRows((prev) => ({ ...prev, [strainId]: !prev[strainId] }));
+    setExpandedStrainId((prev) => (prev === strainId ? null : strainId));
   };
 
   const filteredRows = useMemo(() => {
@@ -202,19 +202,6 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       flex: 0.7,
     },
     {
-      field: "avgDryWeightPerPlant",
-      headerName: "Avg Dry g/plant",
-      minWidth: 140,
-      flex: 0.9,
-    },
-    {
-      field: "wetToDryPercentChange",
-      headerName: "Wet→Dry %",
-      minWidth: 120,
-      flex: 0.8,
-      renderCell: ({ value }) => (value === "N/A" ? "N/A" : `${value}%`),
-    },
-    {
       field: "nextHarvest",
       headerName: "Next Harvest",
       minWidth: 140,
@@ -265,7 +252,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
 
       {filteredRows.map((row) => (
         <Fragment key={row.strainId}>
-          {expandedRows[row.strainId] && (
+          {expandedStrainId === row.strainId && (
             <Accordion defaultExpanded>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography sx={{ fontWeight: 700 }}>

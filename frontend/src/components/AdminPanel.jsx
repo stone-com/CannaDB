@@ -24,18 +24,21 @@ import PlaceIcon from "@mui/icons-material/Place";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import AltRouteIcon from "@mui/icons-material/AltRoute";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import CompanyForm from "./admin-forms/CompanyForm";
 import LocationForm from "./admin-forms/LocationForm";
 import RoomForm from "./admin-forms/RoomForm";
 import StrainForm from "./admin-forms/StrainForm";
 import CreateMomsForm from "./admin-forms/CreateMomsForm";
+import BatchForm from "./BatchForm";
+import DestroyPlantsForm from "./admin-forms/DestroyPlantsForm";
 
 const ADMIN_WORKFLOWS = [
   {
     key: "strain",
-    title: "Add Strain",
-    description:
-      "Create a new strain profile with baseline cultivation details.",
+    title: "Edit Strains",
+    description: "Add, edit, or remove strain profiles and status metadata.",
     category: "Foundation Data",
     icon: SpaIcon,
   },
@@ -56,18 +59,35 @@ const ADMIN_WORKFLOWS = [
   },
   {
     key: "room",
-    title: "Add Room",
-    description: "Create a room with capacity and lifecycle behavior settings.",
+    title: "Edit Rooms",
+    description:
+      "Add, edit, or remove rooms with location, type, and capacity settings.",
     category: "Foundation Data",
     icon: MeetingRoomIcon,
   },
   {
+    key: "batch",
+    title: "Create Batch",
+    description:
+      "Create a new batch with clone/harvest dates and initial plant counts.",
+    category: "Batch Operations",
+    icon: Inventory2Icon,
+  },
+  {
     key: "assign",
-    title: "Assign Batch to Room",
+    title: "Move/Transplant Plants",
     description:
       "Move or split plants across rooms and advance their growth stage.",
-    category: "Room Operations",
+    category: "Batch Operations",
     icon: AltRouteIcon,
+  },
+  {
+    key: "destroyPlants",
+    title: "Destroy Plants",
+    description:
+      "Remove selected strain plants from a batch and persist the reduction.",
+    category: "Batch Operations",
+    icon: DeleteSweepIcon,
   },
   {
     key: "createMoms",
@@ -116,8 +136,12 @@ export default function AdminPanel() {
     if (activeWorkflow.key === "location") return <LocationForm embedded />;
     if (activeWorkflow.key === "room")
       return <RoomForm embedded section="add" />;
+    if (activeWorkflow.key === "batch") return <BatchForm />;
     if (activeWorkflow.key === "assign") {
       return <RoomForm embedded section="assign" />;
+    }
+    if (activeWorkflow.key === "destroyPlants") {
+      return <DestroyPlantsForm embedded />;
     }
     if (activeWorkflow.key === "createMoms") {
       return <CreateMomsForm embedded />;
@@ -142,7 +166,7 @@ export default function AdminPanel() {
           <Stack spacing={0.5}>
             <Typography variant="h4">Admin Operations Center</Typography>
             <Typography color="text.secondary" sx={{ maxWidth: 900 }}>
-              Use structured workflows to manage core records, room movement,
+              Use structured workflows to manage core records, batch movement,
               and propagation tasks with fewer clicks and clearer context.
             </Typography>
           </Stack>
