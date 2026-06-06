@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Button,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 function CreateMomsForm({ embedded }) {
   const [batches, setBatches] = useState([]);
@@ -213,89 +221,82 @@ function CreateMomsForm({ embedded }) {
 
   const body = (
     <>
-      <form onSubmit={handleSubmit}>
-        <div className="form-field">
-          <label className="form-label">
-            Source Production Batch
-            <select
-              className="form-select"
-              value={selectedBatchId}
-              onChange={(e) => handleBatchChange(e.target.value)}
-            >
-              <option value="">-- Select Batch --</option>
-              {productionBatches.map((batch) => (
-                <option key={batch._id} value={batch._id}>
-                  {batch.batchNumber} ({batch.lifecycleStage})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+      <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+        <TextField
+          select
+          label="Source Production Batch"
+          value={selectedBatchId}
+          onChange={(e) => handleBatchChange(e.target.value)}
+        >
+          <MenuItem value="">Select Batch</MenuItem>
+          {productionBatches.map((batch) => (
+            <MenuItem key={batch._id} value={batch._id}>
+              {batch.batchNumber} ({batch.lifecycleStage})
+            </MenuItem>
+          ))}
+        </TextField>
 
         {selectedBatch && (
           <>
-            <div className="form-field">
-              <label className="form-label">
-                Mom Room
-                <select
-                  className="form-select"
-                  value={selectedMomRoomId}
-                  onChange={(e) => setSelectedMomRoomId(e.target.value)}
-                >
-                  <option value="">-- Select Mom Room --</option>
-                  {momRoomsAtLocation.map((room) => (
-                    <option key={room._id} value={room._id}>
-                      {room.locationId?.nickname || "Unknown Location"} -{" "}
-                      {room.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="form-field">
-              <p className="status-message">
-                Select how many plants from each strain to convert to moms.
-              </p>
-              {availablePlantsByStrain.map((strain) => (
-                <label className="form-label" key={strain.strainId}>
-                  {strain.strainName} (available: {strain.totalCount})
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    max={strain.totalCount}
-                    value={momCuts[strain.strainId] || "0"}
-                    onChange={(e) =>
-                      handleCutChange(strain.strainId, e.target.value)
-                    }
-                  />
-                </label>
+            <TextField
+              select
+              label="Mom Room"
+              value={selectedMomRoomId}
+              onChange={(e) => setSelectedMomRoomId(e.target.value)}
+            >
+              <MenuItem value="">Select Mom Room</MenuItem>
+              {momRoomsAtLocation.map((room) => (
+                <MenuItem key={room._id} value={room._id}>
+                  {room.locationId?.nickname || "Unknown Location"} -{" "}
+                  {room.name}
+                </MenuItem>
               ))}
-              <p className="status-message">
-                Total plants selected for mom cut:{" "}
-                <strong>{totalMomPlants}</strong>
-              </p>
-            </div>
+            </TextField>
+
+            <Typography variant="body2" color="text.secondary">
+              Select how many plants from each strain to convert to moms.
+            </Typography>
+
+            {availablePlantsByStrain.map((strain) => (
+              <TextField
+                key={strain.strainId}
+                type="number"
+                label={`${strain.strainName} (available: ${strain.totalCount})`}
+                inputProps={{ min: 0, max: strain.totalCount }}
+                value={momCuts[strain.strainId] || "0"}
+                onChange={(e) =>
+                  handleCutChange(strain.strainId, e.target.value)
+                }
+              />
+            ))}
+
+            <Typography variant="body2">
+              Total plants selected for mom cut:{" "}
+              <strong>{totalMomPlants}</strong>
+            </Typography>
           </>
         )}
 
-        <button className="submit-button" type="submit" disabled={submitting}>
+        <Button variant="contained" type="submit" disabled={submitting}>
           {submitting ? "Creating..." : "Create Mom Batch"}
-        </button>
-      </form>
+        </Button>
 
-      {message && <p className="status-message">{message}</p>}
+        {message && (
+          <Alert severity={message.startsWith("Error") ? "error" : "success"}>
+            {message}
+          </Alert>
+        )}
+      </Stack>
     </>
   );
 
   if (embedded) return body;
 
   return (
-    <div className="form-container">
-      <h2>Create Moms</h2>
+    <Stack spacing={2}>
+      <Typography variant="h6">Create Moms</Typography>
       {body}
-    </div>
+    </Stack>
   );
 }
 

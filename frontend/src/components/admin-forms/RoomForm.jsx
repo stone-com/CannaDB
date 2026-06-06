@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Divider,
+  FormControlLabel,
+  MenuItem,
+  Radio,
+  RadioGroup,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { formatDate } from "../../utils/formatDate";
 
-// Fixed room type options.
 const ROOM_TYPES = [
   "Flower",
   "Veg",
@@ -28,19 +43,18 @@ const NEXT_STAGE_BY_BATCH_TYPE = {
   },
 };
 
-// `section` chooses add-room vs assign-room UI.
-// `embedded` chooses inline vs card layout.
 function RoomForm({ embedded, section }) {
-  // Data and form state.
   const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [batches, setBatches] = useState([]);
+
   const [formData, setFormData] = useState({
     locationId: "",
     name: "",
     type: "",
     sqFoot: "",
   });
+
   const [assignmentData, setAssignmentData] = useState({
     roomId: "",
     batchId: "",
@@ -49,10 +63,10 @@ function RoomForm({ embedded, section }) {
   const [wholeRoomId, setWholeRoomId] = useState("");
   const [splitDestinations, setSplitDestinations] = useState([]);
   const [shouldAdvanceStage, setShouldAdvanceStage] = useState(false);
+
   const [message, setMessage] = useState("");
   const [assignmentMessage, setAssignmentMessage] = useState("");
 
-  // Load locations for dropdown.
   const fetchLocations = async () => {
     try {
       const res = await fetch("/api/locations");
@@ -63,7 +77,6 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Load rooms for assignment targets.
   const fetchRooms = async () => {
     try {
       const res = await fetch("/api/rooms");
@@ -74,7 +87,6 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Load batches for assignment section.
   const fetchBatches = async () => {
     try {
       const res = await fetch("/api/batches");
@@ -85,7 +97,33 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Hide harvested batches and sort by harvest date.
+  useEffect(() => {
+    fetchLocations();
+    fetchRooms();
+    fetchBatches();
+
+    const handleLocationCreated = () => {
+      fetchLocations();
+      fetchRooms();
+      fetchBatches();
+    };
+
+    const handleRoomOrBatchUpdated = () => {
+      fetchRooms();
+      fetchBatches();
+    };
+
+    window.addEventListener("location:created", handleLocationCreated);
+    window.addEventListener("room:created", handleRoomOrBatchUpdated);
+    window.addEventListener("batch:created", handleRoomOrBatchUpdated);
+
+    return () => {
+      window.removeEventListener("location:created", handleLocationCreated);
+      window.removeEventListener("room:created", handleRoomOrBatchUpdated);
+      window.removeEventListener("batch:created", handleRoomOrBatchUpdated);
+    };
+  }, []);
+
   const selectableBatches = useMemo(() => {
     const now = new Date();
 
@@ -169,32 +207,69 @@ function RoomForm({ embedded, section }) {
   const createZeroCounts = () =>
     Object.fromEntries(batchPlantTotals.map((plant) => [plant.strainId, "0"]));
 
-  useEffect(() => {
-    fetchLocations();
-    fetchRooms();
-    fetchBatches();
+  const handleBatchSelection = (batchId) => {
+    setAssignmentData({ roomId: "", batchId });
+    setWholeRoomId("");
+    setShouldAdvanceStage(false);
+    setSplitDestinations(
+      batchId
+        ? [
+            {
+              roomId: "",
+              strainCounts: createZeroCounts(),
+            },
+          ]
+        : [],
+    );
+  };
 
-    const handleLocationCreated = () => {
-      fetchLocations();
-      fetchRooms();
-      fetchBatches();
-    };
+  const handleAddSplitDestination = () => {
+    setSplitDestinations((prev) => [
+      ...prev,
+      {
+        roomId: "",
+        strainCounts: createZeroCounts(),
+      },
+    ]);
+  };
 
-    const handleRoomOrBatchUpdated = () => {
-      fetchRooms();
-      fetchBatches();
-    };
+  const handleRemoveSplitDestination = (index) => {
+    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    window.addEventListener("location:created", handleLocationCreated);
-    window.addEventListener("room:created", handleRoomOrBatchUpdated);
-    window.addEventListener("batch:created", handleRoomOrBatchUpdated);
+  const handleSplitRoomChange = (index, roomId) => {
+    setSplitDestinations((prev) =>
+      prev.map((destination, i) =>
+        i === index ? { ...destination, roomId } : destination,
+      ),
+    );
+  };
 
-    return () => {
-      window.removeEventListener("location:created", handleLocationCreated);
-      window.removeEventListener("room:created", handleRoomOrBatchUpdated);
-      window.removeEventListener("batch:created", handleRoomOrBatchUpdated);
-    };
-  }, []);
+  const handleSplitCountChange = (index, strainId, value) => {
+    const normalizedValue =
+      value === "" ? "" : String(Math.max(0, Number(value) || 0));
+
+    setSplitDestinations((prev) =>
+      prev.map((destination, i) =>
+        i === index
+          ? {
+              ...destination,
+              strainCounts: {
+                ...destination.strainCounts,
+                [strainId]: normalizedValue,
+              },
+            }
+          : destination,
+      ),
+    );
+  };
+
+  const getAllocatedCount = (strainId) =>
+    splitDestinations.reduce(
+      (sum, destination) =>
+        sum + (Number(destination.strainCounts?.[strainId]) || 0),
+      0,
+    );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -233,7 +308,6 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  // Save room assignment for selected batch.
   const handleAssignmentSubmit = async (e) => {
     e.preventDefault();
     setAssignmentMessage("");
@@ -243,7 +317,7 @@ function RoomForm({ embedded, section }) {
         throw new Error("Please select a batch");
       }
 
-      let payload = {
+      const payload = {
         mode: assignmentMode,
         notes: null,
         advanceStage: shouldAdvanceStage,
@@ -331,187 +405,98 @@ function RoomForm({ embedded, section }) {
     }
   };
 
-  const handleBatchSelection = (batchId) => {
-    setAssignmentData({ roomId: "", batchId });
-    setWholeRoomId("");
-    setShouldAdvanceStage(false);
-    setSplitDestinations(
-      batchId
-        ? [
-            {
-              roomId: "",
-              strainCounts: createZeroCounts(),
-            },
-          ]
-        : [],
-    );
-  };
+  const addRoomForm = (
+    <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      <TextField
+        select
+        label="Location"
+        value={formData.locationId}
+        onChange={(e) =>
+          setFormData({ ...formData, locationId: e.target.value })
+        }
+        required
+      >
+        <MenuItem value="">Select Location</MenuItem>
+        {locations.map((loc) => (
+          <MenuItem key={loc._id} value={loc._id}>
+            {loc.nickname}
+          </MenuItem>
+        ))}
+      </TextField>
 
-  const handleAddSplitDestination = () => {
-    setSplitDestinations((prev) => [
-      ...prev,
-      {
-        roomId: "",
-        strainCounts: createZeroCounts(),
-      },
-    ]);
-  };
+      <TextField
+        label="Room Name"
+        value={formData.name}
+        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+        required
+      />
 
-  const handleRemoveSplitDestination = (index) => {
-    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
-  };
+      <TextField
+        select
+        label="Room Type"
+        value={formData.type}
+        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+        required
+      >
+        <MenuItem value="">Select Room Type</MenuItem>
+        {ROOM_TYPES.map((t) => (
+          <MenuItem key={t} value={t}>
+            {t}
+          </MenuItem>
+        ))}
+      </TextField>
 
-  const handleSplitRoomChange = (index, roomId) => {
-    setSplitDestinations((prev) =>
-      prev.map((destination, i) =>
-        i === index ? { ...destination, roomId } : destination,
-      ),
-    );
-  };
+      <TextField
+        label="Square Feet"
+        type="number"
+        value={formData.sqFoot}
+        onChange={(e) => setFormData({ ...formData, sqFoot: e.target.value })}
+      />
 
-  const handleSplitCountChange = (index, strainId, value) => {
-    const normalizedValue =
-      value === "" ? "" : String(Math.max(0, Number(value) || 0));
+      <Button variant="contained" type="submit">
+        Add Room
+      </Button>
 
-    setSplitDestinations((prev) =>
-      prev.map((destination, i) =>
-        i === index
-          ? {
-              ...destination,
-              strainCounts: {
-                ...destination.strainCounts,
-                [strainId]: normalizedValue,
-              },
-            }
-          : destination,
-      ),
-    );
-  };
+      {message && (
+        <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
+          {message}
+        </Alert>
+      )}
+    </Stack>
+  );
 
-  const getAllocatedCount = (strainId) =>
-    splitDestinations.reduce(
-      (sum, destination) =>
-        sum + (Number(destination.strainCounts?.[strainId]) || 0),
-      0,
-    );
+  const assignRoomForm = (
+    <Stack component="form" spacing={2} onSubmit={handleAssignmentSubmit}>
+      <TextField
+        select
+        label="Batch"
+        value={assignmentData.batchId}
+        onChange={(e) => handleBatchSelection(e.target.value)}
+        required
+      >
+        <MenuItem value="">Select Batch</MenuItem>
+        {selectableBatches.map((batch) => (
+          <MenuItem key={batch._id} value={batch._id}>
+            {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
+            Harvest: {formatDate(batch.harvestDate)}
+          </MenuItem>
+        ))}
+      </TextField>
 
-  if (embedded && section === "add") {
-    return (
-      <>
-        <form onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="form-label">
-              Location (required):
-              <select
-                className="form-select"
-                value={formData.locationId}
-                onChange={(e) =>
-                  setFormData({ ...formData, locationId: e.target.value })
-                }
-                required
-              >
-                <option value="">-- Select Location --</option>
-                {locations.map((loc) => (
-                  <option key={loc._id} value={loc._id}>
-                    {loc.nickname}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Room Name (required):
-              <input
-                className="form-input"
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                required
-              />
-            </label>
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Room Type (required):
-              <select
-                className="form-select"
-                value={formData.type}
-                onChange={(e) =>
-                  setFormData({ ...formData, type: e.target.value })
-                }
-                required
-              >
-                <option value="">-- Select Room Type --</option>
-                {ROOM_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Square Feet:
-              <input
-                className="form-input"
-                type="number"
-                min="0"
-                value={formData.sqFoot}
-                onChange={(e) =>
-                  setFormData({ ...formData, sqFoot: e.target.value })
-                }
-              />
-            </label>
-          </div>
-          <button className="submit-button" type="submit">
-            Add Room
-          </button>
-        </form>
-        {message && <p className="status-message">{message}</p>}
-      </>
-    );
-  }
-
-  if (embedded && section === "assign") {
-    return (
-      <>
-        <form onSubmit={handleAssignmentSubmit}>
-          <div className="form-field">
-            <label className="form-label">
-              Batch (required):
-              <select
-                className="form-select"
-                value={assignmentData.batchId}
-                onChange={(e) => handleBatchSelection(e.target.value)}
-                required
-              >
-                <option value="">-- Select Batch --</option>
-                {selectableBatches.map((batch) => (
-                  <option key={batch._id} value={batch._id}>
-                    {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
-                    Harvest: {formatDate(batch.harvestDate)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {selectedBatch && (
-            <div className="form-field">
-              <p className="status-message">
+      {selectedBatch && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={0.5}>
+              <Typography variant="body2">
                 Current Stage: <strong>{selectedBatch.lifecycleStage}</strong>
-              </p>
-              <p className="status-message">
+              </Typography>
+              <Typography variant="body2">
                 In Stage For: <strong>{daysInStage}</strong>
-              </p>
-              <p className="status-message">
+              </Typography>
+              <Typography variant="body2">
                 Next Stage: <strong>{nextStage || "N/A"}</strong>
-              </p>
-              <p className="status-message">
+              </Typography>
+              <Typography variant="body2">
                 Current Room Plan:{" "}
                 <strong>
                   {(selectedBatch.rooms || []).length > 0
@@ -526,299 +511,175 @@ function RoomForm({ embedded, section }) {
                         .join(", ")
                     : "No room plan set"}
                 </strong>
-              </p>
-            </div>
-          )}
+              </Typography>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
-          {selectedBatch && (
-            <div className="form-field">
-              <label className="form-label">
-                <input
-                  type="radio"
-                  checked={assignmentMode === "whole"}
-                  onChange={() => setAssignmentMode("whole")}
-                />{" "}
-                Whole batch to one room
-              </label>
-              <label className="form-label">
-                <input
-                  type="radio"
-                  checked={assignmentMode === "split"}
-                  onChange={() => setAssignmentMode("split")}
-                />{" "}
-                Split strains/plants across multiple rooms
-              </label>
+      {selectedBatch && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={1.25}>
+              <RadioGroup
+                value={assignmentMode}
+                onChange={(e) => setAssignmentMode(e.target.value)}
+              >
+                <FormControlLabel
+                  value="whole"
+                  control={<Radio />}
+                  label="Whole batch to one room"
+                />
+                <FormControlLabel
+                  value="split"
+                  control={<Radio />}
+                  label="Split strains/plants across multiple rooms"
+                />
+              </RadioGroup>
 
-              <label className="form-label">
-                <input
-                  type="checkbox"
-                  checked={shouldAdvanceStage}
-                  disabled={!nextStage}
-                  onChange={(e) => setShouldAdvanceStage(e.target.checked)}
-                />{" "}
-                Advance to next stage when saving
-              </label>
-            </div>
-          )}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={shouldAdvanceStage}
+                    disabled={!nextStage}
+                    onChange={(e) => setShouldAdvanceStage(e.target.checked)}
+                  />
+                }
+                label="Advance to next stage when saving"
+              />
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
-          {selectedBatch && assignmentMode === "whole" && (
-            <div className="form-field">
-              <label className="form-label">
-                Destination Room:
-                <select
-                  className="form-select"
-                  value={wholeRoomId}
-                  onChange={(e) => setWholeRoomId(e.target.value)}
-                  required
-                >
-                  <option value="">-- Select Room --</option>
-                  {assignableRooms.map((room) => (
-                    <option key={room._id} value={room._id}>
-                      {room.locationId?.nickname || "Unknown Location"} -{" "}
-                      {room.name} ({room.type})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
+      {selectedBatch && assignmentMode === "whole" && (
+        <TextField
+          select
+          label="Destination Room"
+          value={wholeRoomId}
+          onChange={(e) => setWholeRoomId(e.target.value)}
+          required
+        >
+          <MenuItem value="">Select Room</MenuItem>
+          {assignableRooms.map((room) => (
+            <MenuItem key={room._id} value={room._id}>
+              {room.locationId?.nickname || "Unknown Location"} - {room.name} (
+              {room.type})
+            </MenuItem>
+          ))}
+        </TextField>
+      )}
 
-          {selectedBatch && assignmentMode === "split" && (
-            <div className="form-field">
-              <p className="status-message">
+      {selectedBatch && assignmentMode === "split" && (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={1.5}>
+              <Typography variant="body2" color="text.secondary">
                 Set plant counts per strain for each destination room. Totals
                 must match the full batch.
-              </p>
+              </Typography>
 
               {batchPlantTotals.map((plant) => (
-                <p key={`totals-${plant.strainId}`} className="status-message">
+                <Typography key={`totals-${plant.strainId}`} variant="body2">
                   {plant.strainName}: {getAllocatedCount(plant.strainId)} /{" "}
                   {plant.totalCount}
-                </p>
+                </Typography>
               ))}
 
               {splitDestinations.map((destination, index) => (
-                <div
-                  key={`split-destination-${index}`}
-                  className="form-field"
-                  style={{ border: "1px solid #ddd", padding: "12px" }}
-                >
-                  <label className="form-label">
-                    Destination Room {index + 1}
-                    <select
-                      className="form-select"
-                      value={destination.roomId}
-                      onChange={(e) =>
-                        handleSplitRoomChange(index, e.target.value)
-                      }
-                    >
-                      <option value="">-- Select Room --</option>
-                      {assignableRooms.map((room) => (
-                        <option key={room._id} value={room._id}>
-                          {room.locationId?.nickname || "Unknown Location"} -{" "}
-                          {room.name} ({room.type})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {batchPlantTotals.map((plant) => (
-                    <label
-                      className="form-label"
-                      key={`split-${index}-${plant.strainId}`}
-                    >
-                      {plant.strainName} Count
-                      <input
-                        className="form-input"
-                        type="number"
-                        min="0"
-                        value={
-                          destination.strainCounts?.[plant.strainId] || "0"
-                        }
+                <Card key={`split-${index}`} variant="outlined">
+                  <CardContent>
+                    <Stack spacing={1.5}>
+                      <TextField
+                        select
+                        label={`Destination Room ${index + 1}`}
+                        value={destination.roomId}
                         onChange={(e) =>
-                          handleSplitCountChange(
-                            index,
-                            plant.strainId,
-                            e.target.value,
-                          )
+                          handleSplitRoomChange(index, e.target.value)
                         }
-                      />
-                    </label>
-                  ))}
+                      >
+                        <MenuItem value="">Select Room</MenuItem>
+                        {assignableRooms.map((room) => (
+                          <MenuItem key={room._id} value={room._id}>
+                            {room.locationId?.nickname || "Unknown Location"} -{" "}
+                            {room.name} ({room.type})
+                          </MenuItem>
+                        ))}
+                      </TextField>
 
-                  {splitDestinations.length > 1 && (
-                    <button
-                      className="submit-button"
-                      type="button"
-                      onClick={() => handleRemoveSplitDestination(index)}
-                    >
-                      Remove Room
-                    </button>
-                  )}
-                </div>
+                      {batchPlantTotals.map((plant) => (
+                        <TextField
+                          key={`split-${index}-${plant.strainId}`}
+                          type="number"
+                          label={`${plant.strainName} Count`}
+                          value={
+                            destination.strainCounts?.[plant.strainId] || "0"
+                          }
+                          onChange={(e) =>
+                            handleSplitCountChange(
+                              index,
+                              plant.strainId,
+                              e.target.value,
+                            )
+                          }
+                        />
+                      ))}
+
+                      {splitDestinations.length > 1 && (
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          onClick={() => handleRemoveSplitDestination(index)}
+                        >
+                          Remove Room
+                        </Button>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
               ))}
 
-              <button
-                className="submit-button"
-                type="button"
-                onClick={handleAddSplitDestination}
-              >
+              <Button variant="outlined" onClick={handleAddSplitDestination}>
                 Add Destination Room
-              </button>
-            </div>
-          )}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
-          <button className="submit-button" type="submit">
-            Save Batch Room Plan
-          </button>
-        </form>
-        {assignmentMessage && (
-          <p className="status-message">{assignmentMessage}</p>
-        )}
-      </>
-    );
-  }
+      <Button variant="contained" type="submit">
+        Save Batch Room Plan
+      </Button>
+
+      {assignmentMessage && (
+        <Alert
+          severity={
+            assignmentMessage.startsWith("Error:") ? "error" : "success"
+          }
+        >
+          {assignmentMessage}
+        </Alert>
+      )}
+    </Stack>
+  );
+
+  if (embedded && section === "add") return addRoomForm;
+  if (embedded && section === "assign") return assignRoomForm;
 
   return (
-    <div className="form-container">
-      <h2>Add Room</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="form-field">
-          <label className="form-label">
-            Location (required):
-            <select
-              className="form-select"
-              value={formData.locationId}
-              onChange={(e) =>
-                setFormData({ ...formData, locationId: e.target.value })
-              }
-              required
-            >
-              <option value="">-- Select Location --</option>
-              {locations.map((location) => (
-                <option key={location._id} value={location._id}>
-                  {location.nickname}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+    <Stack spacing={3}>
+      <Stack spacing={1}>
+        <Typography variant="h6">Add Room</Typography>
+        {addRoomForm}
+      </Stack>
 
-        <div className="form-field">
-          <label className="form-label">
-            Room Name (required):
-            <input
-              className="form-input"
-              type="text"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              required
-            />
-          </label>
-        </div>
+      <Divider />
 
-        <div className="form-field">
-          <label className="form-label">
-            Room Type (required):
-            <select
-              className="form-select"
-              value={formData.type}
-              onChange={(e) =>
-                setFormData({ ...formData, type: e.target.value })
-              }
-              required
-            >
-              <option value="">-- Select Room Type --</option>
-              {ROOM_TYPES.map((roomType) => (
-                <option key={roomType} value={roomType}>
-                  {roomType}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">
-            Square Feet:
-            <input
-              className="form-input"
-              type="number"
-              min="0"
-              value={formData.sqFoot}
-              onChange={(e) =>
-                setFormData({ ...formData, sqFoot: e.target.value })
-              }
-            />
-          </label>
-        </div>
-
-        <button className="submit-button" type="submit">
-          Add Room
-        </button>
-      </form>
-      {message && <p className="status-message">{message}</p>}
-
-      <hr />
-
-      <h2>Assign Batch To Room</h2>
-      <form onSubmit={handleAssignmentSubmit}>
-        <div className="form-field">
-          <label className="form-label">
-            Room (required):
-            <select
-              className="form-select"
-              value={assignmentData.roomId}
-              onChange={(e) =>
-                setAssignmentData({ ...assignmentData, roomId: e.target.value })
-              }
-              required
-            >
-              <option value="">-- Select Room --</option>
-              {rooms.map((room) => (
-                <option key={room._id} value={room._id}>
-                  {room.locationId?.nickname || "Unknown Location"} -{" "}
-                  {room.name} ({room.type})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">
-            Batch:
-            <select
-              className="form-select"
-              value={assignmentData.batchId}
-              onChange={(e) =>
-                setAssignmentData({
-                  ...assignmentData,
-                  batchId: e.target.value,
-                })
-              }
-            >
-              <option value="">-- No Batch (Unassign) --</option>
-              {selectableBatches.map((batch) => (
-                <option key={batch._id} value={batch._id}>
-                  {batch.batchNumber} | Clone: {formatDate(batch.cloneDate)} |
-                  Harvest: {formatDate(batch.harvestDate)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <button className="submit-button" type="submit">
-          Save Assignment
-        </button>
-      </form>
-      {assignmentMessage && (
-        <p className="status-message">{assignmentMessage}</p>
-      )}
-    </div>
+      <Stack spacing={1}>
+        <Typography variant="h6">Assign Batch To Room</Typography>
+        {assignRoomForm}
+      </Stack>
+    </Stack>
   );
 }
 

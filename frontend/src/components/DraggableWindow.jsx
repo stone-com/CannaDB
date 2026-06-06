@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { Box, IconButton, Paper, Stack, Typography } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import MinimizeIcon from "@mui/icons-material/Minimize";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 
-// Shared counter so focused windows stay on top.
-let globalZIndex = 100;
+let globalZIndex = 1200;
 
-// Draggable and resizable window shell.
 export default function DraggableWindow({
   title,
   onClose,
@@ -15,27 +17,18 @@ export default function DraggableWindow({
   defaultW = 540,
   defaultH = 460,
 }) {
-  // Current window position.
   const [pos, setPos] = useState({ x: defaultX, y: defaultY });
-
-  // Current window size.
   const [size, setSize] = useState({ w: defaultW, h: defaultH });
-
-  // Keep latest size available inside mouse listeners.
-  const sizeRef = useRef({ w: defaultW, h: defaultH });
-  sizeRef.current = size;
-
-  // Newer focus gets higher z-index.
   const [zIndex, setZIndex] = useState(() => ++globalZIndex);
-
-  // Active drag/resize snapshot.
   const interaction = useRef(null);
+  const sizeRef = useRef({ w: defaultW, h: defaultH });
+
+  sizeRef.current = size;
 
   const bringToFront = () => {
     setZIndex(++globalZIndex);
   };
 
-  // Start dragging.
   const handleTitleMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -45,16 +38,16 @@ export default function DraggableWindow({
       type: "drag",
       startClientX: e.clientX,
       startClientY: e.clientY,
-      startPosX: pos.x,
-      startPosY: pos.y,
+      startX: pos.x,
+      startY: pos.y,
     };
   };
 
-  // Start resizing from bottom-right handle.
   const handleResizeMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    bringToFront();
 
     interaction.current = {
       type: "resize",
@@ -65,40 +58,34 @@ export default function DraggableWindow({
     };
   };
 
-  // Track drag/resize even if cursor leaves the component.
   useEffect(() => {
     const onMouseMove = (e) => {
       if (!interaction.current) return;
 
-      const {
-        type,
-        startClientX,
-        startClientY,
-        startPosX,
-        startPosY,
-        startW,
-        startH,
-      } = interaction.current;
-
-      const dx = e.clientX - startClientX;
-      const dy = e.clientY - startClientY;
+      const { type } = interaction.current;
 
       if (type === "drag") {
-        // Keep window inside app bounds.
-        const LEFT_BOUND = 254;
-        const TOP_BOUND = 48;
-        const RIGHT_BOUND = window.innerWidth - sizeRef.current.w;
-        const BOTTOM_BOUND = window.innerHeight - 44 - sizeRef.current.h;
+        const dx = e.clientX - interaction.current.startClientX;
+        const dy = e.clientY - interaction.current.startClientY;
+        const nextX = interaction.current.startX + dx;
+        const nextY = interaction.current.startY + dy;
+
+        const maxX = Math.max(0, window.innerWidth - sizeRef.current.w);
+        const maxY = Math.max(0, window.innerHeight - 64 - sizeRef.current.h);
 
         setPos({
-          x: Math.min(Math.max(LEFT_BOUND, startPosX + dx), RIGHT_BOUND),
-          y: Math.min(Math.max(TOP_BOUND, startPosY + dy), BOTTOM_BOUND),
+          x: Math.min(Math.max(0, nextX), maxX),
+          y: Math.min(Math.max(64, nextY), maxY),
         });
-      } else if (type === "resize") {
-        // Enforce minimum window size.
+      }
+
+      if (type === "resize") {
+        const dx = e.clientX - interaction.current.startClientX;
+        const dy = e.clientY - interaction.current.startClientY;
+
         setSize({
-          w: Math.max(300, startW + dx),
-          h: Math.max(200, startH + dy),
+          w: Math.max(360, interaction.current.startW + dx),
+          h: Math.max(240, interaction.current.startH + dy),
         });
       }
     };
@@ -116,13 +103,12 @@ export default function DraggableWindow({
     };
   }, []);
 
-  // Keep state while minimized.
   if (isMinimized) return null;
 
   return (
-    <div
-      className="dw-window"
-      style={{
+    <Box
+      sx={{
+        position: "fixed",
         left: pos.x,
         top: pos.y,
         width: size.w,
@@ -131,38 +117,77 @@ export default function DraggableWindow({
       }}
       onMouseDown={bringToFront}
     >
-      <div className="dw-titlebar" onMouseDown={handleTitleMouseDown}>
-        <span className="dw-title">{title}</span>
+      <Paper
+        elevation={8}
+        sx={{
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          height: "100%",
+          border: "1px solid",
+          borderColor: "divider",
+          overflow: "hidden",
+        }}
+      >
+        <Stack
+          onMouseDown={handleTitleMouseDown}
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{
+            px: 1.25,
+            py: 0.8,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            background:
+              "linear-gradient(90deg, rgba(0,95,115,0.14), rgba(238,155,0,0.10))",
+            cursor: "move",
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <DragIndicatorIcon
+              fontSize="small"
+              sx={{ color: "text.secondary" }}
+            />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              {title}
+            </Typography>
+          </Stack>
 
-        <div className="dw-controls">
-          <button
-            className="dw-btn"
-            title="Minimize to taskbar"
-            onClick={(e) => {
-              // Avoid starting drag when clicking controls.
-              e.stopPropagation();
-              onMinimize();
-            }}
-          >
-            ▼
-          </button>
+          <Stack direction="row" spacing={0.5}>
+            <IconButton size="small" aria-label="Minimize" onClick={onMinimize}>
+              <MinimizeIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              aria-label="Close"
+              color="error"
+              onClick={onClose}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        </Stack>
 
-          <button
-            className="dw-btn dw-btn-close"
-            title="Close"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
+        <Stack sx={{ flex: 1, minHeight: 0, overflow: "auto", p: 2 }}>
+          {children}
+        </Stack>
 
-      <div className="dw-body">{children}</div>
-
-      <div className="dw-resize-handle" onMouseDown={handleResizeMouseDown} />
-    </div>
+        <Box
+          onMouseDown={handleResizeMouseDown}
+          sx={{
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            width: 16,
+            height: 16,
+            cursor: "nwse-resize",
+            background:
+              "linear-gradient(135deg, transparent 0 40%, rgba(0,0,0,0.18) 40% 55%, transparent 55% 70%, rgba(0,0,0,0.3) 70% 85%, transparent 85%)",
+          }}
+        />
+      </Paper>
+    </Box>
   );
 }

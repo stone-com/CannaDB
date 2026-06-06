@@ -1,4 +1,15 @@
 import { useState } from "react";
+import {
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  CardContent,
+  Stack,
+  Typography,
+} from "@mui/material";
+import Grid from "@mui/material/Grid";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CompanyForm from "./admin-forms/CompanyForm";
 import LocationForm from "./admin-forms/LocationForm";
 import RoomForm from "./admin-forms/RoomForm";
@@ -47,40 +58,52 @@ export default function AdminPanel() {
 
   if (activeCard) {
     return (
-      <div className="admin-panel">
-        <button className="admin-back-button" onClick={handleBack}>
-          ← Back
-        </button>
+      <Stack spacing={2}>
+        <Box>
+          <Button startIcon={<ArrowBackIcon />} onClick={handleBack}>
+            Back
+          </Button>
+        </Box>
 
-        <div className="admin-form-panel">
-          {activeCard === "strain" && <StrainForm embedded />}
-          {activeCard === "company" && <CompanyForm embedded />}
-          {activeCard === "location" && <LocationForm embedded />}
-          {activeCard === "room" && <RoomForm embedded section="add" />}
-          {activeCard === "assign" && <RoomForm embedded section="assign" />}
-          {activeCard === "createMoms" && <CreateMomsForm embedded />}
-        </div>
-      </div>
+        <Card>
+          <CardContent>
+            {activeCard === "strain" && <StrainForm embedded />}
+            {activeCard === "company" && <CompanyForm embedded />}
+            {activeCard === "location" && <LocationForm embedded />}
+            {activeCard === "room" && <RoomForm embedded section="add" />}
+            {activeCard === "assign" && <RoomForm embedded section="assign" />}
+            {activeCard === "createMoms" && <CreateMomsForm embedded />}
+          </CardContent>
+        </Card>
+      </Stack>
     );
   }
 
   return (
-    <div className="admin-panel">
-      <h1>Admin Controls</h1>
-      <p className="admin-panel-subtitle">Click a card to open its form.</p>
+    <Stack spacing={2}>
+      <Box>
+        <Typography variant="h4">Admin Controls</Typography>
+        <Typography color="text.secondary">
+          Select a workflow to open a structured admin form.
+        </Typography>
+      </Box>
 
-      <div className="admin-cards">
+      <Grid container spacing={2}>
         {ADMIN_CARDS.map((card) => (
-          <button
-            key={card.key}
-            className="admin-card"
-            onClick={() => handleCardClick(card.key)}
-          >
-            <span className="admin-card-label">{card.label}</span>
-            <span className="admin-card-description">{card.description}</span>
-          </button>
+          <Grid key={card.key} size={{ xs: 12, sm: 6, lg: 4 }}>
+            <Card>
+              <CardActionArea onClick={() => handleCardClick(card.key)}>
+                <CardContent>
+                  <Typography variant="h6">{card.label}</Typography>
+                  <Typography color="text.secondary" variant="body2">
+                    {card.description}
+                  </Typography>
+                </CardContent>
+              </CardActionArea>
+            </Card>
+          </Grid>
         ))}
-      </div>
-    </div>
+      </Grid>
+    </Stack>
   );
 }

@@ -1,4 +1,16 @@
 import { useMemo, useState } from "react";
+import {
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import Grid from "@mui/material/Grid";
+import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
 // Show active batch and plant data for one room.
@@ -75,167 +87,164 @@ function RoomViewer({ rooms, roomAssignments }) {
   }, [selectedRoomAssignments]);
 
   return (
-    <div className="room-viewer">
-      <div className="room-viewer-selector">
-        <label
-          htmlFor="room-viewer-location-select"
-          className="room-viewer-label"
-        >
-          Select Location
-        </label>
-        <select
-          id="room-viewer-location-select"
-          className="room-viewer-select"
-          value={selectedLocationId}
-          onChange={handleLocationChange}
-        >
-          <option value="">— Choose a location —</option>
-          {sortedLocations.map((location) => (
-            <option key={location._id} value={location._id}>
-              {location.nickname || "Unnamed Location"}
-            </option>
-          ))}
-        </select>
-      </div>
+    <Stack spacing={2}>
+      <TextField
+        select
+        label="Select Location"
+        value={selectedLocationId}
+        onChange={handleLocationChange}
+      >
+        <MenuItem value="">Choose a location</MenuItem>
+        {sortedLocations.map((location) => (
+          <MenuItem key={location._id} value={location._id}>
+            {location.nickname || "Unnamed Location"}
+          </MenuItem>
+        ))}
+      </TextField>
 
-      <div className="room-viewer-selector">
-        <label htmlFor="room-viewer-select" className="room-viewer-label">
-          Select Room
-        </label>
-        <select
-          id="room-viewer-select"
-          className="room-viewer-select"
-          value={selectedRoomId}
-          disabled={!selectedLocationId}
-          onChange={(e) => setSelectedRoomId(e.target.value)}
-        >
-          <option value="">— Choose a room —</option>
-          {filteredRooms.map((room) => (
-            <option key={room._id} value={room._id}>
-              {room.name}
-              {room.type ? ` (${room.type})` : ""}
-            </option>
-          ))}
-        </select>
-      </div>
+      <TextField
+        select
+        label="Select Room"
+        value={selectedRoomId}
+        disabled={!selectedLocationId}
+        onChange={(e) => setSelectedRoomId(e.target.value)}
+      >
+        <MenuItem value="">Choose a room</MenuItem>
+        {filteredRooms.map((room) => (
+          <MenuItem key={room._id} value={room._id}>
+            {room.name}
+            {room.type ? ` (${room.type})` : ""}
+          </MenuItem>
+        ))}
+      </TextField>
 
       {!selectedRoom && (
-        <p className="room-viewer-empty">
+        <Alert severity="info">
           Choose a room above to view its current contents.
-        </p>
+        </Alert>
       )}
 
       {selectedRoom && selectedRoomAssignments.length === 0 && (
-        <div className="room-viewer-no-batch">
-          <p>
-            <strong>{selectedRoom.name}</strong> has no active batch assigned.
-          </p>
-        </div>
+        <Alert severity="warning">
+          <strong>{selectedRoom.name}</strong> has no active batch assigned.
+        </Alert>
       )}
 
       {selectedRoom && selectedRoomAssignments.length > 0 && (
-        <div className="room-viewer-content">
-          <div className="room-viewer-meta">
-            <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Room</span>
-              <span className="room-viewer-meta-value">
-                {selectedRoom.name}
-              </span>
-            </div>
-            <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Type</span>
-              <span className="room-viewer-meta-value">
-                {selectedRoom.type || "N/A"}
-              </span>
-            </div>
-            <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Total Plants</span>
-              <span className="room-viewer-meta-value">{roomTotalPlants}</span>
-            </div>
-            <div className="room-viewer-meta-card">
-              <span className="room-viewer-meta-label">Active Batches</span>
-              <span className="room-viewer-meta-value">
-                {selectedRoomAssignments.length}
-              </span>
-            </div>
-          </div>
+        <Stack spacing={2}>
+          <Grid container spacing={2}>
+            {[
+              ["Room", selectedRoom.name],
+              ["Type", selectedRoom.type || "N/A"],
+              ["Total Plants", roomTotalPlants],
+              ["Active Batches", selectedRoomAssignments.length],
+            ].map(([label, value]) => (
+              <Grid key={label} size={{ xs: 12, md: 3 }}>
+                <Card>
+                  <CardContent>
+                    <Typography color="text.secondary" variant="body2">
+                      {label}
+                    </Typography>
+                    <Typography variant="h6">{value}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
 
           {selectedRoomAssignments.map((assignment) => {
             const batch = assignment.batchId;
             const assignedPlants = Array.isArray(assignment?.assignedPlants)
               ? assignment.assignedPlants
               : [];
-            const strainRows = assignedPlants;
-            const batchTotalPlants = strainRows.reduce(
+            const batchTotalPlants = assignedPlants.reduce(
               (sum, row) => sum + (Number(row.count) || 0),
               0,
             );
 
             return (
-              <section key={assignment._id} className="room-viewer-assignment">
-                <div className="room-viewer-meta">
-                  <div className="room-viewer-meta-card">
-                    <span className="room-viewer-meta-label">Batch</span>
-                    <span className="room-viewer-meta-value">
-                      {batch?.batchNumber || "N/A"}
-                    </span>
-                  </div>
-                  <div className="room-viewer-meta-card">
-                    <span className="room-viewer-meta-label">Type</span>
-                    <span className="room-viewer-meta-value">
-                      {batch?.batchType || "production"}
-                    </span>
-                  </div>
-                  <div className="room-viewer-meta-card">
-                    <span className="room-viewer-meta-label">Clone Date</span>
-                    <span className="room-viewer-meta-value">
-                      {formatDate(batch?.cloneDate)}
-                    </span>
-                  </div>
-                  <div className="room-viewer-meta-card">
-                    <span className="room-viewer-meta-label">Plants</span>
-                    <span className="room-viewer-meta-value">
-                      {batchTotalPlants}
-                    </span>
-                  </div>
-                </div>
+              <Card key={assignment._id} variant="outlined">
+                <CardContent>
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    {[
+                      ["Batch", batch?.batchNumber || "N/A"],
+                      ["Type", batch?.batchType || "production"],
+                      ["Clone Date", formatDate(batch?.cloneDate)],
+                      ["Plants", batchTotalPlants],
+                    ].map(([label, value]) => (
+                      <Grid
+                        key={`${assignment._id}-${label}`}
+                        size={{ xs: 6, md: 3 }}
+                      >
+                        <Typography color="text.secondary" variant="caption">
+                          {label}
+                        </Typography>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ fontWeight: 700 }}
+                        >
+                          {value}
+                        </Typography>
+                      </Grid>
+                    ))}
+                  </Grid>
 
-                {strainRows.length === 0 ? (
-                  <p className="room-viewer-empty">
-                    No plants recorded for this batch in the selected room.
-                  </p>
-                ) : (
-                  <table className="room-viewer-table">
-                    <thead>
-                      <tr>
-                        <th>Strain</th>
-                        <th>Type</th>
-                        <th>Plant Count</th>
-                        <th>% of Room</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {strainRows.map((row, i) => (
-                        <tr key={`${assignment._id}-${i}`}>
-                          <td>{row.strainId?.name || "Unknown Strain"}</td>
-                          <td>{row.strainId?.type || "N/A"}</td>
-                          <td>{row.count}</td>
-                          <td>
-                            {roomTotalPlants > 0
+                  {assignedPlants.length === 0 ? (
+                    <Alert severity="info">
+                      No plants recorded for this batch in the selected room.
+                    </Alert>
+                  ) : (
+                    <Box sx={{ height: 280 }}>
+                      <DataGrid
+                        rows={assignedPlants.map((row, i) => ({
+                          id: `${assignment._id}-${i}`,
+                          strainName: row.strainId?.name || "Unknown Strain",
+                          type: row.strainId?.type || "N/A",
+                          count: row.count,
+                          share:
+                            roomTotalPlants > 0
                               ? `${((Number(row.count) / roomTotalPlants) * 100).toFixed(1)}%`
-                              : "N/A"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </section>
+                              : "N/A",
+                        }))}
+                        columns={[
+                          {
+                            field: "strainName",
+                            headerName: "Strain",
+                            flex: 1.2,
+                            minWidth: 150,
+                          },
+                          {
+                            field: "type",
+                            headerName: "Type",
+                            flex: 0.8,
+                            minWidth: 120,
+                          },
+                          {
+                            field: "count",
+                            headerName: "Plant Count",
+                            type: "number",
+                            flex: 0.7,
+                            minWidth: 120,
+                          },
+                          {
+                            field: "share",
+                            headerName: "% of Room",
+                            flex: 0.8,
+                            minWidth: 120,
+                          },
+                        ]}
+                        hideFooter
+                        disableRowSelectionOnClick
+                      />
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
             );
           })}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }
 

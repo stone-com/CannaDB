@@ -1,4 +1,12 @@
 import { useEffect, useState } from "react";
+import {
+  Alert,
+  Button,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 // `embedded` decides inline form vs standalone card view.
 function LocationForm({ embedded }) {
@@ -70,126 +78,57 @@ function LocationForm({ embedded }) {
     }
   };
 
-  if (embedded) {
-    return (
-      <>
-        <form onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="form-label">
-              Company (required):
-              <select
-                className="form-select"
-                value={formData.companyId}
-                onChange={(e) =>
-                  setFormData({ ...formData, companyId: e.target.value })
-                }
-                required
-              >
-                <option value="">-- Select Company --</option>
-                {companies.map((company) => (
-                  <option key={company._id} value={company._id}>
-                    {company.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Nickname (required):
-              <input
-                className="form-input"
-                type="text"
-                value={formData.nickname}
-                onChange={(e) =>
-                  setFormData({ ...formData, nickname: e.target.value })
-                }
-                required
-              />
-            </label>
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Address:
-              <input
-                className="form-input"
-                type="text"
-                value={formData.address}
-                onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
-                }
-              />
-            </label>
-          </div>
-          <button className="submit-button" type="submit">
-            Add Location
-          </button>
-        </form>
-        {message && <p className="status-message">{message}</p>}
-      </>
-    );
-  }
+  const formContent = (
+    <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      <TextField
+        select
+        label="Company"
+        value={formData.companyId}
+        onChange={(e) =>
+          setFormData({ ...formData, companyId: e.target.value })
+        }
+        required
+      >
+        <MenuItem value="">Select Company</MenuItem>
+        {companies.map((company) => (
+          <MenuItem key={company._id} value={company._id}>
+            {company.name}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      <TextField
+        label="Nickname"
+        value={formData.nickname}
+        onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
+        required
+      />
+
+      <TextField
+        label="Address"
+        value={formData.address}
+        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+      />
+
+      <Button variant="contained" type="submit">
+        Add Location
+      </Button>
+
+      {message && (
+        <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
+          {message}
+        </Alert>
+      )}
+    </Stack>
+  );
+
+  if (embedded) return formContent;
 
   return (
-    <div className="form-container">
-      <h2>Add Location</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="form-field">
-          <label className="form-label">
-            Company (required):
-            <select
-              className="form-select"
-              value={formData.companyId}
-              onChange={(e) =>
-                setFormData({ ...formData, companyId: e.target.value })
-              }
-              required
-            >
-              <option value="">-- Select Company --</option>
-              {companies.map((company) => (
-                <option key={company._id} value={company._id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">
-            Nickname (required):
-            <input
-              className="form-input"
-              type="text"
-              value={formData.nickname}
-              onChange={(e) =>
-                setFormData({ ...formData, nickname: e.target.value })
-              }
-              required
-            />
-          </label>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">
-            Address:
-            <input
-              className="form-input"
-              type="text"
-              value={formData.address}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-            />
-          </label>
-        </div>
-
-        <button className="submit-button" type="submit">
-          Add Location
-        </button>
-      </form>
-      {message && <p className="status-message">{message}</p>}
-    </div>
+    <Stack spacing={2}>
+      <Typography variant="h6">Add Location</Typography>
+      {formContent}
+    </Stack>
   );
 }
 

@@ -1,4 +1,15 @@
 ﻿import { Fragment, useMemo, useState } from "react";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Chip,
+  Stack,
+  Typography,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
 // Show strain totals and yield metrics.
@@ -132,117 +143,156 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   };
 
   if (strainRows.length === 0) {
-    return <p>No strains yet.</p>;
+    return <Typography color="text.secondary">No strains yet.</Typography>;
   }
 
+  const columns = [
+    {
+      field: "name",
+      headerName: "Strain",
+      flex: 1.1,
+      minWidth: 160,
+    },
+    {
+      field: "type",
+      headerName: "Type",
+      flex: 0.8,
+      minWidth: 120,
+      renderCell: ({ value }) => (
+        <Chip size="small" label={value} variant="outlined" />
+      ),
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      flex: 0.9,
+      minWidth: 130,
+    },
+    {
+      field: "totalPlants",
+      headerName: "Plants",
+      type: "number",
+      minWidth: 100,
+      flex: 0.7,
+    },
+    {
+      field: "avgDryWeightPerPlant",
+      headerName: "Avg Dry g/plant",
+      minWidth: 140,
+      flex: 0.9,
+    },
+    {
+      field: "wetToDryPercentChange",
+      headerName: "Wet→Dry %",
+      minWidth: 120,
+      flex: 0.8,
+      renderCell: ({ value }) => (value === "N/A" ? "N/A" : `${value}%`),
+    },
+    {
+      field: "nextHarvest",
+      headerName: "Next Harvest",
+      minWidth: 140,
+      flex: 1,
+    },
+  ];
+
   return (
-    <div className="strain-viewer-wrap">
-      <div className="harvest-table-wrap">
-        <table className="harvest-table strain-viewer-table">
-          <thead>
-            <tr>
-              <th>Expand</th>
-              <th>Strain</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Total Plants</th>
-              <th>Avg Dry (g/plant)</th>
-              <th>Wet→Dry Change (%)</th>
-              <th>Next Harvest</th>
-            </tr>
-          </thead>
-          <tbody>
-            {strainRows.map((row) => (
-              <Fragment key={row.strainId}>
-                <tr>
-                  <td>
-                    <button
-                      type="button"
-                      className="table-toggle-button"
-                      onClick={() => toggleExpandedRow(row.strainId)}
-                    >
-                      {expandedRows[row.strainId] ? "−" : "+"}
-                    </button>
-                  </td>
-                  <td>{row.name}</td>
-                  <td>{row.type}</td>
-                  <td>{row.status}</td>
-                  <td>{row.totalPlants}</td>
-                  <td>{row.avgDryWeightPerPlant}</td>
-                  <td>
-                    {row.wetToDryPercentChange === "N/A"
-                      ? "N/A"
-                      : `${row.wetToDryPercentChange}%`}
-                  </td>
-                  <td>{row.nextHarvest}</td>
-                </tr>
+    <Stack spacing={2} sx={{ width: "100%" }}>
+      <Box sx={{ height: 360, width: "100%" }}>
+        <DataGrid
+          rows={strainRows.map((row) => ({ ...row, id: row.strainId }))}
+          columns={columns}
+          disableRowSelectionOnClick
+          pageSizeOptions={[5, 10, 25]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+          }}
+          onRowClick={(params) => toggleExpandedRow(params.id)}
+        />
+      </Box>
 
-                {expandedRows[row.strainId] && (
-                  <tr className="harvest-detail-row">
-                    <td colSpan={8}>
-                      <div className="strain-expand-grid">
-                        <div className="strain-expand-section">
-                          <h4>Plants</h4>
-                          {row.plantsByRoom.length === 0 ? (
-                            <p>No plant/room data available yet.</p>
-                          ) : (
-                            <div className="harvest-table-wrap">
-                              <table className="harvest-table">
-                                <thead>
-                                  <tr>
-                                    <th>Room</th>
-                                    <th>Location</th>
-                                    <th>Batch</th>
-                                    <th>Plant Count</th>
-                                    <th>Batch Harvest Date</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.plantsByRoom.map((item, index) => (
-                                    <tr
-                                      key={`${row.strainId}-plant-row-${index}`}
-                                    >
-                                      <td>{item.roomName}</td>
-                                      <td>{item.locationName}</td>
-                                      <td>{item.batchNumber}</td>
-                                      <td>{item.plantCount}</td>
-                                      <td>
-                                        {formatDate(item.batchHarvestDate)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
+      {strainRows.map((row) => (
+        <Fragment key={row.strainId}>
+          {expandedRows[row.strainId] && (
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {row.name} Details
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={1} sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Historical average dry weight per plant:{" "}
+                    <strong>{row.avgDryWeightPerPlant}</strong>
+                    {row.avgDryWeightPerPlant !== "N/A" ? " g" : ""}
+                  </Typography>
+                  <Typography variant="body2">
+                    Historical wet-to-dry change:{" "}
+                    <strong>
+                      {row.wetToDryPercentChange === "N/A"
+                        ? "N/A"
+                        : `${row.wetToDryPercentChange}%`}
+                    </strong>
+                  </Typography>
+                </Stack>
 
-                        <div className="strain-expand-section">
-                          <h4>Yield Metrics</h4>
-                          <p>
-                            Historical average dry weight per plant:{" "}
-                            <strong>{row.avgDryWeightPerPlant}</strong>
-                            {row.avgDryWeightPerPlant !== "N/A" ? " g" : ""}
-                          </p>
-                          <p>
-                            Historical wet-to-dry change:{" "}
-                            <strong>
-                              {row.wetToDryPercentChange === "N/A"
-                                ? "N/A"
-                                : `${row.wetToDryPercentChange}%`}
-                            </strong>
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
+                {row.plantsByRoom.length === 0 ? (
+                  <Typography color="text.secondary">
+                    No plant/room data available yet.
+                  </Typography>
+                ) : (
+                  <Box sx={{ height: 300 }}>
+                    <DataGrid
+                      rows={row.plantsByRoom.map((item, index) => ({
+                        ...item,
+                        id: `${row.strainId}-${index}`,
+                        batchHarvestDate: formatDate(item.batchHarvestDate),
+                      }))}
+                      columns={[
+                        {
+                          field: "roomName",
+                          headerName: "Room",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "locationName",
+                          headerName: "Location",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "batchNumber",
+                          headerName: "Batch",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "plantCount",
+                          headerName: "Plant Count",
+                          type: "number",
+                          flex: 1,
+                          minWidth: 120,
+                        },
+                        {
+                          field: "batchHarvestDate",
+                          headerName: "Batch Harvest Date",
+                          flex: 1.2,
+                          minWidth: 160,
+                        },
+                      ]}
+                      hideFooter
+                      disableRowSelectionOnClick
+                    />
+                  </Box>
                 )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              </AccordionDetails>
+            </Accordion>
+          )}
+        </Fragment>
+      ))}
+    </Stack>
   );
 }
 

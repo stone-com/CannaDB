@@ -1,42 +1,63 @@
-﻿// Bottom bar with page navigation and minimized window tabs.
+﻿import {
+  AppBar,
+  Box,
+  BottomNavigation,
+  BottomNavigationAction,
+  Chip,
+  Stack,
+  Toolbar,
+} from "@mui/material";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+
 export default function Taskbar({ tabs, activePage, onNavigate }) {
   const visibleTabs = tabs.filter((tab) => tab.visible);
 
   return (
-    <>
-      {visibleTabs.length > 0 && (
-        <div className="taskbar-tabs">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.key}
-              className={`taskbar-tab${tab.minimized ? " taskbar-tab--minimized" : " taskbar-tab--open"}`}
-              onClick={tab.onClick}
-              title={
-                tab.minimized ? `Restore ${tab.label}` : `Minimize ${tab.label}`
-              }
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
+    <AppBar
+      position="fixed"
+      color="inherit"
+      sx={{
+        top: "auto",
+        bottom: 0,
+        borderTop: "1px solid",
+        borderColor: "divider",
+      }}
+    >
+      <Toolbar sx={{ gap: 2, minHeight: "64px !important" }}>
+        <BottomNavigation
+          showLabels
+          value={activePage}
+          onChange={(_, value) => onNavigate(value)}
+          sx={{ minWidth: 240, borderRadius: 3, overflow: "hidden" }}
+        >
+          <BottomNavigationAction
+            label="Dashboard"
+            value="dashboard"
+            icon={<DashboardIcon />}
+          />
+          <BottomNavigationAction
+            label="Admin"
+            value="admin"
+            icon={<AdminPanelSettingsIcon />}
+          />
+        </BottomNavigation>
 
-      <div className="taskbar">
-        <div className="taskbar-nav">
-          <button
-            className={`taskbar-nav-btn${activePage === "dashboard" ? " active" : ""}`}
-            onClick={() => onNavigate("dashboard")}
-          >
-            Dashboard
-          </button>
-          <button
-            className={`taskbar-nav-btn${activePage === "admin" ? " active" : ""}`}
-            onClick={() => onNavigate("admin")}
-          >
-            Admin
-          </button>
-        </div>
-      </div>
-    </>
+        <Box sx={{ flex: 1, overflowX: "auto", pb: 0.4 }}>
+          <Stack direction="row" spacing={1}>
+            {visibleTabs.map((tab) => (
+              <Chip
+                key={tab.key}
+                clickable
+                onClick={tab.onClick}
+                color={tab.minimized ? "default" : "primary"}
+                variant={tab.minimized ? "outlined" : "filled"}
+                label={tab.label}
+              />
+            ))}
+          </Stack>
+        </Box>
+      </Toolbar>
+    </AppBar>
   );
 }

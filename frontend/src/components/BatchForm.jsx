@@ -1,4 +1,13 @@
 import React, { useState, useEffect } from "react";
+import {
+  Alert,
+  Button,
+  Divider,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 function BatchForm() {
   //dropdown state for strains
   const [selectedStrain, setSelectedStrain] = useState("");
@@ -8,6 +17,7 @@ function BatchForm() {
   const [count, setCount] = useState("");
   const [plants, setPlants] = useState([]);
   const [strains, setStrains] = useState([]);
+  const [message, setMessage] = useState("");
   useEffect(() => {
     async function fetchStrains() {
       try {
@@ -31,7 +41,7 @@ function BatchForm() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!batchNumber || !cloneDate || plants.length === 0) {
-      alert("Please complete all required fields.");
+      setMessage("Please complete all required fields.");
       return;
     }
     const payload = {
@@ -50,7 +60,7 @@ function BatchForm() {
       });
       if (!response.ok) throw new Error("Batch submit failed");
 
-      alert("Batch submitted successfully!");
+      setMessage("Batch submitted successfully!");
 
       setBatchNumber("");
       setHarvestDate("");
@@ -60,104 +70,102 @@ function BatchForm() {
       setPlants([]);
     } catch (error) {
       console.error("Error submitting batch form:", error);
-      alert("Error submitting batch form.");
+      setMessage("Error submitting batch form.");
     }
   }
 
   return (
-    <div className="form-container">
-      <form onSubmit={handleSubmit}>
-        <h2>Create New Batch</h2>
-        <label className="form-label" htmlFor="batchNumber">
-          Batch Number:
-        </label>
-        <input
-          type="text"
-          id="batchNumber"
-          value={batchNumber}
-          onChange={(e) => setBatchNumber(e.target.value)}
-        />
-        <label className="form-label" htmlFor="cloneDate">
-          Clone Date:
-        </label>
-        <input
-          type="date"
-          id="cloneDate"
-          value={cloneDate}
-          onChange={(e) => setCloneDate(e.target.value)}
-        />
-        <label className="form-label" htmlFor="harvestDate">
-          Harvest Date:
-        </label>
-        <input
-          type="date"
-          id="harvestDate"
-          value={harvestDate}
-          onChange={(e) => setHarvestDate(e.target.value)}
-        />
+    <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      <Typography variant="h6">Create New Batch</Typography>
+      <TextField
+        label="Batch Number"
+        value={batchNumber}
+        onChange={(e) => setBatchNumber(e.target.value)}
+      />
+      <TextField
+        type="date"
+        label="Clone Date"
+        value={cloneDate}
+        onChange={(e) => setCloneDate(e.target.value)}
+        InputLabelProps={{ shrink: true }}
+      />
+      <TextField
+        type="date"
+        label="Harvest Date"
+        value={harvestDate}
+        onChange={(e) => setHarvestDate(e.target.value)}
+        InputLabelProps={{ shrink: true }}
+      />
 
-        <hr />
-        <label className="form-label" htmlFor="selectedStrain">
-          Strain:
-        </label>
-        <select
-          id="selectedStrain"
-          value={selectedStrain}
-          onChange={(e) => setSelectedStrain(e.target.value)}
-        >
-          <option value="" placeholder="Select a strain"></option>
-          {strains.map((strain) => (
-            <option key={strain._id} value={strain._id}>
-              {strain.name}
-            </option>
-          ))}
-        </select>
-        <label className="form-label" htmlFor="count">
-          Count:
-        </label>
-        <input
-          type="number"
-          id="count"
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-        />
-        <label className="form-label">Plants:</label>
-        <button type="button" onClick={addPlant}>
-          Add Plant
-        </button>
+      <Divider />
 
-        <hr />
+      <TextField
+        select
+        label="Strain"
+        value={selectedStrain}
+        onChange={(e) => setSelectedStrain(e.target.value)}
+      >
+        <MenuItem value="">Select a strain</MenuItem>
+        {strains.map((strain) => (
+          <MenuItem key={strain._id} value={strain._id}>
+            {strain.name}
+          </MenuItem>
+        ))}
+      </TextField>
 
-        <h3>Plants Added</h3>
+      <TextField
+        type="number"
+        label="Count"
+        value={count}
+        onChange={(e) => setCount(e.target.value)}
+      />
 
-        <p>Total Plants: {plants.reduce((sum, p) => sum + p.count, 0)}</p>
+      <Button type="button" variant="outlined" onClick={addPlant}>
+        Add Plant
+      </Button>
 
-        {plants.length === 0 && <p>Selected Plants</p>}
+      <Divider />
 
-        <ul>
-          {plants.map((p, i) => {
-            const strain = strains.find((s) => s._id === p.strainId);
-            return (
-              <li key={i}>
-                {strain ? strain.name : "Unknown Strain"} — {p.count}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPlants(plants.filter((_, idx) => idx !== i));
-                  }}
-                >
-                  X
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <Typography variant="subtitle1">Plants Added</Typography>
+      <Typography variant="body2">
+        Total Plants: {plants.reduce((sum, p) => sum + p.count, 0)}
+      </Typography>
 
-        <button type="submit" onClick={handleSubmit}>
-          Submit Batch
-        </button>
-      </form>
-    </div>
+      {plants.map((p, i) => {
+        const strain = strains.find((s) => s._id === p.strainId);
+        return (
+          <Stack
+            key={i}
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Typography variant="body2">
+              {strain ? strain.name : "Unknown Strain"} - {p.count}
+            </Typography>
+            <Button
+              type="button"
+              color="error"
+              onClick={() => {
+                setPlants(plants.filter((_, idx) => idx !== i));
+              }}
+            >
+              Remove
+            </Button>
+          </Stack>
+        );
+      })}
+
+      <Button type="submit" variant="contained">
+        Submit Batch
+      </Button>
+
+      {message && (
+        <Alert severity={message.startsWith("Error") ? "error" : "success"}>
+          {message}
+        </Alert>
+      )}
+    </Stack>
   );
 }
 
