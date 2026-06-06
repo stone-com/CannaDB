@@ -5,10 +5,13 @@ import {
   AccordionSummary,
   Box,
   Chip,
+  InputAdornment,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import SearchIcon from "@mui/icons-material/Search";
 import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
@@ -16,6 +19,7 @@ import { formatDate } from "../utils/formatDate";
 function StrainDataViewer({ strains, roomAssignments, harvests }) {
   // Expanded table rows by strain ID.
   const [expandedRows, setExpandedRows] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Build one summary row per strain.
   const strainRows = useMemo(() => {
@@ -142,6 +146,28 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
     setExpandedRows((prev) => ({ ...prev, [strainId]: !prev[strainId] }));
   };
 
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return strainRows;
+
+    return strainRows.filter((row) => {
+      const roomSearchText = row.plantsByRoom
+        .map(
+          (item) => `${item.roomName} ${item.locationName} ${item.batchNumber}`,
+        )
+        .join(" ")
+        .toLowerCase();
+
+      return (
+        row.name.toLowerCase().includes(query) ||
+        row.type.toLowerCase().includes(query) ||
+        row.status.toLowerCase().includes(query) ||
+        row.nextHarvest.toLowerCase().includes(query) ||
+        roomSearchText.includes(query)
+      );
+    });
+  }, [strainRows, searchQuery]);
+
   if (strainRows.length === 0) {
     return <Typography color="text.secondary">No strains yet.</Typography>;
   }
@@ -198,9 +224,35 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
 
   return (
     <Stack spacing={2} sx={{ width: "100%" }}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1}
+        justifyContent="space-between"
+        alignItems={{ xs: "stretch", sm: "center" }}
+      >
+        <TextField
+          size="small"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search strains, type, status, room, location, or batch"
+          sx={{ minWidth: { xs: "100%", sm: 360 } }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+
+        <Typography variant="body2" color="text.secondary">
+          Showing {filteredRows.length} of {strainRows.length}
+        </Typography>
+      </Stack>
+
       <Box sx={{ height: 360, width: "100%" }}>
         <DataGrid
-          rows={strainRows.map((row) => ({ ...row, id: row.strainId }))}
+          rows={filteredRows.map((row) => ({ ...row, id: row.strainId }))}
           columns={columns}
           disableRowSelectionOnClick
           pageSizeOptions={[5, 10, 25]}
@@ -211,7 +263,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
         />
       </Box>
 
-      {strainRows.map((row) => (
+      {filteredRows.map((row) => (
         <Fragment key={row.strainId}>
           {expandedRows[row.strainId] && (
             <Accordion defaultExpanded>
