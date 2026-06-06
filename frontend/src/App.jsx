@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   AppBar,
@@ -158,6 +158,88 @@ function App() {
     (sum, harvest) => sum + (Number(harvest?.totalDryWeightGrams) || 0),
     0,
   );
+
+  const historicalAvgDryPerPlant = useMemo(() => {
+    const totalHarvestPlants = harvests.reduce(
+      (sum, harvest) => sum + (Number(harvest?.totalPlantCount) || 0),
+      0,
+    );
+
+    if (totalHarvestPlants <= 0) return null;
+
+    return totalDryWeight / totalHarvestPlants;
+  }, [harvests, totalDryWeight]);
+
+  const upcomingHarvestDetails = useMemo(() => {
+    const candidates = roomAssignments
+      .map((assignment) => assignment?.batchId)
+      .filter(Boolean)
+      .filter(
+        (batch, index, arr) =>
+          arr.findIndex(
+            (candidate) => String(candidate?._id) === String(batch?._id),
+          ) === index,
+      )
+      .filter((batch) => !batch?.harvestId)
+      .map((batch) => ({
+        batchNumber: batch?.batchNumber || "N/A",
+        harvestDate: batch?.harvestDate ? new Date(batch.harvestDate) : null,
+      }))
+      .filter(
+        (entry) =>
+          entry.harvestDate && !Number.isNaN(entry.harvestDate.getTime()),
+      )
+      .sort((a, b) => a.harvestDate - b.harvestDate);
+
+    const nextBatch = candidates[0];
+    if (!nextBatch) return null;
+
+    const assignmentsForBatch = roomAssignments.filter(
+      (assignment) =>
+        String(assignment?.batchId?._id) === String(nextBatch._id) &&
+        assignment?.active !== false,
+    );
+
+    const roomNames = [
+      ...new Set(
+        assignmentsForBatch
+          .map((assignment) => assignment?.roomId?.name)
+          .filter(Boolean),
+      ),
+    ];
+
+    const strainIds = new Set();
+    const totalBatchPlants = assignmentsForBatch.reduce((sum, assignment) => {
+      const assignedPlants = Array.isArray(assignment?.assignedPlants)
+        ? assignment.assignedPlants
+        : [];
+
+      assignedPlants.forEach((plant) => {
+        const strainId = String(plant?.strainId?._id || plant?.strainId || "");
+        if (strainId) strainIds.add(strainId);
+      });
+
+      return (
+        sum +
+        assignedPlants.reduce(
+          (inner, plant) => inner + (Number(plant?.count) || 0),
+          0,
+        )
+      );
+    }, 0);
+
+    return {
+      batchNumber: nextBatch.batchNumber || "N/A",
+      harvestDate: nextBatch.harvestDate,
+      rooms: roomNames,
+      totalPlants: totalBatchPlants,
+      totalStrains: strainIds.size,
+      expectedYieldGrams:
+        historicalAvgDryPerPlant === null
+          ? null
+          : Math.round(totalBatchPlants * historicalAvgDryPerPlant),
+    };
+  }, [historicalAvgDryPerPlant, roomAssignments]);
 
   const dashboardSidebarWidth =
     activePage === "dashboard"
@@ -375,20 +457,98 @@ function App() {
         )}
 
         <Box
-          sx={(theme) => ({
+          sx={{
             flex: 1,
             p: 3,
-            ml: `${dashboardSidebarWidth}px`,
-            transition: theme.transitions.create("margin-left", {
-              duration: theme.transitions.duration.standard,
-              easing: theme.transitions.easing.easeInOut,
-            }),
-          })}
+          }}
         >
           {loadingData && <LinearProgress />}
 
           {activePage === "dashboard" && (
             <Stack spacing={2}>
+              <Card
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  background:
+                    "linear-gradient(120deg, rgba(0,95,115,0.14), rgba(10,147,150,0.08))",
+                }}
+              >
+                <CardContent>
+                  <Stack spacing={1.5}>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                      Upcoming Harvest
+                    </Typography>
+
+                    {!upcomingHarvestDetails ? (
+                      <Typography variant="body2" color="text.secondary">
+                        No active upcoming harvest found.
+                      </Typography>
+                    ) : (
+                      <Grid container spacing={1.5}>
+                        {[
+                          ["Batch", upcomingHarvestDetails.batchNumber],
+                          [
+                            "Harvest Date",
+                            upcomingHarvestDetails.harvestDate
+                              ? new Date(
+                                  upcomingHarvestDetails.harvestDate,
+                                ).toLocaleDateString()
+                              : "N/A",
+                          ],
+                          [
+                            "Room(s)",
+                            upcomingHarvestDetails.rooms.length > 0
+                              ? upcomingHarvestDetails.rooms.join(", ")
+                              : "N/A",
+                          ],
+                          [
+                            "Total Plants",
+                            upcomingHarvestDetails.totalPlants.toLocaleString(),
+                          ],
+                          [
+                            "Total Strains",
+                            upcomingHarvestDetails.totalStrains.toLocaleString(),
+                          ],
+                          [
+                            "Expected Yield (g)",
+                            upcomingHarvestDetails.expectedYieldGrams === null
+                              ? "N/A"
+                              : upcomingHarvestDetails.expectedYieldGrams.toLocaleString(),
+                          ],
+                        ].map(([label, value]) => (
+                          <Grid key={label} size={{ xs: 12, md: 4 }}>
+                            <Stack
+                              spacing={0.25}
+                              sx={{
+                                p: 1.25,
+                                borderRadius: 1.5,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                backgroundColor: "rgba(255,255,255,0.92)",
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {label}
+                              </Typography>
+                              <Typography
+                                variant="body1"
+                                sx={{ fontWeight: 700 }}
+                              >
+                                {value}
+                              </Typography>
+                            </Stack>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    )}
+                  </Stack>
+                </CardContent>
+              </Card>
+
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Card>
