@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { DataGrid } from "@mui/x-data-grid";
+import { BarChart } from "@mui/x-charts";
 import { formatDate } from "../utils/formatDate";
 
 // Show active batch and plant data for one room.
@@ -86,6 +87,50 @@ function RoomViewer({ rooms, roomAssignments }) {
     }, 0);
   }, [selectedRoomAssignments]);
 
+  const roomAnalytics = useMemo(() => {
+    const strainTotals = new Map();
+
+    selectedRoomAssignments.forEach((assignment) => {
+      const assignedPlants = Array.isArray(assignment?.assignedPlants)
+        ? assignment.assignedPlants
+        : [];
+
+      assignedPlants.forEach((plant) => {
+        const strainName = plant?.strainId?.name || "Unknown Strain";
+        strainTotals.set(
+          strainName,
+          (strainTotals.get(strainName) || 0) + (Number(plant?.count) || 0),
+        );
+      });
+    });
+
+    const strainSeries = Array.from(strainTotals.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const strainLabels = strainSeries.map((item) => item.label);
+    const strainChartSeries = strainSeries.map((item, seriesIndex) => ({
+      id: `strain-${seriesIndex}`,
+      label: item.label,
+      stack: "total",
+      data: strainLabels.map((_, labelIndex) =>
+        labelIndex === seriesIndex ? item.value : 0,
+      ),
+    }));
+
+    const chartHeight = Math.min(
+      840,
+      Math.max(300, strainSeries.length * 42 + 50),
+    );
+
+    return {
+      strainSeries,
+      strainLabels,
+      strainChartSeries,
+      chartHeight,
+    };
+  }, [selectedRoomAssignments]);
+
   return (
     <Stack spacing={2}>
       <TextField
@@ -134,10 +179,13 @@ function RoomViewer({ rooms, roomAssignments }) {
         <Stack spacing={2}>
           <Grid container spacing={2}>
             {[
-              ["Room", selectedRoom.name],
-              ["Type", selectedRoom.type || "N/A"],
+              [
+                "Room",
+                `${selectedRoom.name}${selectedRoom.type ? ` (${selectedRoom.type})` : ""}`,
+              ],
               ["Total Plants", roomTotalPlants],
               ["Active Batches", selectedRoomAssignments.length],
+              ["Unique Strains", roomAnalytics.strainSeries.length],
             ].map(([label, value]) => (
               <Grid key={label} size={{ xs: 12, md: 3 }}>
                 <Card>
@@ -150,6 +198,45 @@ function RoomViewer({ rooms, roomAssignments }) {
                 </Card>
               </Grid>
             ))}
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, mb: 1 }}
+                  >
+                    Plants by Strain
+                  </Typography>
+                  {roomAnalytics.strainSeries.length === 0 ? (
+                    <Alert severity="info">
+                      No strain plant data available.
+                    </Alert>
+                  ) : (
+                    <Box
+                      sx={{ width: "100%", height: roomAnalytics.chartHeight }}
+                    >
+                      <BarChart
+                        yAxis={[
+                          {
+                            scaleType: "band",
+                            data: roomAnalytics.strainLabels,
+                          },
+                        ]}
+                        xAxis={[{ label: "Plant Count" }]}
+                        series={roomAnalytics.strainChartSeries}
+                        slotProps={{ tooltip: { trigger: "item" } }}
+                        hideLegend
+                        layout="horizontal"
+                        margin={{ left: 120, right: 20, top: 16, bottom: 30 }}
+                      />
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
 
           {selectedRoomAssignments.map((assignment) => {
