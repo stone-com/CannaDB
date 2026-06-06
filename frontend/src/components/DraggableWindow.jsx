@@ -18,7 +18,10 @@ export default function DraggableWindow({
   defaultW = 540,
   defaultH = 460,
 }) {
-  const [pos, setPos] = useState({ x: Math.max(leftBound, defaultX), y: defaultY });
+  const [pos, setPos] = useState({
+    x: Math.max(leftBound, defaultX),
+    y: defaultY,
+  });
   const [size, setSize] = useState({ w: defaultW, h: defaultH });
   const [zIndex, setZIndex] = useState(() => ++globalZIndex);
   const interaction = useRef(null);
