@@ -476,6 +476,7 @@ function App() {
               onClose={() => toggleView("strains")}
               isMinimized={minimizedWindows.strains}
               onMinimize={() => toggleMinimize("strains")}
+              leftBound={dashboardSidebarWidth}
               defaultX={480}
               defaultY={80}
               defaultW={1000}
@@ -494,6 +495,7 @@ function App() {
               onClose={() => toggleView("harvestReport")}
               isMinimized={minimizedWindows.harvestReport}
               onMinimize={() => toggleMinimize("harvestReport")}
+              leftBound={dashboardSidebarWidth}
               defaultX={630}
               defaultY={230}
               defaultW={800}
@@ -508,6 +510,7 @@ function App() {
               onClose={() => toggleView("roomViewer")}
               isMinimized={minimizedWindows.roomViewer}
               onMinimize={() => toggleMinimize("roomViewer")}
+              leftBound={dashboardSidebarWidth}
               defaultX={480}
               defaultY={200}
               defaultW={700}
@@ -522,6 +525,7 @@ function App() {
               onClose={() => toggleView("harvestForm")}
               isMinimized={minimizedWindows.harvestForm}
               onMinimize={() => toggleMinimize("harvestForm")}
+              leftBound={dashboardSidebarWidth}
               defaultX={240}
               defaultY={100}
               defaultW={760}
@@ -546,6 +550,7 @@ function App() {
               onClose={() => toggleView("dryWeightForm")}
               isMinimized={minimizedWindows.dryWeightForm}
               onMinimize={() => toggleMinimize("dryWeightForm")}
+              leftBound={dashboardSidebarWidth}
               defaultX={240}
               defaultY={140}
               defaultW={860}

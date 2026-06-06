@@ -12,12 +12,13 @@ export default function DraggableWindow({
   isMinimized = false,
   onMinimize,
   children,
+  leftBound = 0,
   defaultX = 120,
   defaultY = 120,
   defaultW = 540,
   defaultH = 460,
 }) {
-  const [pos, setPos] = useState({ x: defaultX, y: defaultY });
+  const [pos, setPos] = useState({ x: Math.max(leftBound, defaultX), y: defaultY });
   const [size, setSize] = useState({ w: defaultW, h: defaultH });
   const [zIndex, setZIndex] = useState(() => ++globalZIndex);
   const interaction = useRef(null);
@@ -70,11 +71,11 @@ export default function DraggableWindow({
         const nextX = interaction.current.startX + dx;
         const nextY = interaction.current.startY + dy;
 
-        const maxX = Math.max(0, window.innerWidth - sizeRef.current.w);
+        const maxX = Math.max(leftBound, window.innerWidth - sizeRef.current.w);
         const maxY = Math.max(0, window.innerHeight - 64 - sizeRef.current.h);
 
         setPos({
-          x: Math.min(Math.max(0, nextX), maxX),
+          x: Math.min(Math.max(leftBound, nextX), maxX),
           y: Math.min(Math.max(64, nextY), maxY),
         });
       }
@@ -101,7 +102,25 @@ export default function DraggableWindow({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, []);
+  }, [leftBound]);
+
+  useEffect(() => {
+    const maxX = Math.max(leftBound, window.innerWidth - sizeRef.current.w);
+    const maxY = Math.max(0, window.innerHeight - 64 - sizeRef.current.h);
+
+    setPos((prev) => {
+      const next = {
+        x: Math.min(Math.max(leftBound, prev.x), maxX),
+        y: Math.min(Math.max(64, prev.y), maxY),
+      };
+
+      if (next.x === prev.x && next.y === prev.y) {
+        return prev;
+      }
+
+      return next;
+    });
+  }, [leftBound]);
 
   if (isMinimized) return null;
 
