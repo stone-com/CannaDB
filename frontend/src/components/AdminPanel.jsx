@@ -1,109 +1,287 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
+  Avatar,
   Box,
-  Button,
   Card,
-  CardActionArea,
   CardContent,
+  Chip,
+  Divider,
+  InputAdornment,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SearchIcon from "@mui/icons-material/Search";
+import SpaIcon from "@mui/icons-material/Spa";
+import ApartmentIcon from "@mui/icons-material/Apartment";
+import PlaceIcon from "@mui/icons-material/Place";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
+import AltRouteIcon from "@mui/icons-material/AltRoute";
+import ContentCutIcon from "@mui/icons-material/ContentCut";
 import CompanyForm from "./admin-forms/CompanyForm";
 import LocationForm from "./admin-forms/LocationForm";
 import RoomForm from "./admin-forms/RoomForm";
 import StrainForm from "./admin-forms/StrainForm";
 import CreateMomsForm from "./admin-forms/CreateMomsForm";
 
-const ADMIN_CARDS = [
+const ADMIN_WORKFLOWS = [
   {
     key: "strain",
-    label: "Add Strain",
-    description: "Create a new strain record",
+    title: "Add Strain",
+    description:
+      "Create a new strain profile with baseline cultivation details.",
+    category: "Foundation Data",
+    icon: SpaIcon,
   },
   {
     key: "company",
-    label: "Add Company",
-    description: "Register a new company",
+    title: "Add Company",
+    description: "Register a company used across operations and reporting.",
+    category: "Foundation Data",
+    icon: ApartmentIcon,
   },
   {
     key: "location",
-    label: "Add Location",
-    description: "Add a grow location",
+    title: "Add Location",
+    description:
+      "Define a production location before creating rooms and assignments.",
+    category: "Foundation Data",
+    icon: PlaceIcon,
   },
-  { key: "room", label: "Add Room", description: "Create a new grow room" },
+  {
+    key: "room",
+    title: "Add Room",
+    description: "Create a room with capacity and lifecycle behavior settings.",
+    category: "Foundation Data",
+    icon: MeetingRoomIcon,
+  },
   {
     key: "assign",
-    label: "Assign Batch to Room",
-    description: "Assign rooms, split plants, and advance stage",
+    title: "Assign Batch to Room",
+    description:
+      "Move or split plants across rooms and advance their growth stage.",
+    category: "Room Operations",
+    icon: AltRouteIcon,
   },
   {
     key: "createMoms",
-    label: "Create Moms",
-    description: "Cut plants from production into a mom batch",
+    title: "Create Moms",
+    description:
+      "Create a new mom batch from production plants for propagation.",
+    category: "Propagation",
+    icon: ContentCutIcon,
   },
 ];
 
 export default function AdminPanel() {
-  const [activeCard, setActiveCard] = useState(null);
+  const [activeWorkflowKey, setActiveWorkflowKey] = useState(
+    ADMIN_WORKFLOWS[0].key,
+  );
+  const [searchText, setSearchText] = useState("");
 
-  function handleCardClick(key) {
-    setActiveCard((prev) => (prev === key ? null : key));
-  }
+  const filteredWorkflows = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return ADMIN_WORKFLOWS;
+    return ADMIN_WORKFLOWS.filter((workflow) => {
+      return (
+        workflow.title.toLowerCase().includes(query) ||
+        workflow.description.toLowerCase().includes(query) ||
+        workflow.category.toLowerCase().includes(query)
+      );
+    });
+  }, [searchText]);
 
-  function handleBack() {
-    setActiveCard(null);
-  }
+  const workflowsByCategory = useMemo(() => {
+    return filteredWorkflows.reduce((acc, workflow) => {
+      const group = acc[workflow.category] || [];
+      group.push(workflow);
+      acc[workflow.category] = group;
+      return acc;
+    }, {});
+  }, [filteredWorkflows]);
 
-  if (activeCard) {
-    return (
-      <Stack spacing={2}>
-        <Box>
-          <Button startIcon={<ArrowBackIcon />} onClick={handleBack}>
-            Back
-          </Button>
-        </Box>
+  const activeWorkflow =
+    ADMIN_WORKFLOWS.find((workflow) => workflow.key === activeWorkflowKey) ||
+    ADMIN_WORKFLOWS[0];
 
-        <Card>
-          <CardContent>
-            {activeCard === "strain" && <StrainForm embedded />}
-            {activeCard === "company" && <CompanyForm embedded />}
-            {activeCard === "location" && <LocationForm embedded />}
-            {activeCard === "room" && <RoomForm embedded section="add" />}
-            {activeCard === "assign" && <RoomForm embedded section="assign" />}
-            {activeCard === "createMoms" && <CreateMomsForm embedded />}
-          </CardContent>
-        </Card>
-      </Stack>
-    );
+  function renderActiveForm() {
+    if (activeWorkflow.key === "strain") return <StrainForm embedded />;
+    if (activeWorkflow.key === "company") return <CompanyForm embedded />;
+    if (activeWorkflow.key === "location") return <LocationForm embedded />;
+    if (activeWorkflow.key === "room")
+      return <RoomForm embedded section="add" />;
+    if (activeWorkflow.key === "assign") {
+      return <RoomForm embedded section="assign" />;
+    }
+    if (activeWorkflow.key === "createMoms") {
+      return <CreateMomsForm embedded />;
+    }
+    return null;
   }
 
   return (
-    <Stack spacing={2}>
-      <Box>
-        <Typography variant="h4">Admin Controls</Typography>
-        <Typography color="text.secondary">
-          Select a workflow to open a structured admin form.
-        </Typography>
-      </Box>
+    <Box sx={{ maxWidth: 1500, mx: "auto" }}>
+      <Stack spacing={2.5}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, md: 2.75 },
+            borderRadius: 2.5,
+            border: "1px solid",
+            borderColor: "divider",
+            background:
+              "linear-gradient(105deg, rgba(0,95,115,0.1), rgba(10,147,150,0.06), rgba(255,255,255,0.96))",
+          }}
+        >
+          <Stack spacing={0.5}>
+            <Typography variant="h4">Admin Operations Center</Typography>
+            <Typography color="text.secondary" sx={{ maxWidth: 900 }}>
+              Use structured workflows to manage core records, room movement,
+              and propagation tasks with fewer clicks and clearer context.
+            </Typography>
+          </Stack>
+        </Paper>
 
-      <Grid container spacing={2}>
-        {ADMIN_CARDS.map((card) => (
-          <Grid key={card.key} size={{ xs: 12, sm: 6, lg: 4 }}>
-            <Card>
-              <CardActionArea onClick={() => handleCardClick(card.key)}>
-                <CardContent>
-                  <Typography variant="h6">{card.label}</Typography>
-                  <Typography color="text.secondary" variant="body2">
-                    {card.description}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 4, lg: 3 }}>
+            <Card
+              sx={{
+                height: "100%",
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <CardContent sx={{ p: 1.5 }}>
+                <Stack spacing={1}>
+                  <TextField
+                    size="small"
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    placeholder="Search workflows"
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  <Divider />
+
+                  {Object.entries(workflowsByCategory).map(
+                    ([categoryName, categoryWorkflows]) => (
+                      <Box key={categoryName}>
+                        <Typography
+                          variant="overline"
+                          sx={{
+                            px: 1,
+                            color: "text.secondary",
+                            letterSpacing: 0.7,
+                          }}
+                        >
+                          {categoryName}
+                        </Typography>
+                        <List dense disablePadding>
+                          {categoryWorkflows.map((workflow) => {
+                            const Icon = workflow.icon;
+                            return (
+                              <ListItemButton
+                                key={workflow.key}
+                                selected={activeWorkflowKey === workflow.key}
+                                onClick={() =>
+                                  setActiveWorkflowKey(workflow.key)
+                                }
+                                sx={{ borderRadius: 1.25, mb: 0.25 }}
+                              >
+                                <ListItemIcon sx={{ minWidth: 34 }}>
+                                  <Icon fontSize="small" />
+                                </ListItemIcon>
+                                <ListItemText
+                                  primary={workflow.title}
+                                  primaryTypographyProps={{ variant: "body2" }}
+                                />
+                              </ListItemButton>
+                            );
+                          })}
+                        </List>
+                      </Box>
+                    ),
+                  )}
+
+                  {filteredWorkflows.length === 0 && (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ p: 1.5 }}
+                    >
+                      No workflows match your search.
+                    </Typography>
+                  )}
+                </Stack>
+              </CardContent>
             </Card>
           </Grid>
-        ))}
-      </Grid>
-    </Stack>
+
+          <Grid size={{ xs: 12, md: 8, lg: 9 }}>
+            <Card
+              sx={{
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <Avatar
+                      sx={{
+                        bgcolor: "primary.main",
+                        width: 36,
+                        height: 36,
+                      }}
+                    >
+                      <activeWorkflow.icon fontSize="small" />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h5">
+                        {activeWorkflow.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {activeWorkflow.description}
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip
+                      size="small"
+                      color="primary"
+                      label={activeWorkflow.category}
+                      variant="outlined"
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      Complete fields in order, then submit to apply changes.
+                    </Typography>
+                  </Stack>
+
+                  <Divider />
+
+                  <Box sx={{ pt: 0.5 }}>{renderActiveForm()}</Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Stack>
+    </Box>
   );
 }

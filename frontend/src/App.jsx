@@ -5,13 +5,14 @@ import {
   Box,
   Card,
   CardContent,
-  Checkbox,
   Divider,
   Drawer,
-  FormControlLabel,
+  IconButton,
   LinearProgress,
   List,
   ListItem,
+  ListItemButton,
+  ListItemIcon,
   ListItemText,
   Snackbar,
   Stack,
@@ -21,6 +22,13 @@ import {
 import Grid from "@mui/material/Grid";
 import InsightsIcon from "@mui/icons-material/Insights";
 import DatasetIcon from "@mui/icons-material/Dataset";
+import MenuOpenIcon from "@mui/icons-material/MenuOpen";
+import MenuIcon from "@mui/icons-material/Menu";
+import SpaIcon from "@mui/icons-material/Spa";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
+import AgricultureIcon from "@mui/icons-material/Agriculture";
+import ScaleIcon from "@mui/icons-material/Scale";
 import AdminPanel from "./components/AdminPanel";
 import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
@@ -29,17 +37,20 @@ import StrainDataViewer from "./components/StrainDataViewer";
 import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
-import BatchForm from "./components/BatchForm";
+
+const APP_BAR_HEIGHT = 64;
+const SIDEBAR_EXPANDED_WIDTH = 320;
+const SIDEBAR_COLLAPSED_WIDTH = 88;
 
 const DATA_VIEWER_OPTIONS = [
-  { key: "strains", label: "Strains" },
-  { key: "harvestReport", label: "Harvest Report" },
-  { key: "roomViewer", label: "Room Viewer" },
+  { key: "strains", label: "Strains", icon: SpaIcon },
+  { key: "harvestReport", label: "Harvest Report", icon: AssessmentIcon },
+  { key: "roomViewer", label: "Room Viewer", icon: MeetingRoomIcon },
 ];
 
 const HARVEST_OPTIONS = [
-  { key: "harvestForm", label: "Add Harvest" },
-  { key: "dryWeightForm", label: "Add Dry Weights" },
+  { key: "harvestForm", label: "Add Harvest", icon: AgricultureIcon },
+  { key: "dryWeightForm", label: "Add Dry Weights", icon: ScaleIcon },
 ];
 
 const DATA_REFRESH_EVENTS = [
@@ -59,6 +70,7 @@ function App() {
   const [harvests, setHarvests] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activePage, setActivePage] = useState("dashboard");
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   const [selectedViews, setSelectedViews] = useState({
     strains: false,
@@ -147,12 +159,28 @@ function App() {
     0,
   );
 
+  const dashboardSidebarWidth =
+    activePage === "dashboard"
+      ? sidebarExpanded
+        ? SIDEBAR_EXPANDED_WIDTH
+        : SIDEBAR_COLLAPSED_WIDTH
+      : 0;
+
   return (
     <Box sx={{ minHeight: "100vh", pb: 10 }}>
       <AppBar
         position="fixed"
         color="inherit"
-        sx={{ borderBottom: "1px solid", borderColor: "divider" }}
+        sx={(theme) => ({
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          ml: `${dashboardSidebarWidth}px`,
+          width: `calc(100% - ${dashboardSidebarWidth}px)`,
+          transition: theme.transitions.create(["margin-left", "width"], {
+            duration: theme.transitions.duration.standard,
+            easing: theme.transitions.easing.easeInOut,
+          }),
+        })}
       >
         <Toolbar sx={{ justifyContent: "space-between" }}>
           <Stack direction="row" spacing={1.25} alignItems="center">
@@ -172,69 +200,173 @@ function App() {
 
       <Toolbar />
 
-      <Box sx={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
+      <Box
+        sx={{ display: "flex", minHeight: `calc(100vh - ${APP_BAR_HEIGHT}px)` }}
+      >
         {activePage === "dashboard" && (
           <Drawer
             variant="permanent"
-            sx={{
-              width: 300,
+            sx={(theme) => ({
+              width: dashboardSidebarWidth,
               flexShrink: 0,
               "& .MuiDrawer-paper": {
-                width: 300,
+                width: dashboardSidebarWidth,
                 boxSizing: "border-box",
-                top: 64,
-                height: "calc(100% - 64px - 64px)",
+                top: 0,
+                height: "calc(100% - 64px)",
                 borderRight: "1px solid",
                 borderColor: "divider",
                 background:
                   "linear-gradient(180deg, rgba(0,95,115,0.06), rgba(255,255,255,0.95))",
+                overflowX: "hidden",
+                transition: theme.transitions.create("width", {
+                  duration: theme.transitions.duration.standard,
+                  easing: theme.transitions.easing.easeInOut,
+                }),
               },
-            }}
+              transition: theme.transitions.create("width", {
+                duration: theme.transitions.duration.standard,
+                easing: theme.transitions.easing.easeInOut,
+              }),
+            })}
           >
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
+            <Box sx={{ p: sidebarExpanded ? 2 : 1.25 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: sidebarExpanded ? "flex-end" : "center",
+                  mb: 0.5,
+                }}
+              >
+                <IconButton
+                  size="small"
+                  color="inherit"
+                  onClick={() => setSidebarExpanded((prev) => !prev)}
+                  aria-label={
+                    sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"
+                  }
+                >
+                  {sidebarExpanded ? <MenuOpenIcon /> : <MenuIcon />}
+                </IconButton>
+              </Box>
+
+              <Typography
+                variant="h6"
+                sx={{
+                  mb: sidebarExpanded ? 1 : 0.5,
+                  opacity: sidebarExpanded ? 1 : 0,
+                  transition: "opacity 180ms ease-in-out",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Dashboard Panels
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mb: sidebarExpanded ? 2 : 0.75,
+                  opacity: sidebarExpanded ? 1 : 0,
+                  height: sidebarExpanded ? "auto" : 0,
+                  overflow: "hidden",
+                  transition: "opacity 180ms ease-in-out",
+                }}
+              >
                 Launch viewers and workflows in floating workspace windows.
               </Typography>
 
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  mb: 0.5,
+                  opacity: sidebarExpanded ? 1 : 0,
+                  transition: "opacity 180ms ease-in-out",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Data Viewer
               </Typography>
               <List dense>
                 {DATA_VIEWER_OPTIONS.map((option) => (
-                  <ListItem key={option.key} disableGutters>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={selectedViews[option.key]}
-                          onChange={() => toggleView(option.key)}
-                        />
-                      }
-                      label={<ListItemText primary={option.label} />}
-                    />
+                  <ListItem key={option.key} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      selected={selectedViews[option.key]}
+                      onClick={() => toggleView(option.key)}
+                      sx={{
+                        minHeight: 44,
+                        justifyContent: sidebarExpanded ? "initial" : "center",
+                        px: sidebarExpanded ? 1.5 : 1,
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: sidebarExpanded ? 36 : 0,
+                          mr: sidebarExpanded ? 1 : 0,
+                          justifyContent: "center",
+                        }}
+                      >
+                        <option.icon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={option.label}
+                        primaryTypographyProps={{ variant: "body2" }}
+                        sx={{
+                          opacity: sidebarExpanded ? 1 : 0,
+                          whiteSpace: "nowrap",
+                          transition: "opacity 180ms ease-in-out",
+                        }}
+                      />
+                    </ListItemButton>
                   </ListItem>
                 ))}
               </List>
 
               <Divider sx={{ my: 1.5 }} />
 
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  mb: 0.5,
+                  opacity: sidebarExpanded ? 1 : 0,
+                  transition: "opacity 180ms ease-in-out",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Harvest Workflows
               </Typography>
               <List dense>
                 {HARVEST_OPTIONS.map((option) => (
-                  <ListItem key={option.key} disableGutters>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={selectedViews[option.key]}
-                          onChange={() => toggleView(option.key)}
-                        />
-                      }
-                      label={<ListItemText primary={option.label} />}
-                    />
+                  <ListItem key={option.key} disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      selected={selectedViews[option.key]}
+                      onClick={() => toggleView(option.key)}
+                      sx={{
+                        minHeight: 44,
+                        justifyContent: sidebarExpanded ? "initial" : "center",
+                        px: sidebarExpanded ? 1.5 : 1,
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: sidebarExpanded ? 36 : 0,
+                          mr: sidebarExpanded ? 1 : 0,
+                          justifyContent: "center",
+                        }}
+                      >
+                        <option.icon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={option.label}
+                        primaryTypographyProps={{ variant: "body2" }}
+                        sx={{
+                          opacity: sidebarExpanded ? 1 : 0,
+                          whiteSpace: "nowrap",
+                          transition: "opacity 180ms ease-in-out",
+                        }}
+                      />
+                    </ListItemButton>
                   </ListItem>
                 ))}
               </List>
@@ -243,7 +375,15 @@ function App() {
         )}
 
         <Box
-          sx={{ flex: 1, p: 3, ml: activePage === "dashboard" ? "300px" : 0 }}
+          sx={(theme) => ({
+            flex: 1,
+            p: 3,
+            ml: `${dashboardSidebarWidth}px`,
+            transition: theme.transitions.create("margin-left", {
+              duration: theme.transitions.duration.standard,
+              easing: theme.transitions.easing.easeInOut,
+            }),
+          })}
         >
           {loadingData && <LinearProgress />}
 
