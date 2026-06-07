@@ -25,6 +25,7 @@ import { formatDate } from "../utils/formatDate";
 
 // Build dropdown label for one harvest.
 const buildHarvestOptionLabel = (harvest) => {
+  // This helper keeps dropdown label formatting in one place.
   if (!harvest) return "N/A";
 
   const dateText = formatDate(harvest.harvestDate);
@@ -40,7 +41,9 @@ const buildHarvestOptionLabel = (harvest) => {
   return `${dateText} — ${harvestNumberText} — ${locationText} — ${roomNames || "No Rooms"}`;
 };
 
+// Read-only harvest analytics page with room and strain drill-down.
 function HarvestReportPage({ harvests }) {
+  // Dropdown selection + row expansion state for the report view.
   const [selectedHarvestId, setSelectedHarvestId] = useState("");
   const [expandedRowKey, setExpandedRowKey] = useState(null);
 
@@ -61,6 +64,7 @@ function HarvestReportPage({ harvests }) {
   }, [selectedHarvestId, sortedHarvests]);
 
   const selectedHarvest = useMemo(
+    // Resolve effective selected id into the full harvest object for this page.
     () =>
       sortedHarvests.find(
         (harvest) => harvest._id === effectiveSelectedHarvestId,
@@ -70,6 +74,7 @@ function HarvestReportPage({ harvests }) {
 
   // Build room sections and strain rows for display.
   const roomSections = useMemo(() => {
+    // Transform nested harvest data into room sections and table-ready strain rows.
     if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) return [];
 
     const sections = [];
@@ -117,6 +122,7 @@ function HarvestReportPage({ harvests }) {
   }, [selectedHarvest]);
 
   const roomNamesSummary = useMemo(
+    // Build comma-separated room names for summary metadata section.
     () => roomSections.map((s) => s.roomName).join(", ") || "N/A",
     [roomSections],
   );
@@ -124,12 +130,14 @@ function HarvestReportPage({ harvests }) {
   const locationName = selectedHarvest?.locationId?.nickname || "N/A";
 
   const formatMetric = (value) => {
+    // Keep metric rendering safe for mixed number/string/missing values.
     if (value === null || value === undefined || value === "N/A") return "N/A";
     if (typeof value === "number") return value.toLocaleString();
     return value;
   };
 
   const summaryCards = useMemo(
+    // Metadata array used to render summary cards with one map() pass.
     () => [
       {
         label: "Total Plants",
@@ -159,12 +167,15 @@ function HarvestReportPage({ harvests }) {
     [selectedHarvest],
   );
 
+  // Expand/collapse one strain detail row at a time.
   const toggleExpandedRow = (rowKey) => {
     setExpandedRowKey((prev) => (prev === rowKey ? null : rowKey));
   };
 
+  // Render harvest header, summary metrics, room accordions, and strain details.
   return (
     <Stack spacing={2.25}>
+      {/* Header card: report title, selected date chip, and harvest selector. */}
       <Paper
         elevation={0}
         sx={{
@@ -206,6 +217,7 @@ function HarvestReportPage({ harvests }) {
             fullWidth
             label="Select Harvest"
             value={effectiveSelectedHarvestId}
+            // Changing harvest resets expanded detail row selection.
             onChange={(e) => {
               setSelectedHarvestId(e.target.value);
               setExpandedRowKey(null);
@@ -224,11 +236,14 @@ function HarvestReportPage({ harvests }) {
       </Paper>
 
       {!selectedHarvest ? (
+        // Alert is used for empty states to keep messaging visible and consistent.
         <Alert severity="info">No harvest selected.</Alert>
       ) : (
         <>
+          {/* Summary metrics rendered as responsive cards. */}
           <Grid container spacing={1.5}>
             {summaryCards.map((card) => (
+              // Each summary card is rendered from the metadata array above.
               <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
                 <Card
                   elevation={0}
@@ -275,6 +290,7 @@ function HarvestReportPage({ harvests }) {
               background: "rgba(255,255,255,0.9)",
             }}
           >
+            {/* Key/value metadata block for quick harvest context. */}
             <Grid container spacing={1.25}>
               {[
                 ["Harvest Number", selectedHarvest.harvestNumber || "N/A"],
@@ -288,6 +304,7 @@ function HarvestReportPage({ harvests }) {
                   ),
                 ],
               ].map(([label, value]) => (
+                // Render one key/value row for each harvest metadata field.
                 <Grid key={label} size={{ xs: 12, md: 6 }}>
                   <Stack
                     direction="row"
@@ -320,6 +337,7 @@ function HarvestReportPage({ harvests }) {
             </Alert>
           ) : (
             roomSections.map((section) => (
+              // Render one accordion per room to group its strain rows together.
               <Accordion
                 key={section.roomSectionKey}
                 defaultExpanded
@@ -333,6 +351,7 @@ function HarvestReportPage({ harvests }) {
                   "&::before": { display: "none" },
                 }}
               >
+                {/* Each accordion represents one room with a strain table inside. */}
                 <AccordionSummary
                   expandIcon={<ExpandMoreIcon />}
                   sx={{
@@ -361,6 +380,7 @@ function HarvestReportPage({ harvests }) {
                     <>
                       <Box sx={{ height: 340, mb: 2 }}>
                         <DataGrid
+                          // DataGrid handles sorting/paging and column sizing for strain metrics.
                           rows={section.strainRows.map((row) => ({
                             ...row,
                             id: row.key,
@@ -428,6 +448,7 @@ function HarvestReportPage({ harvests }) {
                       {section.strainRows.map((row) => (
                         <Fragment key={`${row.key}-detail`}>
                           {expandedRowKey === row.key && (
+                            // Expanded card shows secondary metrics and tote-level data.
                             <Card
                               variant="outlined"
                               sx={{

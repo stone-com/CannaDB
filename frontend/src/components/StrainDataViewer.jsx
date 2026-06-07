@@ -17,6 +17,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
+// Read-only strain analytics combining assignment and harvest history.
 // Show strain totals and yield metrics.
 function StrainDataViewer({ strains, roomAssignments, harvests }) {
   // Only one strain details panel can be open at a time.
@@ -27,7 +28,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   const strainRows = useMemo(() => {
     if (!Array.isArray(strains)) return [];
 
-    // Map by strain ID.
+    // Map by strain ID so we can accumulate assignment + harvest metrics efficiently.
     const rowMap = new Map();
 
     strains.forEach((strain) => {
@@ -46,6 +47,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
     });
 
     if (Array.isArray(roomAssignments)) {
+      // Aggregate current room assignment plant counts into each strain row.
       roomAssignments.forEach((assignment) => {
         const room = assignment?.roomId;
         const batch = assignment?.batchId;
@@ -96,6 +98,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
     }
 
     if (Array.isArray(harvests)) {
+      // Aggregate historical wet/dry metrics from completed harvest data.
       harvests.forEach((harvest) => {
         const rooms = Array.isArray(harvest?.rooms) ? harvest.rooms : [];
 
@@ -145,10 +148,13 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   }, [strains, roomAssignments, harvests]);
 
   const toggleExpandedRow = (strainId) => {
+    // Click once to open details, click again to close same row.
     setExpandedStrainId((prev) => (prev === strainId ? null : strainId));
   };
 
+  // Filter by high-signal fields plus room/batch text.
   const filteredRows = useMemo(() => {
+    // Return all rows when search box is empty.
     const query = searchQuery.trim().toLowerCase();
     if (!query) return strainRows;
 
@@ -171,10 +177,12 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   }, [strainRows, searchQuery]);
 
   if (strainRows.length === 0) {
+    // Early return keeps JSX simple when no source data exists.
     return <Alert severity="info">No strains yet.</Alert>;
   }
 
   const columns = [
+    // Column config for MUI DataGrid table.
     {
       field: "name",
       headerName: "Strain",
@@ -187,6 +195,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       flex: 0.8,
       minWidth: 120,
       renderCell: ({ value }) => (
+        // Type rendered as chip for quick visual grouping.
         <Chip size="small" label={value} variant="outlined" />
       ),
     },
@@ -213,6 +222,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
 
   return (
     <Stack spacing={2.25} sx={{ width: "100%" }}>
+      {/* Top control card: title + search + result count. */}
       <Paper
         elevation={0}
         sx={{
@@ -249,6 +259,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
               placeholder="Search strains, type, status, room, location, or batch"
               sx={{ minWidth: { xs: "100%", sm: 360 } }}
               InputProps={{
+                // Search icon rendered inside the input for context.
                 startAdornment: (
                   <InputAdornment position="start">
                     <SearchIcon fontSize="small" />
@@ -258,6 +269,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
             />
 
             <Typography variant="body2" color="text.secondary">
+              {/* Live count updates as searchQuery filters the rows. */}
               Showing {filteredRows.length} of {strainRows.length}
             </Typography>
           </Stack>
@@ -266,6 +278,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
 
       <Box sx={{ height: 380, width: "100%" }}>
         <DataGrid
+          // DataGrid gives sorting/pagination behavior without custom table plumbing.
           rows={filteredRows.map((row) => ({ ...row, id: row.strainId }))}
           columns={columns}
           disableRowSelectionOnClick
@@ -287,8 +300,10 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       </Box>
 
       {filteredRows.map((row) => (
+        // Render details accordion only for the row currently expanded.
         <Fragment key={row.strainId}>
           {expandedStrainId === row.strainId && (
+            // Accordion reveals secondary details only for the selected row.
             <Accordion
               defaultExpanded
               elevation={0}
@@ -336,9 +351,11 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                     No plant/room data available yet.
                   </Typography>
                 ) : (
+                  // Secondary grid shows where this strain currently lives by room/batch.
                   <Box sx={{ height: 300 }}>
                     <DataGrid
                       rows={row.plantsByRoom.map((item, index) => ({
+                        // Row IDs combine strain + index so DataGrid keys stay stable.
                         ...item,
                         id: `${row.strainId}-${index}`,
                         batchHarvestDate: formatDate(item.batchHarvestDate),

@@ -20,6 +20,7 @@ import { DataGrid } from "@mui/x-data-grid";
 import { BarChart } from "@mui/x-charts";
 import { formatDate } from "../utils/formatDate";
 
+// Room-level dashboard for active assignments and strain distribution.
 // Show active batch and plant data for one room.
 function RoomViewer({ rooms, roomAssignments }) {
   // Selected location.
@@ -27,12 +28,14 @@ function RoomViewer({ rooms, roomAssignments }) {
   // Selected room.
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const allRooms = useMemo(() => (Array.isArray(rooms) ? rooms : []), [rooms]);
+  // Defensive conversion: always work with arrays, even if props are missing.
   const assignments = useMemo(
     () => (Array.isArray(roomAssignments) ? roomAssignments : []),
     [roomAssignments],
   );
 
   const sortedLocations = useMemo(() => {
+    // Build unique location list from rooms so location dropdown has no duplicates.
     const locations = allRooms
       .map((room) => room?.locationId)
       .filter((location) => location?._id)
@@ -59,6 +62,7 @@ function RoomViewer({ rooms, roomAssignments }) {
   }, [allRooms, selectedLocationId]);
 
   const handleLocationChange = (e) => {
+    // Reset room when location changes so room dropdown cannot be out of sync.
     setSelectedLocationId(e.target.value);
     setSelectedRoomId("");
   };
@@ -74,10 +78,12 @@ function RoomViewer({ rooms, roomAssignments }) {
   );
 
   const selectedRoom =
+    // Find the selected room object from currently filtered room list.
     filteredRooms.find((room) => String(room._id) === String(selectedRoomId)) ||
     null;
 
   const roomTotalPlants = useMemo(() => {
+    // Sum all assigned plant counts across active assignments in the selected room.
     return selectedRoomAssignments.reduce((sum, assignment) => {
       const assignedPlants = Array.isArray(assignment?.assignedPlants)
         ? assignment.assignedPlants
@@ -93,6 +99,7 @@ function RoomViewer({ rooms, roomAssignments }) {
     }, 0);
   }, [selectedRoomAssignments]);
 
+  // Build chart-ready totals by strain for the selected room.
   const roomAnalytics = useMemo(() => {
     const strainTotals = new Map();
 
@@ -138,6 +145,7 @@ function RoomViewer({ rooms, roomAssignments }) {
   }, [selectedRoomAssignments]);
 
   const summaryCards = [
+    // Small card metadata array keeps JSX cleaner and easier to reorder.
     {
       label: "Room",
       value: selectedRoom
@@ -168,6 +176,7 @@ function RoomViewer({ rooms, roomAssignments }) {
 
   return (
     <Stack spacing={2.25}>
+      {/* Filter header: pick location first, then room. */}
       <Paper
         elevation={0}
         sx={{
@@ -181,6 +190,7 @@ function RoomViewer({ rooms, roomAssignments }) {
         }}
       >
         <Stack spacing={1.25}>
+          {/* Header text explains this panel's purpose. */}
           <Stack spacing={0.5}>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
               Room Viewer
@@ -191,6 +201,7 @@ function RoomViewer({ rooms, roomAssignments }) {
           </Stack>
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+            {/* First dropdown narrows available room options by location. */}
             <TextField
               select
               label="Select Location"
@@ -210,10 +221,12 @@ function RoomViewer({ rooms, roomAssignments }) {
               select
               label="Select Room"
               value={selectedRoomId}
+              // Room select stays disabled until a location is chosen.
               disabled={!selectedLocationId}
               onChange={(e) => setSelectedRoomId(e.target.value)}
               fullWidth
             >
+              {/* Second dropdown is dependent on selected location. */}
               <MenuItem value="">Choose a room</MenuItem>
               {filteredRooms.map((room) => (
                 <MenuItem key={room._id} value={room._id}>
@@ -227,6 +240,7 @@ function RoomViewer({ rooms, roomAssignments }) {
       </Paper>
 
       {!selectedRoom && (
+        // Lightweight status messaging with MUI Alert components.
         <Alert severity="info">
           Choose a room above to view its current contents.
         </Alert>
@@ -240,8 +254,10 @@ function RoomViewer({ rooms, roomAssignments }) {
 
       {selectedRoom && selectedRoomAssignments.length > 0 && (
         <Stack spacing={2}>
+          {/* Responsive KPI cards for quick room-level stats. */}
           <Grid container spacing={1.5}>
             {summaryCards.map((card) => (
+              // KPI cards are rendered from a shared metadata array.
               <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
                 <Card
                   elevation={0}
@@ -298,6 +314,7 @@ function RoomViewer({ rooms, roomAssignments }) {
                   <Box
                     sx={{ width: "100%", height: roomAnalytics.chartHeight }}
                   >
+                    {/* MUI X BarChart renders strain composition for the selected room. */}
                     <BarChart
                       yAxis={[
                         {
@@ -319,6 +336,7 @@ function RoomViewer({ rooms, roomAssignments }) {
           </Card>
 
           {selectedRoomAssignments.map((assignment) => {
+            // One card per assignment to show batch details and per-strain breakdown.
             const batch = assignment.batchId;
             const assignedPlants = Array.isArray(assignment?.assignedPlants)
               ? assignment.assignedPlants
@@ -372,6 +390,7 @@ function RoomViewer({ rooms, roomAssignments }) {
                         ["Batch Type", batch?.batchType || "production"],
                         ["Plants in Room", batchTotalPlants],
                       ].map(([label, value]) => (
+                        // Render one metadata tile for each batch detail field.
                         <Grid
                           key={`${assignment._id}-${label}`}
                           size={{ xs: 12, md: 3 }}
@@ -410,6 +429,7 @@ function RoomViewer({ rooms, roomAssignments }) {
                     ) : (
                       <Box sx={{ height: 280 }}>
                         <DataGrid
+                          // DataGrid is used for dense tabular strain data with consistent styling.
                           rows={assignedPlants.map((row, i) => ({
                             id: `${assignment._id}-${i}`,
                             strainName: row.strainId?.name || "Unknown Strain",

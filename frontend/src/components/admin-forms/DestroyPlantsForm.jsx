@@ -16,7 +16,9 @@ import {
   Typography,
 } from "@mui/material";
 
+// Controlled destruction workflow that reduces strain counts inside a batch.
 function DestroyPlantsForm({ embedded }) {
+  // Controlled form fields and dialog state.
   const [batches, setBatches] = useState([]);
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [selectedStrainId, setSelectedStrainId] = useState("");
@@ -28,6 +30,7 @@ function DestroyPlantsForm({ embedded }) {
   const [confirmText, setConfirmText] = useState("");
 
   const fetchBatches = async () => {
+    // Load batches and keep them sorted for predictable dropdown order.
     try {
       const res = await fetch("/api/batches");
       const data = await res.json();
@@ -42,6 +45,7 @@ function DestroyPlantsForm({ embedded }) {
   };
 
   useEffect(() => {
+    // Initial load + live refresh when batches are created/updated elsewhere.
     fetchBatches();
 
     const refresh = () => fetchBatches();
@@ -55,6 +59,7 @@ function DestroyPlantsForm({ embedded }) {
   }, []);
 
   const selectedBatch = useMemo(
+    // Resolve dropdown id into full batch object used by the UI.
     () =>
       batches.find((batch) => String(batch._id) === String(selectedBatchId)) ||
       null,
@@ -62,6 +67,7 @@ function DestroyPlantsForm({ embedded }) {
   );
 
   const strainTotals = useMemo(() => {
+    // Build per-strain available counts from the selected batch's room plant data.
     if (!selectedBatch) return [];
 
     const totals = new Map();
@@ -90,6 +96,7 @@ function DestroyPlantsForm({ embedded }) {
   }, [selectedBatch]);
 
   const selectedStrain = useMemo(
+    // Resolve strain id into selected strain totals row.
     () =>
       strainTotals.find(
         (row) => String(row.strainId) === String(selectedStrainId),
@@ -98,12 +105,14 @@ function DestroyPlantsForm({ embedded }) {
   );
 
   const canSubmit =
+    // Basic client-side guard before opening confirmation dialog.
     selectedBatchId &&
     selectedStrainId &&
     Number(destroyCount) > 0 &&
     Number(destroyCount) <= Number(selectedStrain?.count || 0);
 
   const handleBatchChange = (batchId) => {
+    // Reset dependent form fields when source batch changes.
     setSelectedBatchId(batchId);
     setSelectedStrainId("");
     setDestroyCount("");
@@ -111,6 +120,7 @@ function DestroyPlantsForm({ embedded }) {
     setMessage("");
   };
 
+  // Execute the destructive API operation after validation/confirmation.
   const executeDestroy = async () => {
     const amount = Number(destroyCount);
     if (!canSubmit) {
@@ -164,6 +174,7 @@ function DestroyPlantsForm({ embedded }) {
     }
   };
 
+  // Open a confirmation dialog before making destructive changes.
   const handleSubmit = (event) => {
     event.preventDefault();
     setMessage("");
@@ -180,6 +191,7 @@ function DestroyPlantsForm({ embedded }) {
   };
 
   const content = (
+    // Form + confirmation dialog pattern for destructive actions.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
       <TextField
         select
@@ -190,6 +202,7 @@ function DestroyPlantsForm({ embedded }) {
       >
         <MenuItem value="">Select Batch</MenuItem>
         {batches.map((batch) => (
+          // Show batch number and stage so operators pick the correct source batch.
           <MenuItem key={batch._id} value={batch._id}>
             <Stack
               direction="row"
@@ -211,6 +224,7 @@ function DestroyPlantsForm({ embedded }) {
       </TextField>
 
       {selectedBatch && (
+        // Context card helps confirm the operator is editing the right batch.
         <Card variant="outlined">
           <CardContent>
             <Stack spacing={0.5}>
@@ -237,8 +251,10 @@ function DestroyPlantsForm({ embedded }) {
         required
         disabled={!selectedBatchId}
       >
+        {/* Strains list updates dynamically from selected batch totals. */}
         <MenuItem value="">Select Strain</MenuItem>
         {strainTotals.map((row) => (
+          // Each option includes currently available count for quick validation.
           <MenuItem key={row.strainId} value={row.strainId}>
             {row.strainName} (Available: {row.count})
           </MenuItem>
@@ -289,12 +305,14 @@ function DestroyPlantsForm({ embedded }) {
       <Dialog
         open={confirmOpen}
         onClose={() => {
+          // Block accidental close while request is currently being submitted.
           if (isSubmitting) return;
           setConfirmOpen(false);
         }}
         fullWidth
         maxWidth="sm"
       >
+        {/* MUI Dialog provides a clear secondary confirmation step. */}
         <DialogTitle>Confirm Plant Destruction</DialogTitle>
         <DialogContent>
           <Stack spacing={1.25} sx={{ mt: 0.5 }}>
@@ -335,6 +353,7 @@ function DestroyPlantsForm({ embedded }) {
     </Stack>
   );
 
+  // Embedded mode omits standalone title wrapper.
   if (embedded) return content;
 
   return (

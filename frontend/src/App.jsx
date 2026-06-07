@@ -38,6 +38,7 @@ import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
 
+// Layout sizing constants for the app shell.
 const APP_BAR_HEIGHT = 64;
 const SIDEBAR_EXPANDED_WIDTH = 320;
 const SIDEBAR_COLLAPSED_WIDTH = 88;
@@ -48,6 +49,7 @@ const DATA_VIEWER_OPTIONS = [
   { key: "roomViewer", label: "Room Viewer", icon: MeetingRoomIcon },
 ];
 
+// Dashboard button definitions used to render sidebar launchers.
 const HARVEST_OPTIONS = [
   { key: "harvestForm", label: "Add Harvest", icon: AgricultureIcon },
   { key: "dryWeightForm", label: "Add Dry Weights", icon: ScaleIcon },
@@ -63,7 +65,9 @@ const DATA_REFRESH_EVENTS = [
   "strain:created",
 ];
 
+// Main application shell and dashboard/workspace coordinator.
 function App() {
+  // Shared datasets used by dashboard cards and panels.
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [roomAssignments, setRoomAssignments] = useState([]);
@@ -72,6 +76,7 @@ function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
+  // Boolean flags for whether each floating panel is currently open.
   const [selectedViews, setSelectedViews] = useState({
     strains: false,
     harvestReport: false,
@@ -80,6 +85,7 @@ function App() {
     dryWeightForm: false,
   });
 
+  // Tracks whether each floating panel is minimized to taskbar.
   const [minimizedWindows, setMinimizedWindows] = useState({
     strains: false,
     harvestReport: false,
@@ -94,6 +100,7 @@ function App() {
     severity: "success",
   });
 
+  // Generic fetch helper for API collections.
   const fetchCollection = useCallback(async (path, setter) => {
     try {
       const res = await fetch(path);
@@ -105,6 +112,7 @@ function App() {
     }
   }, []);
 
+  // Refresh all dashboard datasets together.
   const fetchAllData = useCallback(async () => {
     setLoadingData(true);
     await Promise.all([
@@ -116,10 +124,12 @@ function App() {
     setLoadingData(false);
   }, [fetchCollection]);
 
+  // Initial data load.
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
 
+  // Keep data fresh when forms dispatch app-level events.
   useEffect(() => {
     const handleDataCreated = () => fetchAllData();
 
@@ -134,16 +144,21 @@ function App() {
     };
   }, [fetchAllData]);
 
+  // Toggle panel visibility and always un-minimize when opened.
   const toggleView = (key) => {
     setSelectedViews((prev) => ({ ...prev, [key]: !prev[key] }));
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
   };
 
+  // Minimize or restore one floating window from the taskbar/chips.
   const toggleMinimize = (key) => {
     setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Dashboard KPI values.
+  // Count how many panel toggles are currently switched on.
   const openWindowCount = Object.values(selectedViews).filter(Boolean).length;
+  // Sum all currently assigned plants across active room assignments.
   const totalPlants = roomAssignments.reduce((sum, assignment) => {
     const plants = Array.isArray(assignment?.assignedPlants)
       ? assignment.assignedPlants
@@ -154,11 +169,13 @@ function App() {
     );
   }, 0);
 
+  // Sum dry grams from harvest records for top-level dashboard KPI.
   const totalDryWeight = harvests.reduce(
     (sum, harvest) => sum + (Number(harvest?.totalDryWeightGrams) || 0),
     0,
   );
 
+  // Historical baseline used to estimate yields for upcoming harvests.
   const historicalAvgDryPerPlant = useMemo(() => {
     const totalHarvestPlants = harvests.reduce(
       (sum, harvest) => sum + (Number(harvest?.totalPlantCount) || 0),
@@ -170,7 +187,9 @@ function App() {
     return totalDryWeight / totalHarvestPlants;
   }, [harvests, totalDryWeight]);
 
+  // Next-harvest snapshot built from active room assignments.
   const upcomingHarvestDetails = useMemo(() => {
+    // Step 1: collect unique active batches and sort by soonest harvest date.
     const candidates = roomAssignments
       .map((assignment) => assignment?.batchId)
       .filter(Boolean)
@@ -191,6 +210,7 @@ function App() {
       )
       .sort((a, b) => a.harvestDate - b.harvestDate);
 
+    // Step 2: pick nearest upcoming batch and summarize its rooms/strains/plants.
     const nextBatch = candidates[0];
     if (!nextBatch) return null;
 
@@ -241,6 +261,7 @@ function App() {
     };
   }, [historicalAvgDryPerPlant, roomAssignments]);
 
+  // Sidebar width only affects dashboard mode.
   const dashboardSidebarWidth =
     activePage === "dashboard"
       ? sidebarExpanded
@@ -250,6 +271,7 @@ function App() {
 
   return (
     <Box sx={{ minHeight: "100vh", pb: 10 }}>
+      {/* Fixed top app bar. Width shifts when dashboard sidebar is expanded/collapsed. */}
       <AppBar
         position="fixed"
         color="inherit"
@@ -280,12 +302,14 @@ function App() {
         </Toolbar>
       </AppBar>
 
+      {/* Toolbar spacer keeps page content from sliding underneath the fixed AppBar. */}
       <Toolbar />
 
       <Box
         sx={{ display: "flex", minHeight: `calc(100vh - ${APP_BAR_HEIGHT}px)` }}
       >
         {activePage === "dashboard" && (
+          /* Permanent MUI Drawer used as the dashboard launcher rail. */
           <Drawer
             variant="permanent"
             sx={(theme) => ({
@@ -369,6 +393,7 @@ function App() {
                 Data Viewer
               </Typography>
               <List dense>
+                {/* Data viewer panel toggles. */}
                 {DATA_VIEWER_OPTIONS.map((option) => (
                   <ListItem key={option.key} disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
@@ -418,6 +443,7 @@ function App() {
                 Harvest Workflows
               </Typography>
               <List dense>
+                {/* Harvest workflow panel toggles. */}
                 {HARVEST_OPTIONS.map((option) => (
                   <ListItem key={option.key} disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
@@ -462,10 +488,13 @@ function App() {
             p: 3,
           }}
         >
+          {/* LinearProgress gives users immediate feedback during API refreshes. */}
           {loadingData && <LinearProgress />}
 
           {activePage === "dashboard" && (
+            // Dashboard page body: upcoming harvest, KPIs, and workspace intro.
             <Stack spacing={2}>
+              {/* Hero summary card with nearest upcoming harvest details. */}
               <Card
                 sx={{
                   border: "1px solid",
@@ -550,6 +579,7 @@ function App() {
               </Card>
 
               <Grid container spacing={2}>
+                {/* KPI cards shown as a responsive 4-column grid on desktop. */}
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Card>
                     <CardContent>
@@ -624,13 +654,16 @@ function App() {
             </Stack>
           )}
 
+          {/* Admin page body is delegated to AdminPanel component. */}
           {activePage === "admin" && <AdminPanel />}
         </Box>
       </Box>
 
       {!loadingData && activePage === "dashboard" && (
         <>
+          {/* Each viewer/form mounts inside the same draggable window shell. */}
           {selectedViews.strains && (
+            // Floating analytics window for strain-level live and historical metrics.
             <DraggableWindow
               title={`Strains (${strains.length})`}
               onClose={() => toggleView("strains")}
@@ -650,6 +683,7 @@ function App() {
             </DraggableWindow>
           )}
           {selectedViews.harvestReport && (
+            // Floating report window for room/strain harvest breakdowns.
             <DraggableWindow
               title="Harvest Report"
               onClose={() => toggleView("harvestReport")}
@@ -665,6 +699,7 @@ function App() {
             </DraggableWindow>
           )}
           {selectedViews.roomViewer && (
+            // Floating room-focused window for assignments and composition charts.
             <DraggableWindow
               title="Room Viewer"
               onClose={() => toggleView("roomViewer")}
@@ -680,6 +715,7 @@ function App() {
             </DraggableWindow>
           )}
           {selectedViews.harvestForm && (
+            // Floating workflow window for entering wet harvest tote data.
             <DraggableWindow
               title="Add Harvest"
               onClose={() => toggleView("harvestForm")}
@@ -705,6 +741,7 @@ function App() {
             </DraggableWindow>
           )}
           {selectedViews.dryWeightForm && (
+            // Floating workflow window for entering/finalizing dry weights.
             <DraggableWindow
               title="Add Dry Weights"
               onClose={() => toggleView("dryWeightForm")}
@@ -736,6 +773,7 @@ function App() {
       <Taskbar
         activePage={activePage}
         onNavigate={setActivePage}
+        // Each tab object describes how taskbar should render and interact.
         tabs={[
           {
             key: "strains",
@@ -775,6 +813,7 @@ function App() {
         ]}
       />
 
+      {/* Snackbar is a short-lived global feedback message container. */}
       <Snackbar
         open={toast.open}
         autoHideDuration={3000}

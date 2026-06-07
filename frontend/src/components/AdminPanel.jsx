@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Avatar,
   Box,
@@ -6,18 +6,15 @@ import {
   CardContent,
   Chip,
   Divider,
-  InputAdornment,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import SearchIcon from "@mui/icons-material/Search";
 import SpaIcon from "@mui/icons-material/Spa";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import PlaceIcon from "@mui/icons-material/Place";
@@ -34,6 +31,8 @@ import CreateMomsForm from "./admin-forms/CreateMomsForm";
 import BatchForm from "./BatchForm";
 import DestroyPlantsForm from "./admin-forms/DestroyPlantsForm";
 
+// Available admin workflows grouped into category-based navigation.
+// This configuration drives both left navigation and right-side panel details.
 const ADMIN_WORKFLOWS = [
   {
     key: "strain",
@@ -99,38 +98,29 @@ const ADMIN_WORKFLOWS = [
   },
 ];
 
+// Admin workspace that switches between operational forms.
 export default function AdminPanel() {
+  // Tracks which workflow button is selected in the left navigation list.
   const [activeWorkflowKey, setActiveWorkflowKey] = useState(
     ADMIN_WORKFLOWS[0].key,
   );
-  const [searchText, setSearchText] = useState("");
 
-  const filteredWorkflows = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    if (!query) return ADMIN_WORKFLOWS;
-    return ADMIN_WORKFLOWS.filter((workflow) => {
-      return (
-        workflow.title.toLowerCase().includes(query) ||
-        workflow.description.toLowerCase().includes(query) ||
-        workflow.category.toLowerCase().includes(query)
-      );
-    });
-  }, [searchText]);
+  // Build a category -> workflows map for grouped rendering.
+  const workflowsByCategory = ADMIN_WORKFLOWS.reduce((acc, workflow) => {
+    const group = acc[workflow.category] || [];
+    group.push(workflow);
+    acc[workflow.category] = group;
+    return acc;
+  }, {});
 
-  const workflowsByCategory = useMemo(() => {
-    return filteredWorkflows.reduce((acc, workflow) => {
-      const group = acc[workflow.category] || [];
-      group.push(workflow);
-      acc[workflow.category] = group;
-      return acc;
-    }, {});
-  }, [filteredWorkflows]);
-
+  // Read currently selected workflow object for icon/title/description rendering.
   const activeWorkflow =
     ADMIN_WORKFLOWS.find((workflow) => workflow.key === activeWorkflowKey) ||
     ADMIN_WORKFLOWS[0];
 
+  // Render the form that belongs to the currently selected workflow.
   function renderActiveForm() {
+    // Each condition picks one React component to render in the right panel.
     if (activeWorkflow.key === "strain") return <StrainForm embedded />;
     if (activeWorkflow.key === "company") return <CompanyForm embedded />;
     if (activeWorkflow.key === "location") return <LocationForm embedded />;
@@ -152,6 +142,7 @@ export default function AdminPanel() {
   return (
     <Box sx={{ maxWidth: 1500, mx: "auto" }}>
       <Stack spacing={2.5}>
+        {/* Intro banner uses Paper as a low-emphasis container with custom background. */}
         <Paper
           elevation={0}
           sx={{
@@ -173,7 +164,9 @@ export default function AdminPanel() {
         </Paper>
 
         <Grid container spacing={2}>
+          {/* Grid gives a responsive 2-column layout: nav left, content right. */}
           <Grid size={{ xs: 12, md: 4, lg: 3 }}>
+            {/* Left column: workflow list grouped by category. */}
             <Card
               sx={{
                 height: "100%",
@@ -184,23 +177,7 @@ export default function AdminPanel() {
             >
               <CardContent sx={{ p: 1.5 }}>
                 <Stack spacing={1}>
-                  <TextField
-                    size="small"
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    placeholder="Search workflows"
-                    fullWidth
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-
-                  <Divider />
-
+                  {/* Render each category heading with its workflow buttons underneath. */}
                   {Object.entries(workflowsByCategory).map(
                     ([categoryName, categoryWorkflows]) => (
                       <Box key={categoryName}>
@@ -221,6 +198,7 @@ export default function AdminPanel() {
                               <ListItemButton
                                 key={workflow.key}
                                 selected={activeWorkflowKey === workflow.key}
+                                // Update selection so right panel swaps to matching form.
                                 onClick={() =>
                                   setActiveWorkflowKey(workflow.key)
                                 }
@@ -240,22 +218,13 @@ export default function AdminPanel() {
                       </Box>
                     ),
                   )}
-
-                  {filteredWorkflows.length === 0 && (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ p: 1.5 }}
-                    >
-                      No workflows match your search.
-                    </Typography>
-                  )}
                 </Stack>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid size={{ xs: 12, md: 8, lg: 9 }}>
+            {/* Right column: details header + active form content. */}
             <Card
               sx={{
                 borderRadius: 2,
@@ -265,6 +234,7 @@ export default function AdminPanel() {
             >
               <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
                 <Stack spacing={2}>
+                  {/* Header row shows the selected workflow icon + title/description. */}
                   <Stack direction="row" spacing={1.25} alignItems="center">
                     <Avatar
                       sx={{

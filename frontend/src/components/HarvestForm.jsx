@@ -17,6 +17,7 @@ const SELECT_MENU_PROPS = {
   disablePortal: true,
 };
 
+// Capture wet harvest tote weights for one batch/room at a time.
 function HarvestForm({ onComplete }) {
   // Data used by dropdowns and lookups.
   const [batches, setBatches] = useState([]);
@@ -33,6 +34,7 @@ function HarvestForm({ onComplete }) {
 
   // Load initial data once.
   useEffect(() => {
+    // Fetch batches and active assignments in parallel for faster initial render.
     const loadData = async () => {
       try {
         const [batchRes, assignmentRes] = await Promise.all([
@@ -53,7 +55,9 @@ function HarvestForm({ onComplete }) {
     loadData();
   }, []);
 
+  // Only allow batches that are ready to harvest and not already harvested.
   const unharvestedBatches = useMemo(
+    // Restrict dropdown to batches that still need wet harvest intake.
     () =>
       batches.filter(
         (batch) =>
@@ -64,11 +68,13 @@ function HarvestForm({ onComplete }) {
   );
 
   const selectedBatch = useMemo(
+    // Find full batch object for the currently selected batch id.
     () => batches.find((batch) => batch._id === selectedBatchId) || null,
     [batches, selectedBatchId],
   );
 
   const availableRooms = useMemo(() => {
+    // Build unique room list for this batch from active room assignments.
     if (!selectedBatchId) return [];
 
     const assignedRoomMap = new Map();
@@ -90,6 +96,7 @@ function HarvestForm({ onComplete }) {
   }, [roomAssignments, selectedBatchId]);
 
   const selectedRoomAssignment = useMemo(
+    // Find the active assignment row that matches both selected batch and room.
     () =>
       roomAssignments.find(
         (assignment) =>
@@ -101,6 +108,7 @@ function HarvestForm({ onComplete }) {
   );
 
   const activePlants = useMemo(
+    // Normalize assignedPlants so render logic can always treat it as an array.
     () =>
       Array.isArray(selectedRoomAssignment?.assignedPlants)
         ? selectedRoomAssignment.assignedPlants
@@ -109,6 +117,7 @@ function HarvestForm({ onComplete }) {
   );
 
   const selectedStrainPlant = useMemo(
+    // Identify the selected strain row so the tote editor can show context.
     () =>
       activePlants.find((plant) => plant.strainId?._id === selectedStrainId) ||
       null,
@@ -116,16 +125,19 @@ function HarvestForm({ onComplete }) {
   );
 
   const totalPlants = useMemo(
+    // Sum all plant counts in this room for quick context on harvest scope.
     () => activePlants.reduce((sum, plant) => sum + (plant.count || 0), 0),
     [activePlants],
   );
 
   const activeTotes = useMemo(
+    // Read only the tote list for whichever strain is currently selected.
     () => (selectedStrainId ? totes[selectedStrainId] || [] : []),
     [selectedStrainId, totes],
   );
 
   const activeToteTotal = useMemo(
+    // Compute total wet grams for this strain from its tote entries.
     () => activeTotes.reduce((sum, weight) => sum + weight, 0),
     [activeTotes],
   );
@@ -140,11 +152,13 @@ function HarvestForm({ onComplete }) {
   };
 
   const handleStrainClick = (strainId) => {
+    // Set active strain so right-side tote editor knows which row to edit.
     setSelectedStrainId(strainId);
     setWeightInput("");
   };
 
   const handleAddTote = () => {
+    // Keep tote input numeric and positive before adding to state.
     const weight = parseFloat(weightInput);
     if (Number.isNaN(weight) || weight <= 0) return;
 
@@ -156,12 +170,14 @@ function HarvestForm({ onComplete }) {
   };
 
   const handleRemoveTote = (strainId, index) => {
+    // Remove one tote entry by index from the chosen strain list.
     setTotes((prev) => ({
       ...prev,
       [strainId]: prev[strainId].filter((_, i) => i !== index),
     }));
   };
 
+  // Build the harvest payload from UI selections and submit it.
   const handleSubmit = async () => {
     if (!selectedBatchId || !selectedRoomId) {
       window.alert("Please select a batch and a room.");
@@ -170,6 +186,7 @@ function HarvestForm({ onComplete }) {
 
     try {
       const strainsPayload = activePlants.map((plant) => ({
+        // Each strain carries tote-level wet weights for backend calculations.
         strainId: plant.strainId?._id,
         plantCount: plant.count,
         totes: (totes[plant.strainId?._id] || []).map((weight) => ({
@@ -226,7 +243,9 @@ function HarvestForm({ onComplete }) {
       spacing={2}
       sx={{ height: "100%" }}
     >
+      {/* Left column: selection controls and strain list for the selected batch/room. */}
       <Stack spacing={2} sx={{ width: { xs: "100%", md: 360 } }}>
+        {/* Section title for this workflow panel. */}
         <Typography variant="h6">Harvest Intake Form</Typography>
 
         <TextField
@@ -234,6 +253,7 @@ function HarvestForm({ onComplete }) {
           label="Batch (HarvestReady Only)"
           value={selectedBatchId}
           onChange={handleBatchChange}
+          // disablePortal keeps the menu anchored inside draggable window layers.
           SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
         >
           <MenuItem value="">Select Batch</MenuItem>
@@ -278,6 +298,7 @@ function HarvestForm({ onComplete }) {
         >
           <MenuItem value="">Select Room</MenuItem>
           {availableRooms.map((room) => (
+            // Room options come from active room assignments for selected batch.
             <MenuItem key={room._id} value={room._id}>
               {room.name}
             </MenuItem>
@@ -285,6 +306,7 @@ function HarvestForm({ onComplete }) {
         </TextField>
 
         {selectedBatch && (
+          // Card becomes a selectable list of strains currently in chosen room.
           <Card variant="outlined">
             <CardContent>
               <Typography
@@ -296,6 +318,7 @@ function HarvestForm({ onComplete }) {
               </Typography>
               <Stack spacing={1}>
                 {activePlants.map((plant) => {
+                  // Render one selectable button per strain currently in this room.
                   const strainId = plant.strainId?._id;
                   const strainName = plant.strainId?.name || "Unknown";
                   const toteCount = (totes[strainId] || []).length;
@@ -331,16 +354,20 @@ function HarvestForm({ onComplete }) {
         )}
 
         {selectedBatchId && selectedRoomId && (
+          // Final action only appears when required selections are made.
           <Button variant="contained" size="large" onClick={handleSubmit}>
             Submit Harvest
           </Button>
         )}
       </Stack>
 
+      {/* Right column: tote entry for the currently selected strain. */}
       <Box sx={{ flex: 1 }}>
+        {/* Card keeps the editor visually separated from left navigation controls. */}
         <Card variant="outlined" sx={{ height: "100%" }}>
           <CardContent>
             {selectedStrainPlant ? (
+              // Context-sensitive editor: shown only after user clicks a strain.
               <Stack spacing={2}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                   {selectedStrainPlant.strainId?.name} -{" "}
@@ -367,6 +394,7 @@ function HarvestForm({ onComplete }) {
                 <Divider />
 
                 {activeTotes.length > 0 ? (
+                  // Tote list displays each entry and allows individual removal.
                   <Stack spacing={1}>
                     {activeTotes.map((weight, i) => (
                       <Stack

@@ -10,7 +10,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+
+// Create a batch and collect initial plant counts by strain.
 function BatchForm() {
+  // Controlled input states mirror each visible form field.
   const [selectedStrain, setSelectedStrain] = useState("");
   const [batchNumber, setBatchNumber] = useState("");
   const [harvestDate, setHarvestDate] = useState("");
@@ -21,7 +24,9 @@ function BatchForm() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Load strain options used in the strain dropdown.
   useEffect(() => {
+    // Local helper keeps fetching logic close to where it is used.
     async function fetchStrains() {
       try {
         const response = await fetch("/api/strains");
@@ -40,12 +45,15 @@ function BatchForm() {
   }, []);
 
   const totalPlants = useMemo(
+    // Keep a live total so users can verify plant counts before submit.
     () => plants.reduce((sum, plant) => sum + plant.count, 0),
     [plants],
   );
 
+  // Simple form readiness check for required fields.
   const canSubmit = batchNumber.trim() && cloneDate && plants.length > 0;
 
+  // Add a strain/count row, merging duplicates into a single running total.
   function addPlant() {
     const numericCount = Number(count);
     if (!selectedStrain || Number.isNaN(numericCount) || numericCount <= 0) {
@@ -76,6 +84,7 @@ function BatchForm() {
     setCount("");
   }
 
+  // Persist the batch and reset the form on success.
   async function handleSubmit(e) {
     e.preventDefault();
     if (!canSubmit) {
@@ -115,6 +124,7 @@ function BatchForm() {
       }
 
       const savedBatch = await response.json();
+      // Event allows other screens to refresh without tight component coupling.
       window.dispatchEvent(
         new CustomEvent("batch:created", { detail: savedBatch }),
       );
@@ -136,8 +146,10 @@ function BatchForm() {
   }
 
   return (
+    // Stack with component="form" is a common MUI pattern for vertically spaced form fields.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
       <Typography variant="h6">Create New Batch</Typography>
+      {/* Card groups core batch metadata fields. */}
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2}>
@@ -154,6 +166,7 @@ function BatchForm() {
               value={cloneDate}
               onChange={(e) => setCloneDate(e.target.value)}
               slotProps={{
+                // Date inputs need shrink so the label does not overlap selected values.
                 inputLabel: { shrink: true },
                 htmlInput: { placeholder: "" },
               }}
@@ -177,6 +190,7 @@ function BatchForm() {
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2}>
+            {/* Second card manages strain rows and plant totals for the batch. */}
             <Typography variant="subtitle1">Add Plants</Typography>
 
             <TextField
@@ -218,6 +232,7 @@ function BatchForm() {
               </Typography>
             ) : (
               plants.map((plant, index) => {
+                // Render one summary row for each strain currently added to the batch.
                 const strain = strains.find((s) => s._id === plant.strainId);
                 return (
                   <Stack
@@ -239,6 +254,7 @@ function BatchForm() {
                       type="button"
                       color="error"
                       size="small"
+                      // Remove this one row from the local plants list.
                       onClick={() => {
                         setPlants((prev) =>
                           prev.filter((_, plantIndex) => plantIndex !== index),
@@ -258,6 +274,7 @@ function BatchForm() {
       <Button
         type="submit"
         variant="contained"
+        // Button disable ties directly to simple client-side validation.
         disabled={!canSubmit || isSubmitting}
       >
         {isSubmitting ? "Saving..." : "Submit Batch"}

@@ -9,8 +9,10 @@ import {
   Typography,
 } from "@mui/material";
 
+// Add/edit/remove workflow for strain records.
 // `embedded` decides inline form vs standalone card view.
 function StrainForm({ embedded }) {
+  // Mode drives both API method and visible fields.
   const [mode, setMode] = useState("add");
   const [strains, setStrains] = useState([]);
   const [selectedStrainId, setSelectedStrainId] = useState("");
@@ -18,6 +20,7 @@ function StrainForm({ embedded }) {
   const [message, setMessage] = useState("");
 
   const fetchStrains = async () => {
+    // Pull and alphabetize strain options for dropdowns.
     try {
       const res = await fetch("/api/strains");
       const data = await res.json();
@@ -30,25 +33,30 @@ function StrainForm({ embedded }) {
   };
 
   useEffect(() => {
+    // Load initial strain list once when this form mounts.
     fetchStrains();
   }, []);
 
   const resetForm = () => {
+    // Clear all controlled field values.
     setForm({ name: "", type: "", status: "" });
     setSelectedStrainId("");
   };
 
   const notifyStrainChange = () => {
+    // Broadcast for other screens that derive data from strain list.
     window.dispatchEvent(new CustomEvent("strain:created"));
   };
 
   const handleModeChange = (nextMode) => {
+    // Switching modes resets state so fields reflect the new workflow.
     setMode(nextMode);
     setMessage("");
     resetForm();
   };
 
   const handleSelectStrain = (strainId) => {
+    // Load chosen strain details into edit/remove form state.
     setSelectedStrainId(strainId);
     const selected = strains.find(
       (strain) => String(strain._id) === String(strainId),
@@ -61,6 +69,7 @@ function StrainForm({ embedded }) {
     });
   };
 
+  // Route to POST/PATCH/DELETE depending on selected mode.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -69,6 +78,7 @@ function StrainForm({ embedded }) {
       let res;
 
       if (mode === "add") {
+        // Add mode creates a brand-new strain.
         res = await fetch("/api/strains", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -81,6 +91,7 @@ function StrainForm({ embedded }) {
       }
 
       if (mode === "edit") {
+        // Edit mode updates an existing strain record.
         if (!selectedStrainId) {
           throw new Error("Please select a strain to edit");
         }
@@ -97,6 +108,7 @@ function StrainForm({ embedded }) {
       }
 
       if (mode === "remove") {
+        // Remove mode deletes the selected strain.
         if (!selectedStrainId) {
           throw new Error("Please select a strain to remove");
         }
@@ -111,6 +123,7 @@ function StrainForm({ embedded }) {
       }
 
       const getResponseError = async (response) => {
+        // Defensive parsing helps surface backend errors cleanly in UI.
         const contentType = response.headers.get("content-type") || "";
 
         if (contentType.includes("application/json")) {
@@ -165,6 +178,7 @@ function StrainForm({ embedded }) {
 
   const formContent = (
     <>
+      {/* Top controls choose operation mode and (when needed) target strain. */}
       <Stack spacing={1.5} sx={{ mb: 2 }}>
         <TextField
           select
@@ -178,6 +192,7 @@ function StrainForm({ embedded }) {
         </TextField>
 
         {mode !== "add" && (
+          // In edit/remove mode, user picks which existing strain to target.
           <TextField
             select
             label="Strain"
@@ -187,6 +202,7 @@ function StrainForm({ embedded }) {
           >
             <MenuItem value="">Select Strain</MenuItem>
             {strains.map((strain) => (
+              // Dropdown rows are sourced from alphabetized strain list state.
               <MenuItem key={strain._id} value={strain._id}>
                 {strain.name}
               </MenuItem>
@@ -197,6 +213,7 @@ function StrainForm({ embedded }) {
 
       <Divider sx={{ mb: 2 }} />
 
+      {/* Main form body changes based on add/edit/remove mode. */}
       <Stack component="form" spacing={2} onSubmit={handleSubmit}>
         {mode !== "remove" && (
           <>
@@ -235,6 +252,7 @@ function StrainForm({ embedded }) {
         )}
 
         {mode === "remove" && (
+          // Use Alert for destructive-action context before submit.
           <Alert severity="warning">
             This will permanently remove the selected strain if it is not
             referenced by existing records.
