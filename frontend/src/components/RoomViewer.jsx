@@ -373,6 +373,46 @@ function RoomViewer({ rooms, roomAssignments }) {
             const daysUntilHarvest = batch?.harvestDate
               ? toDaysDelta(new Date(), batch.harvestDate)
               : null;
+            const isMomRoom = String(selectedRoom?.type || "")
+              .toLowerCase()
+              .includes("mom");
+            const isMomBatch = String(batch?.batchType || "")
+              .toLowerCase()
+              .includes("mom");
+            const showHarvestCard = !(isMomRoom || isMomBatch);
+            const metadataCards = [
+              {
+                label: "Clone Date",
+                value: formatDate(batch?.cloneDate),
+                detail: "Batch origin date",
+              },
+              ...(showHarvestCard
+                ? [
+                    {
+                      label: "Harvest Date",
+                      value: formatDate(batch?.harvestDate),
+                      detail:
+                        daysUntilHarvest === null
+                          ? "No harvest date set"
+                          : daysUntilHarvest < 0
+                            ? `${Math.abs(daysUntilHarvest)} days overdue`
+                            : daysUntilHarvest === 0
+                              ? "Harvest is today"
+                              : `${daysUntilHarvest} days until harvest`,
+                    },
+                  ]
+                : []),
+              {
+                label: "Time in Room",
+                value:
+                  daysInRoom === null
+                    ? "N/A"
+                    : `${daysInRoom} day${daysInRoom === 1 ? "" : "s"}`,
+                detail: batch?.lifecycleStage
+                  ? `Current stage: ${batch.lifecycleStage}`
+                  : "Current assignment duration",
+              },
+            ];
 
             return (
               <Card
@@ -412,39 +452,14 @@ function RoomViewer({ rooms, roomAssignments }) {
                     </Stack>
 
                     <Grid container spacing={1.25}>
-                      {[
-                        {
-                          label: "Clone Date",
-                          value: formatDate(batch?.cloneDate),
-                          detail: "Batch origin date",
-                        },
-                        {
-                          label: "Harvest Date",
-                          value: formatDate(batch?.harvestDate),
-                          detail:
-                            daysUntilHarvest === null
-                              ? "No harvest date set"
-                              : daysUntilHarvest < 0
-                                ? `${Math.abs(daysUntilHarvest)} days overdue`
-                                : daysUntilHarvest === 0
-                                  ? "Harvest is today"
-                                  : `${daysUntilHarvest} days until harvest`,
-                        },
-                        {
-                          label: "Time in Room",
-                          value:
-                            daysInRoom === null
-                              ? "N/A"
-                              : `${daysInRoom} day${daysInRoom === 1 ? "" : "s"}`,
-                          detail: batch?.lifecycleStage
-                            ? `Current stage: ${batch.lifecycleStage}`
-                            : "Current assignment duration",
-                        },
-                      ].map((meta) => (
+                      {metadataCards.map((meta) => (
                         // Render one metadata tile for each batch detail field.
                         <Grid
                           key={`${assignment._id}-${meta.label}`}
-                          size={{ xs: 12, md: 4 }}
+                          size={{
+                            xs: 12,
+                            md: metadataCards.length === 2 ? 6 : 4,
+                          }}
                         >
                           <Stack
                             spacing={0.25}

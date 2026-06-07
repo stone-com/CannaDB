@@ -37,7 +37,7 @@ const ADMIN_WORKFLOWS = [
     key: "strain",
     title: "Edit Strains",
     description: "Add, edit, or remove strain profiles and status metadata.",
-    category: "Foundation Data",
+    category: "Core Records",
     icon: SpaIcon,
   },
   {
@@ -45,7 +45,7 @@ const ADMIN_WORKFLOWS = [
     title: "Company & Location Setup",
     description:
       "Create a company, then immediately add one or more locations in the same flow.",
-    category: "Foundation Data",
+    category: "Core Records",
     icon: ApartmentIcon,
   },
   {
@@ -53,7 +53,7 @@ const ADMIN_WORKFLOWS = [
     title: "Edit Rooms",
     description:
       "Add, edit, or remove rooms with location, type, and capacity settings.",
-    category: "Foundation Data",
+    category: "Core Records",
     icon: MeetingRoomIcon,
   },
   {
@@ -85,7 +85,7 @@ const ADMIN_WORKFLOWS = [
     title: "Create Moms",
     description:
       "Create a new mom batch from production plants for propagation.",
-    category: "Propagation",
+    category: "Batch Operations",
     icon: ContentCutIcon,
   },
 ];
