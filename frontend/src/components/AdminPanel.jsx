@@ -18,14 +18,12 @@ import Grid from "@mui/material/Grid";
 import { alpha } from "@mui/material/styles";
 import SpaIcon from "@mui/icons-material/Spa";
 import ApartmentIcon from "@mui/icons-material/Apartment";
-import PlaceIcon from "@mui/icons-material/Place";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import AltRouteIcon from "@mui/icons-material/AltRoute";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
-import CompanyForm from "./admin-forms/CompanyForm";
-import LocationForm from "./admin-forms/LocationForm";
+import CompanyLocationSetupForm from "./admin-forms/CompanyLocationSetupForm";
 import RoomForm from "./admin-forms/RoomForm";
 import StrainForm from "./admin-forms/StrainForm";
 import CreateMomsForm from "./admin-forms/CreateMomsForm";
@@ -43,19 +41,12 @@ const ADMIN_WORKFLOWS = [
     icon: SpaIcon,
   },
   {
-    key: "company",
-    title: "Add Company",
-    description: "Register a company used across operations and reporting.",
+    key: "orgSetup",
+    title: "Company & Location Setup",
+    description:
+      "Create a company, then immediately add one or more locations in the same flow.",
     category: "Foundation Data",
     icon: ApartmentIcon,
-  },
-  {
-    key: "location",
-    title: "Add Location",
-    description:
-      "Define a production location before creating rooms and assignments.",
-    category: "Foundation Data",
-    icon: PlaceIcon,
   },
   {
     key: "room",
@@ -123,8 +114,9 @@ export default function AdminPanel() {
   function renderActiveForm() {
     // Each condition picks one React component to render in the right panel.
     if (activeWorkflow.key === "strain") return <StrainForm embedded />;
-    if (activeWorkflow.key === "company") return <CompanyForm embedded />;
-    if (activeWorkflow.key === "location") return <LocationForm embedded />;
+    if (activeWorkflow.key === "orgSetup") {
+      return <CompanyLocationSetupForm embedded />;
+    }
     if (activeWorkflow.key === "room")
       return <RoomForm embedded section="add" />;
     if (activeWorkflow.key === "batch") return <BatchForm />;

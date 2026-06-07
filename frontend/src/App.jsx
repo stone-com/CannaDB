@@ -22,7 +22,6 @@ import {
 import Grid from "@mui/material/Grid";
 import { alpha } from "@mui/material/styles";
 import InsightsIcon from "@mui/icons-material/Insights";
-import DatasetIcon from "@mui/icons-material/Dataset";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
@@ -61,6 +60,7 @@ const HARVEST_OPTIONS = [
 const DATA_REFRESH_EVENTS = [
   "company:created",
   "location:created",
+  "location:updated",
   "room:created",
   "roomAssignment:created",
   "batch:created",
