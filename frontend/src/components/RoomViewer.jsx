@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
+import { alpha } from "@mui/material/styles";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
 import GrassIcon from "@mui/icons-material/Grass";
 import LayersIcon from "@mui/icons-material/Layers";
@@ -152,25 +153,25 @@ function RoomViewer({ rooms, roomAssignments }) {
         ? `${selectedRoom.name}${selectedRoom.type ? ` (${selectedRoom.type})` : ""}`
         : "N/A",
       icon: <WarehouseIcon fontSize="small" />,
-      tone: "linear-gradient(135deg, rgba(9, 121, 105, 0.14), rgba(9, 121, 105, 0.03))",
+      tone: "primary",
     },
     {
       label: "Total Plants",
       value: roomTotalPlants.toLocaleString(),
       icon: <GrassIcon fontSize="small" />,
-      tone: "linear-gradient(135deg, rgba(2, 136, 209, 0.16), rgba(2, 136, 209, 0.03))",
+      tone: "info",
     },
     {
       label: "Active Batches",
       value: selectedRoomAssignments.length.toLocaleString(),
       icon: <LayersIcon fontSize="small" />,
-      tone: "linear-gradient(135deg, rgba(245, 124, 0, 0.17), rgba(245, 124, 0, 0.03))",
+      tone: "warning",
     },
     {
       label: "Unique Strains",
       value: roomAnalytics.strainSeries.length.toLocaleString(),
       icon: <ScienceIcon fontSize="small" />,
-      tone: "linear-gradient(135deg, rgba(123, 31, 162, 0.14), rgba(123, 31, 162, 0.03))",
+      tone: "secondary",
     },
   ];
 
@@ -179,15 +180,17 @@ function RoomViewer({ rooms, roomAssignments }) {
       {/* Filter header: pick location first, then room. */}
       <Paper
         elevation={0}
-        sx={{
+        sx={(theme) => ({
           p: { xs: 2, md: 2.5 },
           borderRadius: 2.5,
           border: "1px solid",
           borderColor: "divider",
           background:
-            "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(244, 250, 248, 0.9))",
+            theme.palette.mode === "dark"
+              ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
+              : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
           backdropFilter: "blur(8px)",
-        }}
+        })}
       >
         <Stack spacing={1.25}>
           {/* Header text explains this panel's purpose. */}
@@ -261,13 +264,20 @@ function RoomViewer({ rooms, roomAssignments }) {
               <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
                 <Card
                   elevation={0}
-                  sx={{
+                  sx={(theme) => ({
                     borderRadius: 2,
                     border: "1px solid",
                     borderColor: "divider",
-                    background: card.tone,
+                    background:
+                      card.tone === "primary"
+                        ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.primary.main, 0.04)})`
+                        : card.tone === "info"
+                          ? `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.16)}, ${alpha(theme.palette.info.main, 0.04)})`
+                          : card.tone === "warning"
+                            ? `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.18)}, ${alpha(theme.palette.warning.main, 0.04)})`
+                            : `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.16)}, ${alpha(theme.palette.secondary.main, 0.04)})`,
                     minHeight: 106,
-                  }}
+                  })}
                 >
                   <CardContent>
                     <Stack spacing={0.5}>
@@ -296,12 +306,12 @@ function RoomViewer({ rooms, roomAssignments }) {
 
           <Card
             elevation={0}
-            sx={{
+            sx={(theme) => ({
               border: "1px solid",
               borderColor: "divider",
               borderRadius: 2,
-              backgroundColor: "rgba(255,255,255,0.95)",
-            }}
+              backgroundColor: alpha(theme.palette.background.paper, 0.95),
+            })}
           >
             <CardContent>
               <Stack spacing={1.25}>
@@ -350,12 +360,12 @@ function RoomViewer({ rooms, roomAssignments }) {
               <Card
                 key={assignment._id}
                 elevation={0}
-                sx={{
+                sx={(theme) => ({
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 2,
-                  backgroundColor: "rgba(255,255,255,0.95)",
-                }}
+                  backgroundColor: alpha(theme.palette.background.paper, 0.95),
+                })}
               >
                 <CardContent>
                   <Stack spacing={1.5}>
@@ -469,14 +479,21 @@ function RoomViewer({ rooms, roomAssignments }) {
                           ]}
                           hideFooter
                           disableRowSelectionOnClick
-                          sx={{
+                          sx={(theme) => ({
                             borderRadius: 1.5,
                             borderColor: "divider",
+                            backgroundColor: alpha(
+                              theme.palette.background.paper,
+                              0.86,
+                            ),
                             "& .MuiDataGrid-columnHeaders": {
-                              backgroundColor: "rgba(25, 118, 210, 0.06)",
+                              backgroundColor: alpha(
+                                theme.palette.primary.main,
+                                0.14,
+                              ),
                               fontWeight: 700,
                             },
-                          }}
+                          })}
                         />
                       </Box>
                     )}

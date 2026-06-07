@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SearchIcon from "@mui/icons-material/Search";
 import { DataGrid } from "@mui/x-data-grid";
@@ -225,15 +226,17 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       {/* Top control card: title + search + result count. */}
       <Paper
         elevation={0}
-        sx={{
+        sx={(theme) => ({
           p: { xs: 2, md: 2.5 },
           borderRadius: 2.5,
           border: "1px solid",
           borderColor: "divider",
           background:
-            "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(244, 250, 248, 0.9))",
+            theme.palette.mode === "dark"
+              ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
+              : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
           backdropFilter: "blur(8px)",
-        }}
+        })}
       >
         <Stack spacing={1.25}>
           <Stack spacing={0.5}>
@@ -287,15 +290,15 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
             pagination: { paginationModel: { pageSize: 10, page: 0 } },
           }}
           onRowClick={(params) => toggleExpandedRow(params.id)}
-          sx={{
+          sx={(theme) => ({
             borderRadius: 1.75,
             borderColor: "divider",
-            backgroundColor: "rgba(255,255,255,0.93)",
+            backgroundColor: alpha(theme.palette.background.paper, 0.9),
             "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "rgba(25, 118, 210, 0.06)",
+              backgroundColor: alpha(theme.palette.primary.main, 0.14),
               fontWeight: 700,
             },
-          }}
+          })}
         />
       </Box>
 
@@ -307,23 +310,22 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
             <Accordion
               defaultExpanded
               elevation={0}
-              sx={{
+              sx={(theme) => ({
                 border: "1px solid",
                 borderColor: "divider",
                 borderRadius: "12px !important",
                 overflow: "hidden",
-                backgroundColor: "rgba(255,255,255,0.95)",
+                backgroundColor: alpha(theme.palette.background.paper, 0.95),
                 "&::before": { display: "none" },
-              }}
+              })}
             >
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  background:
-                    "linear-gradient(90deg, rgba(76, 175, 80, 0.08), rgba(76, 175, 80, 0.02))",
+                sx={(theme) => ({
+                  background: `linear-gradient(90deg, ${alpha(theme.palette.success.main, 0.08)}, ${alpha(theme.palette.success.main, 0.02)})`,
                   borderBottom: "1px solid",
                   borderColor: "divider",
-                }}
+                })}
               >
                 <Typography sx={{ fontWeight: 700 }}>
                   {row.name} Details
@@ -395,14 +397,21 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                       ]}
                       hideFooter
                       disableRowSelectionOnClick
-                      sx={{
+                      sx={(theme) => ({
                         borderRadius: 1.5,
                         borderColor: "divider",
+                        backgroundColor: alpha(
+                          theme.palette.background.paper,
+                          0.86,
+                        ),
                         "& .MuiDataGrid-columnHeaders": {
-                          backgroundColor: "rgba(25, 118, 210, 0.06)",
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.14,
+                          ),
                           fontWeight: 700,
                         },
-                      }}
+                      })}
                     />
                   </Box>
                 )}

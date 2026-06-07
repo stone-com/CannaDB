@@ -15,6 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
+import { alpha } from "@mui/material/styles";
 import SpaIcon from "@mui/icons-material/Spa";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import PlaceIcon from "@mui/icons-material/Place";
@@ -145,14 +146,13 @@ export default function AdminPanel() {
         {/* Intro banner uses Paper as a low-emphasis container with custom background. */}
         <Paper
           elevation={0}
-          sx={{
+          sx={(theme) => ({
             p: { xs: 2, md: 2.75 },
             borderRadius: 2.5,
             border: "1px solid",
             borderColor: "divider",
-            background:
-              "linear-gradient(105deg, rgba(0,95,115,0.1), rgba(10,147,150,0.06), rgba(255,255,255,0.96))",
-          }}
+            background: `linear-gradient(105deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.secondary.main, 0.06)}, ${alpha(theme.palette.background.paper, 0.96)})`,
+          })}
         >
           <Stack spacing={0.5}>
             <Typography variant="h4">Admin Operations Center</Typography>

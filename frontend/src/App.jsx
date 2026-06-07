@@ -20,8 +20,11 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
+import { alpha } from "@mui/material/styles";
 import InsightsIcon from "@mui/icons-material/Insights";
 import DatasetIcon from "@mui/icons-material/Dataset";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import MenuIcon from "@mui/icons-material/Menu";
 import SpaIcon from "@mui/icons-material/Spa";
@@ -66,7 +69,7 @@ const DATA_REFRESH_EVENTS = [
 ];
 
 // Main application shell and dashboard/workspace coordinator.
-function App() {
+function App({ darkMode, onToggleDarkMode }) {
   // Shared datasets used by dashboard cards and panels.
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -298,6 +301,16 @@ function App() {
             <Typography variant="body2" color="text.secondary">
               Total Plants: {totalPlants.toLocaleString()}
             </Typography>
+            {/* Theme toggle switches the entire app between light and dark modes. */}
+            <IconButton
+              size="small"
+              onClick={onToggleDarkMode}
+              aria-label={
+                darkMode ? "Switch to light mode" : "Switch to dark mode"
+              }
+            >
+              {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
+            </IconButton>
           </Stack>
         </Toolbar>
       </AppBar>
@@ -323,7 +336,9 @@ function App() {
                 borderRight: "1px solid",
                 borderColor: "divider",
                 background:
-                  "linear-gradient(180deg, rgba(0,95,115,0.06), rgba(255,255,255,0.95))",
+                  theme.palette.mode === "dark"
+                    ? `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.97)})`
+                    : `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.06)}, ${alpha(theme.palette.background.paper, 0.95)})`,
                 overflowX: "hidden",
                 transition: theme.transitions.create("width", {
                   duration: theme.transitions.duration.standard,
@@ -496,12 +511,11 @@ function App() {
             <Stack spacing={2}>
               {/* Hero summary card with nearest upcoming harvest details. */}
               <Card
-                sx={{
+                sx={(theme) => ({
                   border: "1px solid",
                   borderColor: "divider",
-                  background:
-                    "linear-gradient(120deg, rgba(0,95,115,0.14), rgba(10,147,150,0.08))",
-                }}
+                  background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.14)}, ${alpha(theme.palette.secondary.main, 0.08)})`,
+                })}
               >
                 <CardContent>
                   <Stack spacing={1.5}>
@@ -549,13 +563,22 @@ function App() {
                           <Grid key={label} size={{ xs: 12, md: 4 }}>
                             <Stack
                               spacing={0.25}
-                              sx={{
+                              sx={(theme) => ({
                                 p: 1.25,
                                 borderRadius: 1.5,
                                 border: "1px solid",
                                 borderColor: "divider",
-                                backgroundColor: "rgba(255,255,255,0.92)",
-                              }}
+                                backgroundColor:
+                                  theme.palette.mode === "dark"
+                                    ? alpha(
+                                        theme.palette.background.paper,
+                                        0.88,
+                                      )
+                                    : alpha(
+                                        theme.palette.background.paper,
+                                        0.92,
+                                      ),
+                              })}
                             >
                               <Typography
                                 variant="caption"
@@ -625,11 +648,10 @@ function App() {
               </Grid>
 
               <Card
-                sx={{
-                  background:
-                    "linear-gradient(120deg, rgba(0,95,115,0.94), rgba(10,147,150,0.9))",
-                  color: "#fff",
-                }}
+                sx={(theme) => ({
+                  background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.94)}, ${alpha(theme.palette.secondary.main, 0.9)})`,
+                  color: "common.white",
+                })}
               >
                 <CardContent>
                   <Stack

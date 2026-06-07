@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, IconButton, Paper, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import MinimizeIcon from "@mui/icons-material/Minimize";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
@@ -173,15 +174,14 @@ export default function DraggableWindow({
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          sx={{
+          sx={(theme) => ({
             px: 1.25,
             py: 0.8,
             borderBottom: "1px solid",
             borderColor: "divider",
-            background:
-              "linear-gradient(90deg, rgba(0,95,115,0.14), rgba(238,155,0,0.10))",
+            background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.14)}, ${alpha(theme.palette.secondary.main, 0.1)})`,
             cursor: "move",
-          }}
+          })}
         >
           {/* Title bar doubles as drag handle. */}
           <Stack direction="row" spacing={1} alignItems="center">
@@ -217,16 +217,15 @@ export default function DraggableWindow({
         {/* Bottom-right grab handle for manual resize. */}
         <Box
           onMouseDown={handleResizeMouseDown}
-          sx={{
+          sx={(theme) => ({
             position: "absolute",
             right: 0,
             bottom: 0,
             width: 16,
             height: 16,
             cursor: "nwse-resize",
-            background:
-              "linear-gradient(135deg, transparent 0 40%, rgba(0,0,0,0.18) 40% 55%, transparent 55% 70%, rgba(0,0,0,0.3) 70% 85%, transparent 85%)",
-          }}
+            background: `linear-gradient(135deg, transparent 0 40%, ${alpha(theme.palette.text.primary, 0.18)} 40% 55%, transparent 55% 70%, ${alpha(theme.palette.text.primary, 0.3)} 70% 85%, transparent 85%)`,
+          })}
         />
       </Paper>
     </Box>

@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
+import { alpha } from "@mui/material/styles";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import GrassIcon from "@mui/icons-material/Grass";
 import ScaleIcon from "@mui/icons-material/Scale";
@@ -143,25 +144,25 @@ function HarvestReportPage({ harvests }) {
         label: "Total Plants",
         value: selectedHarvest?.totalPlantCount ?? 0,
         icon: <GrassIcon fontSize="small" />,
-        tone: "linear-gradient(135deg, rgba(9, 121, 105, 0.14), rgba(9, 121, 105, 0.03))",
+        tone: "primary",
       },
       {
         label: "Total Wet (g)",
         value: selectedHarvest?.totalWetWeightGrams ?? 0,
         icon: <ScaleIcon fontSize="small" />,
-        tone: "linear-gradient(135deg, rgba(2, 136, 209, 0.16), rgba(2, 136, 209, 0.03))",
+        tone: "info",
       },
       {
         label: "Total Dry (g)",
         value: selectedHarvest?.totalDryWeightGrams ?? 0,
         icon: <ScaleIcon fontSize="small" />,
-        tone: "linear-gradient(135deg, rgba(245, 124, 0, 0.17), rgba(245, 124, 0, 0.03))",
+        tone: "warning",
       },
       {
         label: "Yield (g / sq ft)",
         value: selectedHarvest?.totalYieldGramsPerSquareFoot ?? "N/A",
         icon: <WarehouseIcon fontSize="small" />,
-        tone: "linear-gradient(135deg, rgba(123, 31, 162, 0.14), rgba(123, 31, 162, 0.03))",
+        tone: "secondary",
       },
     ],
     [selectedHarvest],
@@ -178,15 +179,17 @@ function HarvestReportPage({ harvests }) {
       {/* Header card: report title, selected date chip, and harvest selector. */}
       <Paper
         elevation={0}
-        sx={{
+        sx={(theme) => ({
           p: { xs: 2, md: 2.5 },
           borderRadius: 2.5,
           border: "1px solid",
           borderColor: "divider",
           background:
-            "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(244, 250, 248, 0.9))",
+            theme.palette.mode === "dark"
+              ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
+              : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
           backdropFilter: "blur(8px)",
-        }}
+        })}
       >
         <Stack spacing={1.25}>
           <Stack
@@ -247,13 +250,20 @@ function HarvestReportPage({ harvests }) {
               <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
                 <Card
                   elevation={0}
-                  sx={{
+                  sx={(theme) => ({
                     borderRadius: 2,
                     border: "1px solid",
                     borderColor: "divider",
-                    background: card.tone,
+                    background:
+                      card.tone === "primary"
+                        ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.primary.main, 0.04)})`
+                        : card.tone === "info"
+                          ? `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.16)}, ${alpha(theme.palette.info.main, 0.04)})`
+                          : card.tone === "warning"
+                            ? `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.18)}, ${alpha(theme.palette.warning.main, 0.04)})`
+                            : `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.16)}, ${alpha(theme.palette.secondary.main, 0.04)})`,
                     minHeight: 108,
-                  }}
+                  })}
                 >
                   <CardContent>
                     <Stack spacing={0.5}>
@@ -282,13 +292,16 @@ function HarvestReportPage({ harvests }) {
 
           <Paper
             elevation={0}
-            sx={{
+            sx={(theme) => ({
               p: { xs: 1.5, md: 2 },
               borderRadius: 2.25,
               border: "1px solid",
               borderColor: "divider",
-              background: "rgba(255,255,255,0.9)",
-            }}
+              background:
+                theme.palette.mode === "dark"
+                  ? alpha(theme.palette.background.paper, 0.9)
+                  : alpha(theme.palette.background.paper, 0.9),
+            })}
           >
             {/* Key/value metadata block for quick harvest context. */}
             <Grid container spacing={1.25}>
@@ -342,24 +355,23 @@ function HarvestReportPage({ harvests }) {
                 key={section.roomSectionKey}
                 defaultExpanded
                 elevation={0}
-                sx={{
+                sx={(theme) => ({
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: "12px !important",
                   overflow: "hidden",
-                  backgroundColor: "rgba(255,255,255,0.95)",
+                  backgroundColor: alpha(theme.palette.background.paper, 0.95),
                   "&::before": { display: "none" },
-                }}
+                })}
               >
                 {/* Each accordion represents one room with a strain table inside. */}
                 <AccordionSummary
                   expandIcon={<ExpandMoreIcon />}
-                  sx={{
-                    background:
-                      "linear-gradient(90deg, rgba(76, 175, 80, 0.08), rgba(76, 175, 80, 0.02))",
+                  sx={(theme) => ({
+                    background: `linear-gradient(90deg, ${alpha(theme.palette.success.main, 0.08)}, ${alpha(theme.palette.success.main, 0.02)})`,
                     borderBottom: "1px solid",
                     borderColor: "divider",
-                  }}
+                  })}
                 >
                   <Stack>
                     <Typography sx={{ fontWeight: 800 }}>
@@ -434,14 +446,21 @@ function HarvestReportPage({ harvests }) {
                           }}
                           disableRowSelectionOnClick
                           onRowClick={(params) => toggleExpandedRow(params.id)}
-                          sx={{
+                          sx={(theme) => ({
                             borderRadius: 1.5,
                             borderColor: "divider",
+                            backgroundColor: alpha(
+                              theme.palette.background.paper,
+                              0.86,
+                            ),
                             "& .MuiDataGrid-columnHeaders": {
-                              backgroundColor: "rgba(25, 118, 210, 0.06)",
+                              backgroundColor: alpha(
+                                theme.palette.primary.main,
+                                0.14,
+                              ),
                               fontWeight: 700,
                             },
-                          }}
+                          })}
                         />
                       </Box>
 
@@ -493,14 +512,16 @@ function HarvestReportPage({ harvests }) {
                                       >
                                         <Stack
                                           spacing={0.25}
-                                          sx={{
+                                          sx={(theme) => ({
                                             p: 1,
                                             borderRadius: 1.25,
                                             border: "1px solid",
                                             borderColor: "divider",
-                                            backgroundColor:
-                                              "rgba(250, 250, 250, 0.95)",
-                                          }}
+                                            backgroundColor: alpha(
+                                              theme.palette.background.paper,
+                                              0.95,
+                                            ),
+                                          })}
                                         >
                                           <Typography
                                             variant="caption"
