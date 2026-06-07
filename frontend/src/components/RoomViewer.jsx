@@ -21,6 +21,18 @@ import { DataGrid } from "@mui/x-data-grid";
 import { BarChart } from "@mui/x-charts";
 import { formatDate } from "../utils/formatDate";
 
+function toDaysDelta(fromValue, toValue) {
+  const from = new Date(fromValue);
+  const to = new Date(toValue);
+
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return null;
+  }
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.ceil((to.getTime() - from.getTime()) / msPerDay);
+}
+
 // Room-level dashboard for active assignments and strain distribution.
 // Show active batch and plant data for one room.
 function RoomViewer({ rooms, roomAssignments }) {
@@ -355,6 +367,12 @@ function RoomViewer({ rooms, roomAssignments }) {
               (sum, row) => sum + (Number(row.count) || 0),
               0,
             );
+            const daysInRoom = assignment?.startedAt
+              ? toDaysDelta(assignment.startedAt, new Date())
+              : null;
+            const daysUntilHarvest = batch?.harvestDate
+              ? toDaysDelta(new Date(), batch.harvestDate)
+              : null;
 
             return (
               <Card
@@ -395,15 +413,38 @@ function RoomViewer({ rooms, roomAssignments }) {
 
                     <Grid container spacing={1.25}>
                       {[
-                        ["Clone Date", formatDate(batch?.cloneDate)],
-                        ["Harvest Date", formatDate(batch?.harvestDate)],
-                        ["Batch Type", batch?.batchType || "production"],
-                        ["Plants in Room", batchTotalPlants],
-                      ].map(([label, value]) => (
+                        {
+                          label: "Clone Date",
+                          value: formatDate(batch?.cloneDate),
+                          detail: "Batch origin date",
+                        },
+                        {
+                          label: "Harvest Date",
+                          value: formatDate(batch?.harvestDate),
+                          detail:
+                            daysUntilHarvest === null
+                              ? "No harvest date set"
+                              : daysUntilHarvest < 0
+                                ? `${Math.abs(daysUntilHarvest)} days overdue`
+                                : daysUntilHarvest === 0
+                                  ? "Harvest is today"
+                                  : `${daysUntilHarvest} days until harvest`,
+                        },
+                        {
+                          label: "Time in Room",
+                          value:
+                            daysInRoom === null
+                              ? "N/A"
+                              : `${daysInRoom} day${daysInRoom === 1 ? "" : "s"}`,
+                          detail: batch?.lifecycleStage
+                            ? `Current stage: ${batch.lifecycleStage}`
+                            : "Current assignment duration",
+                        },
+                      ].map((meta) => (
                         // Render one metadata tile for each batch detail field.
                         <Grid
-                          key={`${assignment._id}-${label}`}
-                          size={{ xs: 12, md: 3 }}
+                          key={`${assignment._id}-${meta.label}`}
+                          size={{ xs: 12, md: 4 }}
                         >
                           <Stack
                             spacing={0.25}
@@ -419,13 +460,19 @@ function RoomViewer({ rooms, roomAssignments }) {
                               variant="caption"
                               color="text.secondary"
                             >
-                              {label}
+                              {meta.label}
                             </Typography>
                             <Typography
                               variant="body2"
                               sx={{ fontWeight: 700 }}
                             >
-                              {value}
+                              {meta.value}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {meta.detail}
                             </Typography>
                           </Stack>
                         </Grid>
