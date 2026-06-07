@@ -107,7 +107,7 @@ function getBatchCompletionState(batchLike) {
       batchLike?.stage ??
       batchLike?.lifecycleStage ??
       batchLike?.status ??
-      ""
+      "",
   ).toLowerCase();
 }
 
@@ -141,7 +141,7 @@ function getHarvestDryWeightTotal(harvest) {
         entry?.weight ??
         entry?.amount ??
         entry?.value ??
-        0
+        0,
     );
 
     return Number.isFinite(numericValue) ? sum + numericValue : sum;
@@ -175,7 +175,7 @@ async function recalculateStrainAverageDryWeights() {
   const strainNameToId = new Map(
     strains
       .filter((strain) => strain?.name)
-      .map((strain) => [String(strain.name).toLowerCase(), String(strain._id)])
+      .map((strain) => [String(strain.name).toLowerCase(), String(strain._id)]),
   );
 
   const batchToStrainId = new Map();
@@ -199,7 +199,7 @@ async function recalculateStrainAverageDryWeights() {
 
   const completedBatchIds = Array.from(batchToStrainId.keys());
   const averagesByStrainId = new Map(
-    strains.map((strain) => [String(strain._id), []])
+    strains.map((strain) => [String(strain._id), []]),
   );
 
   if (completedBatchIds.length) {
