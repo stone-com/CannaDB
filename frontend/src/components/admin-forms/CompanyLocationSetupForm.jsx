@@ -1,12 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Card,
   CardActionArea,
   CardContent,
   Stack,
-  Tab,
-  Tabs,
   Typography,
 } from "@mui/material";
 import ApartmentIcon from "@mui/icons-material/Apartment";
@@ -40,11 +38,6 @@ const ORG_ACTIONS = [
 // Consolidated organization setup workspace with action-based navigation.
 export default function CompanyLocationSetupForm({ embedded }) {
   const [activeAction, setActiveAction] = useState(ORG_ACTIONS[0].key);
-
-  const activeActionIndex = useMemo(
-    () => ORG_ACTIONS.findIndex((action) => action.key === activeAction),
-    [activeAction],
-  );
 
   const content = (
     <Stack spacing={2.25}>
@@ -99,19 +92,6 @@ export default function CompanyLocationSetupForm({ embedded }) {
           );
         })}
       </Box>
-
-      <Tabs
-        value={Math.max(activeActionIndex, 0)}
-        onChange={(_, tabIndex) => {
-          const next = ORG_ACTIONS[tabIndex];
-          if (next) setActiveAction(next.key);
-        }}
-        variant="fullWidth"
-      >
-        <Tab label="Add Company" />
-        <Tab label="Add Location" />
-        <Tab label="Edit Location" />
-      </Tabs>
 
       <Box>
         {activeAction === "addCompany" && <CompanyForm embedded />}
