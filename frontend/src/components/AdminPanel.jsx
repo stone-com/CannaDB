@@ -156,10 +156,6 @@ export default function AdminPanel() {
         >
           <Stack spacing={0.5}>
             <Typography variant="h4">Admin Operations Center</Typography>
-            <Typography color="text.secondary" sx={{ maxWidth: 900 }}>
-              Use structured workflows to manage core records, batch movement,
-              and propagation tasks with fewer clicks and clearer context.
-            </Typography>
           </Stack>
         </Paper>
 

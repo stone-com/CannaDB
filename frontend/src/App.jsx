@@ -646,33 +646,6 @@ function App({ darkMode, onToggleDarkMode }) {
                   </Card>
                 </Grid>
               </Grid>
-
-              <Card
-                sx={(theme) => ({
-                  background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.94)}, ${alpha(theme.palette.secondary.main, 0.9)})`,
-                  color: "common.white",
-                })}
-              >
-                <CardContent>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{ mb: 1 }}
-                  >
-                    <DatasetIcon />
-                    <Typography variant="h5">Operations Workspace</Typography>
-                  </Stack>
-                  <Typography
-                    variant="body1"
-                    sx={{ maxWidth: 780, opacity: 0.95 }}
-                  >
-                    Open any panel from the left rail to run analytics, room
-                    analysis, and harvest workflows in parallel draggable
-                    windows.
-                  </Typography>
-                </CardContent>
-              </Card>
             </Stack>
           )}
 
