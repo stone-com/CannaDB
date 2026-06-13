@@ -24,6 +24,37 @@ import WarehouseIcon from "@mui/icons-material/Warehouse";
 import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
+const roundToTenth = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return Math.round(num * 10) / 10;
+};
+
+const formatHarvestMetric = (value) => {
+  if (value === null || value === undefined || value === "N/A") return "N/A";
+  if (typeof value === "string" && value.trim() === "") return "N/A";
+
+  const rounded = roundToTenth(value);
+  if (rounded === null) return value;
+
+  return rounded.toLocaleString(undefined, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+};
+
+const formatHarvestPercent = (value) => {
+  const formatted = formatHarvestMetric(value);
+  return formatted === "N/A" ? formatted : `${formatted}%`;
+};
+
+const formatToteWeights = (totes) => {
+  if (!Array.isArray(totes) || totes.length === 0) return "None";
+  return totes
+    .map((tote) => formatHarvestMetric(tote?.wetWeight ?? 0))
+    .join(", ");
+};
+
 // Build dropdown label for one harvest.
 const buildHarvestOptionLabel = (harvest) => {
   // This helper keeps dropdown label formatting in one place.
@@ -84,7 +115,8 @@ function HarvestReportPage({ harvests }) {
       const roomId = roomEntry?.roomId;
       const roomName = roomId?.name || "N/A";
       const roomType = roomId?.type || "N/A";
-      const roomSqFoot = roomId?.sqFoot ?? "N/A";
+      const roomSqFoot =
+        roomId?.sqFoot == null ? "N/A" : roundToTenth(roomId.sqFoot);
       const roomSectionKey = `${selectedHarvest._id}-room-${roomIndex}`;
 
       const strains = Array.isArray(roomEntry?.strains)
@@ -130,12 +162,9 @@ function HarvestReportPage({ harvests }) {
 
   const locationName = selectedHarvest?.locationId?.nickname || "N/A";
 
-  const formatMetric = (value) => {
-    // Keep metric rendering safe for mixed number/string/missing values.
-    if (value === null || value === undefined || value === "N/A") return "N/A";
-    if (typeof value === "number") return value.toLocaleString();
-    return value;
-  };
+  const formatMetric = formatHarvestMetric;
+
+  const gridValueFormatter = (value) => formatHarvestMetric(value);
 
   const summaryCards = useMemo(
     // Metadata array used to render summary cards with one map() pass.
@@ -378,7 +407,7 @@ function HarvestReportPage({ harvests }) {
                       Room: {section.roomName} ({section.roomType})
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Sq Ft: {section.roomSqFoot} • Strains:{" "}
+                      Sq Ft: {formatMetric(section.roomSqFoot)} • Strains:{" "}
                       {section.strainRows.length}
                     </Typography>
                   </Stack>
@@ -410,6 +439,7 @@ function HarvestReportPage({ harvests }) {
                               type: "number",
                               flex: 0.8,
                               minWidth: 120,
+                              valueFormatter: gridValueFormatter,
                             },
                             {
                               field: "totalWetWeightGrams",
@@ -417,6 +447,7 @@ function HarvestReportPage({ harvests }) {
                               type: "number",
                               flex: 0.9,
                               minWidth: 130,
+                              valueFormatter: gridValueFormatter,
                             },
                             {
                               field: "totalDryWeightGrams",
@@ -424,18 +455,21 @@ function HarvestReportPage({ harvests }) {
                               type: "number",
                               flex: 0.9,
                               minWidth: 130,
+                              valueFormatter: gridValueFormatter,
                             },
                             {
                               field: "yieldGramsPerSquareFoot",
                               headerName: "Yield (g/sq ft)",
                               flex: 0.9,
                               minWidth: 130,
+                              valueFormatter: gridValueFormatter,
                             },
                             {
                               field: "dryPlantAvgWeightGrams",
                               headerName: "Dry Avg (g/plant)",
                               flex: 1,
                               minWidth: 140,
+                              valueFormatter: gridValueFormatter,
                             },
                           ]}
                           pageSizeOptions={[5, 10]}
@@ -489,21 +523,15 @@ function HarvestReportPage({ harvests }) {
                                     {[
                                       [
                                         "Wet Avg / Plant (g)",
-                                        row.wetPlantAvgWeightGrams,
+                                        formatHarvestMetric(row.wetPlantAvgWeightGrams),
                                       ],
                                       [
                                         "% Change Wet→Dry",
-                                        row.percentChangeWetToDry,
+                                        formatHarvestPercent(row.percentChangeWetToDry),
                                       ],
                                       [
                                         "Tote Wet Weights",
-                                        row.totes.length === 0
-                                          ? "None"
-                                          : row.totes
-                                              .map(
-                                                (tote) => tote?.wetWeight ?? 0,
-                                              )
-                                              .join(", "),
+                                        formatToteWeights(row.totes),
                                       ],
                                     ].map(([label, value]) => (
                                       <Grid

@@ -11,8 +11,6 @@ const {
 } = require("../utils/plantHelpers");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
 
-// Shared populate config so assignment responses include room details,
-// batch summary info, and readable strain data.
 const ROOM_ASSIGNMENT_POPULATE = [
   {
     path: "roomId",
@@ -28,11 +26,13 @@ const ROOM_ASSIGNMENT_POPULATE = [
 
 router.get("/", async (req, res) => {
   try {
-    // By default, only return active assignments unless the client asks for all.
     const activeOnly = req.query.active !== "false";
-    const filter = activeOnly ? { active: true } : {};
 
-    // Newest assignments first makes current activity easier to read in the UI.
+    // Always filter by tenantId so we only return this org's assignments.
+    const filter = activeOnly
+      ? { tenantId: req.tenantId, active: true }
+      : { tenantId: req.tenantId };
+
     const assignments = await RoomAssignment.find(filter)
       .sort({ createdAt: -1 })
       .populate(ROOM_ASSIGNMENT_POPULATE);
@@ -57,8 +57,10 @@ router.post("/", async (req, res) => {
     const result = await runWithOptionalTransaction(
       mongoose,
       async (session) => {
-        // First confirm the destination room exists.
-        const roomQuery = Room.findById(roomId);
+        const roomQuery = Room.findOne({
+          tenantId: req.tenantId,
+          _id: roomId,
+        });
         if (session) roomQuery.session(session);
         const room = await roomQuery;
 
@@ -66,13 +68,11 @@ router.post("/", async (req, res) => {
           return { status: 404, body: { error: "Room not found" } };
         }
 
-        // No batchId means unassign this room.
         if (!normalizedBatchId) {
           const now = new Date();
 
-          // End every active assignment currently attached to this room.
           const unassignResult = await RoomAssignment.updateMany(
-            { roomId, active: true },
+            { tenantId: req.tenantId, roomId, active: true },
             { $set: { active: false, endedAt: now } },
             session ? { session } : undefined,
           );
@@ -91,8 +91,10 @@ router.post("/", async (req, res) => {
           };
         }
 
-        // Otherwise, load the batch we want to place into the room.
-        const batchQuery = Batch.findById(normalizedBatchId);
+        const batchQuery = Batch.findOne({
+          tenantId: req.tenantId,
+          _id: normalizedBatchId,
+        });
         if (session) batchQuery.session(session);
         const batch = await batchQuery;
 
@@ -100,7 +102,6 @@ router.post("/", async (req, res) => {
           return { status: 404, body: { error: "Batch not found" } };
         }
 
-        // A batch can only be assigned into rooms at its own location.
         if (
           batch.location &&
           String(batch.location) !== String(room.locationId)
@@ -116,13 +117,12 @@ router.post("/", async (req, res) => {
 
         const now = new Date();
 
-        // Look at current active assignments first.
-        // If the batch is already split across rooms, those assignments are the
-        // live source of truth for plant counts.
         const activeAssignmentsQuery = RoomAssignment.find({
+          tenantId: req.tenantId,
           batchId: normalizedBatchId,
           active: true,
         }).select("assignedPlants");
+
         if (session) activeAssignmentsQuery.session(session);
         const activeAssignments = await activeAssignmentsQuery;
 
@@ -131,15 +131,14 @@ router.post("/", async (req, res) => {
             ? aggregateAssignmentTotalsMap(activeAssignments)
             : aggregatePlantTotalsMap(batch.rooms);
 
-        // Keep one active assignment per batch.
         await RoomAssignment.updateMany(
-          { batchId: normalizedBatchId, active: true },
+          { tenantId: req.tenantId, batchId: normalizedBatchId, active: true },
           { $set: { active: false, endedAt: now } },
           session ? { session } : undefined,
         );
 
-        // Create the new active assignment for this room.
         const assignment = new RoomAssignment({
+          tenantId: req.tenantId,
           batchId: normalizedBatchId,
           roomId,
           assignedPlants: mapTotalsToPlants(assignmentTotals),
@@ -165,9 +164,10 @@ router.post("/", async (req, res) => {
       return res.status(result.status).json(result.body);
     }
 
-    const populatedAssignment = await RoomAssignment.findById(
-      result.assignmentId,
-    ).populate(ROOM_ASSIGNMENT_POPULATE);
+    const populatedAssignment = await RoomAssignment.findOne({
+      tenantId: req.tenantId,
+      _id: result.assignmentId,
+    }).populate(ROOM_ASSIGNMENT_POPULATE);
 
     return res.status(201).json(populatedAssignment);
   } catch (error) {
@@ -186,8 +186,11 @@ router.patch("/:id", async (req, res) => {
   try {
     const { active, endedAt, notes } = req.body;
 
-    // Load the assignment first so we can patch only the fields that were sent.
-    const assignment = await RoomAssignment.findById(req.params.id);
+    const assignment = await RoomAssignment.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    });
+
     if (!assignment) {
       return res.status(404).json({ error: "Assignment not found" });
     }
@@ -196,8 +199,6 @@ router.patch("/:id", async (req, res) => {
     if (endedAt !== undefined) assignment.endedAt = endedAt;
     if (notes !== undefined) assignment.notes = notes;
 
-    // If the client turns an assignment off without an end time,
-    // close it using the current time.
     if (active === false && endedAt === undefined) {
       assignment.endedAt = new Date();
     }

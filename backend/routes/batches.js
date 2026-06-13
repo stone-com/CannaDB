@@ -47,9 +47,10 @@ const NEXT_STAGE_BY_BATCH_TYPE = {
 };
 
 // Promote production batches to HarvestReady once their harvest date is due.
-async function autoPromoteDueBatchesToHarvestReady(session = null) {
+async function autoPromoteDueBatchesToHarvestReady(tenantId, session = null) {
   const now = new Date();
   const query = {
+    tenantId,
     batchType: "production",
     harvestId: null,
     harvestDate: { $ne: null, $lte: now },
@@ -74,8 +75,14 @@ async function autoPromoteDueBatchesToHarvestReady(session = null) {
 // Get the current total plants for a batch by strain.
 // Active room assignments are the main source of truth.
 // If none exist yet, fall back to the batch's stored room data.
-async function getCurrentBatchTotals(batchId, fallbackRooms, session = null) {
+async function getCurrentBatchTotals(
+  batchId,
+  fallbackRooms,
+  tenantId,
+  session = null,
+) {
   const assignmentQuery = RoomAssignment.find({
+    tenantId,
     batchId,
     active: true,
   }).select("roomId assignedPlants");
@@ -93,13 +100,14 @@ async function getCurrentBatchTotals(batchId, fallbackRooms, session = null) {
 
 // Replace each batch's rooms with rooms built from active assignments when available.
 // This lets the API return the live room state without needing duplicate active data on Batch.
-async function attachDerivedRoomsToBatches(batches) {
+async function attachDerivedRoomsToBatches(batches, tenantId) {
   if (!Array.isArray(batches) || batches.length === 0) {
     return [];
   }
 
   const batchIds = batches.map((batch) => batch._id);
   const assignments = await RoomAssignment.find({
+    tenantId,
     active: true,
     batchId: { $in: batchIds },
   })
@@ -135,14 +143,18 @@ async function attachDerivedRoomsToBatches(batches) {
 
 // Build a unique batch number for new mom batches.
 // It re-tries with a timestamp-based suffix until it finds an unused value.
-async function buildUniqueMomBatchNumber(baseBatchNumber, session = null) {
+async function buildUniqueMomBatchNumber(
+  baseBatchNumber,
+  tenantId,
+  session = null,
+) {
   const normalizedBase = baseBatchNumber || "BATCH";
 
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const suffix = `${Date.now()}-${attempt}`;
     const candidate = `${normalizedBase}-MOM-${suffix}`;
     // eslint-disable-next-line no-await-in-loop
-    const existsQuery = Batch.exists({ batchNumber: candidate });
+    const existsQuery = Batch.exists({ tenantId, batchNumber: candidate });
     if (session) existsQuery.session(session);
     // eslint-disable-next-line no-await-in-loop
     const exists = await existsQuery;
@@ -168,6 +180,7 @@ router.post("/", async (req, res) => {
 
     // New batches start in Clone stage.
     const batch = new Batch({
+      tenantId: req.tenantId,
       batchNumber,
       cloneDate,
       harvestDate: harvestDate || null,
@@ -193,11 +206,12 @@ router.post("/", async (req, res) => {
 // List batches.
 router.get("/", async (req, res) => {
   try {
-    await autoPromoteDueBatchesToHarvestReady();
+    await autoPromoteDueBatchesToHarvestReady(req.tenantId);
 
-    // Load saved batch data, then swap in live room state from active assignments.
-    const batches = await Batch.find().populate(BATCH_POPULATE);
-    const hydrated = await attachDerivedRoomsToBatches(batches);
+    const batches = await Batch.find({ tenantId: req.tenantId }).populate(
+      BATCH_POPULATE,
+    );
+    const hydrated = await attachDerivedRoomsToBatches(batches, req.tenantId);
     res.json(hydrated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -214,8 +228,8 @@ router.post("/:id/move", async (req, res) => {
     }
 
     const [batch, room] = await Promise.all([
-      Batch.findById(req.params.id),
-      Room.findById(roomId),
+      Batch.findOne({ tenantId: req.tenantId, _id: req.params.id }),
+      Room.findOne({ tenantId: req.tenantId, _id: roomId }),
     ]);
 
     if (!batch) {
@@ -244,17 +258,22 @@ router.post("/:id/move", async (req, res) => {
 
         // Close any current active room placements for this batch.
         await RoomAssignment.updateMany(
-          { batchId: batch._id, active: true },
+          { tenantId: req.tenantId, batchId: batch._id, active: true },
           { $set: { active: false, endedAt: now } },
           session ? { session } : undefined,
         );
 
-        // Create the new active room assignment using the batch's current plant totals.
         const assignment = new RoomAssignment({
+          tenantId: req.tenantId,
           batchId: batch._id,
           roomId,
           assignedPlants: mapTotalsToPlants(
-            await getCurrentBatchTotals(batch._id, batch.rooms, session),
+            await getCurrentBatchTotals(
+              batch._id,
+              batch.rooms,
+              req.tenantId,
+              session,
+            ),
           ),
           active: true,
           source: "manual",
@@ -277,8 +296,13 @@ router.post("/:id/move", async (req, res) => {
     );
 
     const [batchDoc, populatedAssignment] = await Promise.all([
-      Batch.findById(batch._id).populate(BATCH_POPULATE),
-      RoomAssignment.findById(savedAssignmentId).populate([
+      Batch.findOne({ tenantId: req.tenantId, _id: batch._id }).populate(
+        BATCH_POPULATE,
+      ),
+      RoomAssignment.findOne({
+        tenantId: req.tenantId,
+        _id: savedAssignmentId,
+      }).populate([
         {
           path: "roomId",
           populate: { path: "locationId" },
@@ -292,7 +316,10 @@ router.post("/:id/move", async (req, res) => {
       ]),
     ]);
 
-    const [populatedBatch] = await attachDerivedRoomsToBatches([batchDoc]);
+    const [populatedBatch] = await attachDerivedRoomsToBatches(
+      [batchDoc],
+      req.tenantId,
+    );
 
     res.status(201).json({
       batch: populatedBatch,
@@ -316,13 +343,19 @@ router.post("/:id/assign-rooms", async (req, res) => {
       destroyUnallocated,
     } = req.body;
 
-    const batch = await Batch.findById(req.params.id);
+    const batch = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    });
     if (!batch) {
       return res.status(404).json({ error: "Batch not found" });
     }
 
-    // Start from the batch's current live plant totals.
-    const currentTotals = await getCurrentBatchTotals(batch._id, batch.rooms);
+    const currentTotals = await getCurrentBatchTotals(
+      batch._id,
+      batch.rooms,
+      req.tenantId,
+    );
     const normalizedMode = mode === "split" ? "split" : "whole";
 
     let normalizedAssignments = [];
@@ -457,9 +490,10 @@ router.post("/:id/assign-rooms", async (req, res) => {
       ...new Set(normalizedAssignments.map((entry) => String(entry.roomId))),
     ];
 
-    const roomDocs = await Room.find({ _id: { $in: uniqueRoomIds } }).select(
-      "_id locationId",
-    );
+    const roomDocs = await Room.find({
+      tenantId: req.tenantId,
+      _id: { $in: uniqueRoomIds },
+    }).select("_id locationId");
 
     if (roomDocs.length !== uniqueRoomIds.length) {
       return res
@@ -486,12 +520,11 @@ router.post("/:id/assign-rooms", async (req, res) => {
 
         // End current active assignments before writing the new room layout.
         await RoomAssignment.updateMany(
-          { batchId: batch._id, active: true },
+          { tenantId: req.tenantId, batchId: batch._id, active: true },
           { $set: { active: false, endedAt: now } },
           session ? { session } : undefined,
         );
 
-        // Create one active assignment per selected room.
         const savedAssignments = await RoomAssignment.insertMany(
           uniqueRoomIds.map((id) => {
             const roomAssignmentEntry = normalizedAssignments.find(
@@ -499,6 +532,7 @@ router.post("/:id/assign-rooms", async (req, res) => {
             );
 
             return {
+              tenantId: req.tenantId,
               batchId: batch._id,
               roomId: id,
               assignedPlants: roomAssignmentEntry?.plants || [],
@@ -540,13 +574,19 @@ router.post("/:id/assign-rooms", async (req, res) => {
     );
 
     const [updatedBatchDoc, populatedAssignments] = await Promise.all([
-      Batch.findById(batch._id).populate(BATCH_POPULATE),
+      Batch.findOne({ tenantId: req.tenantId, _id: batch._id }).populate(
+        BATCH_POPULATE,
+      ),
       RoomAssignment.find({
+        tenantId: req.tenantId,
         _id: { $in: savedAssignmentIds },
       }).populate(ROOM_ASSIGNMENT_POPULATE),
     ]);
 
-    const [updatedBatch] = await attachDerivedRoomsToBatches([updatedBatchDoc]);
+    const [updatedBatch] = await attachDerivedRoomsToBatches(
+      [updatedBatchDoc],
+      req.tenantId,
+    );
 
     res.status(201).json({
       batch: updatedBatch,
@@ -573,9 +613,10 @@ router.post("/:id/create-moms", async (req, res) => {
   try {
     const { plants, momRoomId, notes } = req.body;
 
-    const sourceBatch = await Batch.findById(req.params.id).populate(
-      BATCH_POPULATE,
-    );
+    const sourceBatch = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    }).populate(BATCH_POPULATE);
     if (!sourceBatch) {
       return res.status(404).json({ error: "Source batch not found" });
     }
@@ -603,6 +644,7 @@ router.post("/:id/create-moms", async (req, res) => {
     const availableTotals = await getCurrentBatchTotals(
       sourceBatch._id,
       sourceBatch.rooms,
+      req.tenantId,
     );
     const requestedCuts = new Map();
 
@@ -632,12 +674,16 @@ router.post("/:id/create-moms", async (req, res) => {
     let momRoom = null;
 
     if (momRoomId) {
-      momRoom = await Room.findById(momRoomId);
+      momRoom = await Room.findOne({
+        tenantId: req.tenantId,
+        _id: momRoomId,
+      });
       if (!momRoom) {
         return res.status(404).json({ error: "Selected mom room not found" });
       }
     } else {
       momRoom = await Room.findOne({
+        tenantId: req.tenantId,
         locationId: sourceBatch.location,
         type: "Mom",
       });
@@ -660,6 +706,7 @@ router.post("/:id/create-moms", async (req, res) => {
 
         // Load active assignments so the cut is based on the live room layout.
         const activeAssignmentsQuery = RoomAssignment.find({
+          tenantId: req.tenantId,
           batchId: sourceBatch._id,
           active: true,
         });
@@ -686,11 +733,12 @@ router.post("/:id/create-moms", async (req, res) => {
 
         const momBatchNumber = await buildUniqueMomBatchNumber(
           sourceBatch.batchNumber,
+          req.tenantId,
           session,
         );
 
-        // Create the new mom batch.
         const momBatch = new Batch({
+          tenantId: req.tenantId,
           batchNumber: momBatchNumber,
           cloneDate: now,
           harvestDate: null,
@@ -740,6 +788,7 @@ router.post("/:id/create-moms", async (req, res) => {
 
         // Create the first active room assignment for the new mom batch.
         const momAssignment = new RoomAssignment({
+          tenantId: req.tenantId,
           batchId: savedMomBatch._id,
           roomId: momRoom._id,
           assignedPlants: momPlants,
@@ -762,15 +811,23 @@ router.post("/:id/create-moms", async (req, res) => {
 
     const [sourceBatchDoc, momBatchDoc, populatedMomAssignment] =
       await Promise.all([
-        Batch.findById(sourceBatch._id).populate(BATCH_POPULATE),
-        Batch.findById(savedMomBatchId).populate(BATCH_POPULATE),
-        RoomAssignment.findById(momAssignmentId).populate(
-          ROOM_ASSIGNMENT_POPULATE,
+        Batch.findOne({ tenantId: req.tenantId, _id: sourceBatch._id }).populate(
+          BATCH_POPULATE,
         ),
+        Batch.findOne({ tenantId: req.tenantId, _id: savedMomBatchId }).populate(
+          BATCH_POPULATE,
+        ),
+        RoomAssignment.findOne({
+          tenantId: req.tenantId,
+          _id: momAssignmentId,
+        }).populate(ROOM_ASSIGNMENT_POPULATE),
       ]);
 
     const [updatedSourceBatch, populatedMomBatch] =
-      await attachDerivedRoomsToBatches([sourceBatchDoc, momBatchDoc]);
+      await attachDerivedRoomsToBatches(
+        [sourceBatchDoc, momBatchDoc],
+        req.tenantId,
+      );
 
     res.status(201).json({
       sourceBatch: updatedSourceBatch,
@@ -805,12 +862,19 @@ router.post("/:id/destroy-plants", async (req, res) => {
       return res.status(400).json({ error: "count must be a positive number" });
     }
 
-    const batch = await Batch.findById(req.params.id).populate(BATCH_POPULATE);
+    const batch = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    }).populate(BATCH_POPULATE);
     if (!batch) {
       return res.status(404).json({ error: "Batch not found" });
     }
 
-    const currentTotals = await getCurrentBatchTotals(batch._id, batch.rooms);
+    const currentTotals = await getCurrentBatchTotals(
+      batch._id,
+      batch.rooms,
+      req.tenantId,
+    );
     const available = currentTotals.get(normalizedStrainId) || 0;
 
     if (available < removeCount) {
@@ -825,6 +889,7 @@ router.post("/:id/destroy-plants", async (req, res) => {
         const now = new Date();
 
         const activeAssignmentsQuery = RoomAssignment.find({
+          tenantId: req.tenantId,
           batchId: batch._id,
           active: true,
         }).sort({ createdAt: 1 });
@@ -916,6 +981,7 @@ router.post("/:id/destroy-plants", async (req, res) => {
           }
 
           const refreshedAssignmentsQuery = RoomAssignment.find({
+            tenantId: req.tenantId,
             batchId: batch._id,
             active: true,
           }).select("roomId assignedPlants");
@@ -975,15 +1041,21 @@ router.post("/:id/destroy-plants", async (req, res) => {
     );
 
     const [updatedBatchDoc, changedAssignments] = await Promise.all([
-      Batch.findById(batch._id).populate(BATCH_POPULATE),
+      Batch.findOne({ tenantId: req.tenantId, _id: batch._id }).populate(
+        BATCH_POPULATE,
+      ),
       changedAssignmentIds.length > 0
-        ? RoomAssignment.find({ _id: { $in: changedAssignmentIds } }).populate(
-            ROOM_ASSIGNMENT_POPULATE,
-          )
+        ? RoomAssignment.find({
+            tenantId: req.tenantId,
+            _id: { $in: changedAssignmentIds },
+          }).populate(ROOM_ASSIGNMENT_POPULATE)
         : Promise.resolve([]),
     ]);
 
-    const [updatedBatch] = await attachDerivedRoomsToBatches([updatedBatchDoc]);
+    const [updatedBatch] = await attachDerivedRoomsToBatches(
+      [updatedBatchDoc],
+      req.tenantId,
+    );
 
     res.status(200).json({
       batch: updatedBatch,
@@ -1001,16 +1073,20 @@ router.post("/:id/destroy-plants", async (req, res) => {
 // Get one batch.
 router.get("/:id", async (req, res) => {
   try {
-    await autoPromoteDueBatchesToHarvestReady();
+    await autoPromoteDueBatchesToHarvestReady(req.tenantId);
 
-    const batchDoc = await Batch.findById(req.params.id).populate(
-      BATCH_POPULATE,
-    );
+    const batchDoc = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    }).populate(BATCH_POPULATE);
     if (!batchDoc) {
       return res.status(404).json({ error: "Batch not found" });
     }
 
-    const [batch] = await attachDerivedRoomsToBatches([batchDoc]);
+    const [batch] = await attachDerivedRoomsToBatches(
+      [batchDoc],
+      req.tenantId,
+    );
     res.json(batch);
   } catch (error) {
     res.status(500).json({ error: error.message });

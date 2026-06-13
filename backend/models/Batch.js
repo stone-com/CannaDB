@@ -2,10 +2,15 @@ const mongoose = require("mongoose");
 
 // A batch is one tracked plant group over time.
 const batchSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Tenant",
+    required: true,
+    index: true,
+  },
   batchNumber: {
     type: String,
     required: true,
-    unique: true,
   },
   // Set after harvest is created.
   harvestId: {
@@ -80,8 +85,9 @@ const batchSchema = new mongoose.Schema({
   },
 });
 
-batchSchema.index({ lifecycleStage: 1, batchType: 1, harvestDate: 1 });
-batchSchema.index({ location: 1, lifecycleStage: 1, createdAt: -1 });
+batchSchema.index({ tenantId: 1, batchNumber: 1 }, { unique: true });
+batchSchema.index({ tenantId: 1, lifecycleStage: 1, batchType: 1, harvestDate: 1 });
+batchSchema.index({ tenantId: 1, location: 1, lifecycleStage: 1, createdAt: -1 });
 
 function normalizeObjectId(value) {
   if (!value) {

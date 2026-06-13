@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const roomAssignmentSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Tenant",
+    required: true,
+    index: true,
+  },
   batchId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Batch",
@@ -53,9 +59,9 @@ const roomAssignmentSchema = new mongoose.Schema({
   },
 });
 
-// Only allow one active row for the same batch + room pair.
+// Only allow one active row for the same batch + room pair within a tenant.
 roomAssignmentSchema.index(
-  { batchId: 1, roomId: 1, active: 1 },
+  { tenantId: 1, batchId: 1, roomId: 1, active: 1 },
   {
     unique: true,
     partialFilterExpression: { active: true },
@@ -63,8 +69,8 @@ roomAssignmentSchema.index(
 );
 
 // Speed up active lookups by room and by batch.
-roomAssignmentSchema.index({ active: 1, roomId: 1, createdAt: -1 });
-roomAssignmentSchema.index({ active: 1, batchId: 1, createdAt: -1 });
+roomAssignmentSchema.index({ tenantId: 1, active: 1, roomId: 1, createdAt: -1 });
+roomAssignmentSchema.index({ tenantId: 1, active: 1, batchId: 1, createdAt: -1 });
 
 roomAssignmentSchema.pre("validate", function () {
   if (this.active === false && !this.endedAt) {

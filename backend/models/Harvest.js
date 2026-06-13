@@ -4,12 +4,16 @@ const Room = require("./Room");
 
 // One harvest record: batch + rooms + per-strain metrics.
 const harvestSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Tenant",
+    required: true,
+    index: true,
+  },
   // Human-friendly unique ID for this harvest.
   harvestNumber: {
     type: String,
     required: true,
-    unique: true,
-    sparse: true,
     trim: true,
   },
   batchId: {
@@ -121,9 +125,10 @@ const harvestSchema = new mongoose.Schema({
   },
 });
 
-harvestSchema.index({ batchId: 1 }, { unique: true });
-harvestSchema.index({ harvestDate: -1, createdAt: -1 });
-harvestSchema.index({ locationId: 1, harvestDate: -1 });
+harvestSchema.index({ tenantId: 1, harvestNumber: 1 }, { unique: true });
+harvestSchema.index({ tenantId: 1, batchId: 1 }, { unique: true });
+harvestSchema.index({ tenantId: 1, harvestDate: -1, createdAt: -1 });
+harvestSchema.index({ tenantId: 1, locationId: 1, harvestDate: -1 });
 
 // Recompute derived fields before validation/save.
 harvestSchema.pre("validate", async function () {

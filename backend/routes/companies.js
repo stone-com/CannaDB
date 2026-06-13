@@ -3,8 +3,8 @@ const router = express.Router();
 const Company = require("../models/Company");
 
 // Company create/read endpoints.
+// req.tenantId comes from auth middleware — always include it in queries.
 
-// Create company.
 router.post("/", async (req, res) => {
   try {
     const { name } = req.body;
@@ -13,7 +13,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Company name is required" });
     }
 
-    const company = new Company({ name });
+    const company = new Company({
+      tenantId: req.tenantId,
+      name: name.trim(),
+    });
     const savedCompany = await company.save();
     res.status(201).json(savedCompany);
   } catch (error) {
@@ -25,23 +28,26 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List companies.
 router.get("/", async (req, res) => {
   try {
-    const companies = await Company.find();
+    const companies = await Company.find({ tenantId: req.tenantId });
     res.json(companies);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get one company.
 router.get("/:id", async (req, res) => {
   try {
-    const company = await Company.findById(req.params.id);
+    const company = await Company.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    });
+
     if (!company) {
       return res.status(404).json({ error: "Company not found" });
     }
+
     res.json(company);
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -4,16 +4,19 @@ import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import MinimizeIcon from "@mui/icons-material/Minimize";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
 
-// Shared z-index counter so the most recently clicked window stays on top.
 let globalZIndex = 1200;
 
-// Reusable floating panel with drag, resize, minimize, and close controls.
+const APP_BAR_HEIGHT = 64;
+const TASKBAR_HEIGHT = 64;
+
 export default function DraggableWindow({
   title,
   onClose,
   isMinimized = false,
   onMinimize,
+  onToggleFullscreen,
   children,
   leftBound = 0,
   defaultX = 120,
@@ -21,27 +24,21 @@ export default function DraggableWindow({
   defaultW = 540,
   defaultH = 460,
 }) {
-  // Position state controls where the floating window appears on screen.
   const [pos, setPos] = useState({
     x: Math.max(leftBound, defaultX),
     y: defaultY,
   });
-  // Size state controls window width/height for manual resize behavior.
   const [size, setSize] = useState({ w: defaultW, h: defaultH });
   const [zIndex, setZIndex] = useState(() => ++globalZIndex);
-  // interaction keeps transient drag/resize state between mouse events.
   const interaction = useRef(null);
-  // sizeRef avoids stale size values in mousemove listeners.
   const sizeRef = useRef({ w: defaultW, h: defaultH });
 
   sizeRef.current = size;
 
-  // Bring the window to the top layer.
   const bringToFront = () => {
     setZIndex(++globalZIndex);
   };
 
-  // Start drag interaction from the title bar.
   const handleTitleMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -56,7 +53,6 @@ export default function DraggableWindow({
     };
   };
 
-  // Start resize interaction from the bottom-right handle.
   const handleResizeMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -72,7 +68,6 @@ export default function DraggableWindow({
     };
   };
 
-  // Global mouse listeners keep drag/resize working outside the panel bounds.
   useEffect(() => {
     const onMouseMove = (e) => {
       if (!interaction.current) return;
@@ -86,12 +81,14 @@ export default function DraggableWindow({
         const nextY = interaction.current.startY + dy;
 
         const maxX = Math.max(leftBound, window.innerWidth - sizeRef.current.w);
-        const maxY = Math.max(0, window.innerHeight - 64 - sizeRef.current.h);
+        const maxY = Math.max(
+          0,
+          window.innerHeight - TASKBAR_HEIGHT - sizeRef.current.h,
+        );
 
-        // Clamp drag coordinates so windows stay inside viewport + below header.
         setPos({
           x: Math.min(Math.max(leftBound, nextX), maxX),
-          y: Math.min(Math.max(64, nextY), maxY),
+          y: Math.min(Math.max(APP_BAR_HEIGHT, nextY), maxY),
         });
       }
 
@@ -99,7 +96,6 @@ export default function DraggableWindow({
         const dx = e.clientX - interaction.current.startClientX;
         const dy = e.clientY - interaction.current.startClientY;
 
-        // Enforce minimum dimensions so content remains usable.
         setSize({
           w: Math.max(360, interaction.current.startW + dx),
           h: Math.max(240, interaction.current.startH + dy),
@@ -120,16 +116,17 @@ export default function DraggableWindow({
     };
   }, [leftBound]);
 
-  // Clamp window position if sidebar width changes.
   useEffect(() => {
-    // Re-check bounds whenever left sidebar width changes.
     const maxX = Math.max(leftBound, window.innerWidth - sizeRef.current.w);
-    const maxY = Math.max(0, window.innerHeight - 64 - sizeRef.current.h);
+    const maxY = Math.max(
+      0,
+      window.innerHeight - TASKBAR_HEIGHT - sizeRef.current.h,
+    );
 
     setPos((prev) => {
       const next = {
         x: Math.min(Math.max(leftBound, prev.x), maxX),
-        y: Math.min(Math.max(64, prev.y), maxY),
+        y: Math.min(Math.max(APP_BAR_HEIGHT, prev.y), maxY),
       };
 
       if (next.x === prev.x && next.y === prev.y) {
@@ -140,7 +137,6 @@ export default function DraggableWindow({
     });
   }, [leftBound]);
 
-  // Returning null removes the window from view while keeping state in memory.
   if (isMinimized) return null;
 
   return (
@@ -155,7 +151,6 @@ export default function DraggableWindow({
       }}
       onMouseDown={bringToFront}
     >
-      {/* Paper is the visual window frame with elevation and border styling. */}
       <Paper
         elevation={8}
         sx={{
@@ -169,21 +164,19 @@ export default function DraggableWindow({
           overflow: "visible",
         }}
       >
-        <Stack
+        <Box
           onMouseDown={handleTitleMouseDown}
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
           sx={(theme) => ({
+            position: "relative",
             px: 1.25,
             py: 0.8,
+            pr: 11,
             borderBottom: "1px solid",
             borderColor: "divider",
             background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.14)}, ${alpha(theme.palette.secondary.main, 0.1)})`,
             cursor: "move",
           })}
         >
-          {/* Title bar doubles as drag handle. */}
           <Stack direction="row" spacing={1} alignItems="center">
             <DragIndicatorIcon
               fontSize="small"
@@ -194,9 +187,26 @@ export default function DraggableWindow({
             </Typography>
           </Stack>
 
-          <Stack direction="row" spacing={0.5}>
+          <Stack
+            direction="row"
+            spacing={0.25}
+            alignItems="center"
+            onMouseDown={(e) => e.stopPropagation()}
+            sx={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+            }}
+          >
             <IconButton size="small" aria-label="Minimize" onClick={onMinimize}>
               <MinimizeIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              aria-label="Open full screen view"
+              onClick={onToggleFullscreen}
+            >
+              <FullscreenIcon fontSize="small" />
             </IconButton>
             <IconButton
               size="small"
@@ -207,14 +217,12 @@ export default function DraggableWindow({
               <CloseIcon fontSize="small" />
             </IconButton>
           </Stack>
-        </Stack>
+        </Box>
 
-        {/* Window body hosts whichever viewer/form is passed as children. */}
         <Stack sx={{ flex: 1, minHeight: 0, overflow: "auto", p: 2 }}>
           {children}
         </Stack>
 
-        {/* Bottom-right grab handle for manual resize. */}
         <Box
           onMouseDown={handleResizeMouseDown}
           sx={(theme) => ({

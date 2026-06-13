@@ -2,10 +2,15 @@ const mongoose = require("mongoose");
 
 // Reusable strain record used by batches and harvests.
 const strainSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Tenant",
+    required: true,
+    index: true,
+  },
   name: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
   },
   type: {
@@ -28,5 +33,7 @@ const strainSchema = new mongoose.Schema({
     default: null,
   },
 });
+
+strainSchema.index({ tenantId: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model("Strain", strainSchema);

@@ -3,9 +3,13 @@ import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { amber, blueGrey, cyan, green, grey, teal } from "@mui/material/colors";
 import App from "./App.jsx";
+import LoginPage from "./components/LoginPage.jsx";
+import { isLoggedIn, logout } from "./utils/api";
 
 // App-level wrapper that stores light/dark theme mode and provides MUI theme.
 export default function ThemeRoot() {
+  // Track whether the user has a saved login token.
+  const [loggedIn, setLoggedIn] = useState(isLoggedIn());
   // Track current visual mode for the whole application.
   const [darkMode, setDarkMode] = useState(false);
 
@@ -73,15 +77,25 @@ export default function ThemeRoot() {
     [darkMode],
   );
 
+  const handleLogout = () => {
+    logout();
+    setLoggedIn(false);
+  };
+
   return (
     // ThemeProvider makes the custom MUI theme available to all children.
     <ThemeProvider theme={theme}>
       {/* CssBaseline applies a consistent browser reset with sensible defaults. */}
       <CssBaseline />
-      <App
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode((prev) => !prev)}
-      />
+      {!loggedIn ? (
+        <LoginPage onLoginSuccess={() => setLoggedIn(true)} />
+      ) : (
+        <App
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode((prev) => !prev)}
+          onLogout={handleLogout}
+        />
+      )}
     </ThemeProvider>
   );
 }
