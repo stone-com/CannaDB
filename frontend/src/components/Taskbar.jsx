@@ -13,6 +13,8 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 // Bottom app bar for page navigation and open panel chips.
 export default function Taskbar({ tabs, activePage, onNavigate }) {
   const visibleTabs = tabs.filter((tab) => tab.visible);
+  const navValue =
+    activePage === "dashboard" || activePage === "admin" ? activePage : false;
 
   return (
     <AppBar
@@ -28,7 +30,7 @@ export default function Taskbar({ tabs, activePage, onNavigate }) {
       <Toolbar sx={{ gap: 2, minHeight: "64px !important" }}>
         <BottomNavigation
           showLabels
-          value={activePage}
+          value={navValue}
           onChange={(_, value) => onNavigate(value)}
           sx={{ minWidth: 240, borderRadius: 3, overflow: "hidden", flexShrink: 0 }}
         >

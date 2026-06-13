@@ -10,6 +10,7 @@ const {
   mapTotalsToPlants,
 } = require("../utils/plantHelpers");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
+const { recordAudit } = require("../utils/recordAudit");
 
 const ROOM_ASSIGNMENT_POPULATE = [
   {
@@ -161,6 +162,14 @@ router.post("/", async (req, res) => {
     );
 
     if (result?.body) {
+      if (result.status === 200) {
+        await recordAudit(req, {
+          action: "update",
+          resourceType: "room",
+          resourceId: result.body.roomId,
+          summary: "Unassigned all batches from room",
+        });
+      }
       return res.status(result.status).json(result.body);
     }
 
@@ -168,6 +177,18 @@ router.post("/", async (req, res) => {
       tenantId: req.tenantId,
       _id: result.assignmentId,
     }).populate(ROOM_ASSIGNMENT_POPULATE);
+
+    const batchLabel =
+      populatedAssignment?.batchId?.batchNumber || populatedAssignment?.batchId;
+    const roomLabel = populatedAssignment?.roomId?.name || roomId;
+
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "roomAssignment",
+      resourceId: populatedAssignment._id,
+      batchId: populatedAssignment.batchId?._id || populatedAssignment.batchId,
+      summary: `Assigned batch ${batchLabel} to room ${roomLabel}`,
+    });
 
     return res.status(201).json(populatedAssignment);
   } catch (error) {
@@ -207,6 +228,16 @@ router.patch("/:id", async (req, res) => {
     const populatedAssignment = await updatedAssignment.populate(
       ROOM_ASSIGNMENT_POPULATE,
     );
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "roomAssignment",
+      resourceId: updatedAssignment._id,
+      batchId: updatedAssignment.batchId,
+      summary: active === false
+        ? "Ended room assignment"
+        : "Updated room assignment",
+    });
 
     res.json(populatedAssignment);
   } catch (error) {

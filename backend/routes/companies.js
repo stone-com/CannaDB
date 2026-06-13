@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Company = require("../models/Company");
+const { recordAudit } = require("../utils/recordAudit");
 
 // Company create/read endpoints.
 // req.tenantId comes from auth middleware — always include it in queries.
@@ -18,6 +19,12 @@ router.post("/", async (req, res) => {
       name: name.trim(),
     });
     const savedCompany = await company.save();
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "company",
+      resourceId: savedCompany._id,
+      summary: `Created company ${savedCompany.name}`,
+    });
     res.status(201).json(savedCompany);
   } catch (error) {
     if (error.code === 11000) {

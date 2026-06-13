@@ -55,6 +55,7 @@ app.use("/api/companies", require("./routes/companies"));
 app.use("/api/locations", require("./routes/locations"));
 app.use("/api/rooms", require("./routes/rooms"));
 app.use("/api/harvests", require("./routes/harvests"));
+app.use("/api/audit-logs", require("./routes/auditLogs"));
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

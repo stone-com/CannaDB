@@ -6,6 +6,7 @@ const Batch = require("../models/Batch");
 const Room = require("../models/Room");
 const RoomAssignment = require("../models/RoomAssignment");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
+const { recordAudit } = require("../utils/recordAudit");
 
 router.post("/", async (req, res) => {
   try {
@@ -191,6 +192,14 @@ router.post("/", async (req, res) => {
       "rooms.strains.strainId",
     ]);
 
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "harvest",
+      resourceId: populatedHarvest._id,
+      batchId: populatedHarvest.batchId?._id || populatedHarvest.batchId,
+      summary: `Created harvest ${populatedHarvest.harvestNumber || populatedHarvest._id}`,
+    });
+
     res.status(201).json(populatedHarvest);
   } catch (error) {
     if (error?.code === 11000) {
@@ -335,6 +344,16 @@ router.patch("/:id", async (req, res) => {
       "rooms.roomId",
       "rooms.strains.strainId",
     ]);
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "harvest",
+      resourceId: populatedHarvest._id,
+      batchId: populatedHarvest.batchId?._id || populatedHarvest.batchId,
+      summary: finalizeDryWeights === true
+        ? `Finalized dry weights for harvest ${populatedHarvest.harvestNumber || populatedHarvest._id}`
+        : `Updated harvest ${populatedHarvest.harvestNumber || populatedHarvest._id}`,
+    });
 
     res.json(populatedHarvest);
   } catch (error) {

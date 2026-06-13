@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Company = require("../models/Company");
 const Location = require("../models/Location");
+const { recordAudit } = require("../utils/recordAudit");
 
 router.post("/", async (req, res) => {
   try {
@@ -31,6 +32,12 @@ router.post("/", async (req, res) => {
 
     const savedLocation = await location.save();
     const populatedLocation = await savedLocation.populate("companyId");
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "location",
+      resourceId: savedLocation._id,
+      summary: `Created location ${savedLocation.nickname}`,
+    });
     res.status(201).json(populatedLocation);
   } catch (error) {
     if (error?.code === 11000) {
@@ -106,6 +113,13 @@ router.put("/:id", async (req, res) => {
     if (!updatedLocation) {
       return res.status(404).json({ error: "Location not found" });
     }
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "location",
+      resourceId: updatedLocation._id,
+      summary: `Updated location ${updatedLocation.nickname}`,
+    });
 
     res.json(updatedLocation);
   } catch (error) {

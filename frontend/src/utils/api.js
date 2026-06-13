@@ -69,3 +69,25 @@ export async function login(email, password) {
 export async function logout() {
   clearToken();
 }
+
+export async function fetchAuditLogs(limit = 200) {
+  const response = await fetch(`/api/audit-logs?limit=${limit}`);
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    const snippet = (await response.text()).slice(0, 80);
+    throw new Error(
+      response.status === 404
+        ? "Activity log API not found — restart the backend server and try again."
+        : `Unexpected response from server (${response.status}): ${snippet}`,
+    );
+  }
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to load audit logs");
+  }
+
+  return data;
+}

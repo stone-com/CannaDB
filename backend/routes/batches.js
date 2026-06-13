@@ -13,6 +13,7 @@ const {
   subtractPlantsFromRooms,
 } = require("../utils/plantHelpers");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
+const { recordAudit } = require("../utils/recordAudit");
 
 // Populate strain details inside each batch room/plant entry.
 const BATCH_POPULATE = "rooms.plants.strainId";
@@ -193,6 +194,13 @@ router.post("/", async (req, res) => {
 
     const savedBatch = await batch.save();
     const populatedBatch = await savedBatch.populate(BATCH_POPULATE);
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "batch",
+      resourceId: savedBatch._id,
+      batchId: savedBatch._id,
+      summary: `Created batch ${savedBatch.batchNumber}`,
+    });
     res.status(201).json(populatedBatch);
   } catch (error) {
     if (error.code === 11000) {
@@ -320,6 +328,14 @@ router.post("/:id/move", async (req, res) => {
       [batchDoc],
       req.tenantId,
     );
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "batch",
+      resourceId: batch._id,
+      batchId: batch._id,
+      summary: `Moved batch ${populatedBatch?.batchNumber || batch.batchNumber} to ${populatedAssignment?.roomId?.name || "room"} (${populatedBatch?.lifecycleStage})`,
+    });
 
     res.status(201).json({
       batch: populatedBatch,
@@ -588,6 +604,14 @@ router.post("/:id/assign-rooms", async (req, res) => {
       req.tenantId,
     );
 
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "batch",
+      resourceId: batch._id,
+      batchId: batch._id,
+      summary: `Assigned batch ${updatedBatch?.batchNumber || batch.batchNumber} to room(s)`,
+    });
+
     res.status(201).json({
       batch: updatedBatch,
       assignments: populatedAssignments,
@@ -829,6 +853,14 @@ router.post("/:id/create-moms", async (req, res) => {
         req.tenantId,
       );
 
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "batch",
+      resourceId: populatedMomBatch?._id || momBatchDoc._id,
+      batchId: updatedSourceBatch?._id || sourceBatchDoc._id,
+      summary: `Created mom batch ${populatedMomBatch?.batchNumber || "from source batch"}`,
+    });
+
     res.status(201).json({
       sourceBatch: updatedSourceBatch,
       momBatch: populatedMomBatch,
@@ -1056,6 +1088,14 @@ router.post("/:id/destroy-plants", async (req, res) => {
       [updatedBatchDoc],
       req.tenantId,
     );
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "batch",
+      resourceId: batch._id,
+      batchId: batch._id,
+      summary: `Removed ${removeCount} plants from batch ${updatedBatch?.batchNumber || batch.batchNumber}`,
+    });
 
     res.status(200).json({
       batch: updatedBatch,

@@ -33,7 +33,9 @@ import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import AgricultureIcon from "@mui/icons-material/Agriculture";
 import ScaleIcon from "@mui/icons-material/Scale";
 import LogoutIcon from "@mui/icons-material/Logout";
+import HistoryIcon from "@mui/icons-material/History";
 import AdminPanel from "./components/AdminPanel";
+import AuditLogPage from "./components/AuditLogPage";
 import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
 import HarvestReportPage from "./components/HarvestReportPage";
@@ -460,7 +462,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     onClick: () => handleTaskbarPanelClick(key),
   });
 
-  // Sidebar width only on dashboard home — hidden for admin and full-screen panel views.
+  // Sidebar width only on dashboard home — hidden for admin, activity log, and panel views.
   const dashboardSidebarWidth =
     activePage === "dashboard" && !isPanelView
       ? sidebarExpanded
@@ -507,6 +509,18 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
             >
               {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
             </IconButton>
+            <Button
+              size="small"
+              variant={activePage === "auditLogs" ? "contained" : "outlined"}
+              startIcon={<HistoryIcon />}
+              onClick={() =>
+                setActivePage((page) =>
+                  page === "auditLogs" ? "dashboard" : "auditLogs",
+                )
+              }
+            >
+              Activity
+            </Button>
             <Button
               size="small"
               variant="outlined"
@@ -812,6 +826,8 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
 
           {/* Admin page body is delegated to AdminPanel component. */}
           {activePage === "admin" && <AdminPanel />}
+
+          {activePage === "auditLogs" && <AuditLogPage />}
         </Box>
       </Box>
 

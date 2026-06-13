@@ -4,6 +4,7 @@ const Strain = require("../models/Strain");
 const Batch = require("../models/Batch");
 const Harvest = require("../models/Harvest");
 const RoomAssignment = require("../models/RoomAssignment");
+const { recordAudit } = require("../utils/recordAudit");
 
 router.post("/", async (req, res) => {
   try {
@@ -21,6 +22,12 @@ router.post("/", async (req, res) => {
     });
 
     const savedStrain = await strain.save();
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "strain",
+      resourceId: savedStrain._id,
+      summary: `Created strain ${savedStrain.name}`,
+    });
     res.status(201).json(savedStrain);
   } catch (error) {
     if (error.code === 11000) {
@@ -86,6 +93,12 @@ router.patch("/:id", async (req, res) => {
     }
 
     const updatedStrain = await strain.save();
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "strain",
+      resourceId: updatedStrain._id,
+      summary: `Updated strain ${updatedStrain.name}`,
+    });
     res.json(updatedStrain);
   } catch (error) {
     if (error.code === 11000) {
@@ -134,6 +147,12 @@ router.delete("/:id", async (req, res) => {
     await Strain.findOneAndDelete({
       tenantId: req.tenantId,
       _id: strainId,
+    });
+    await recordAudit(req, {
+      action: "delete",
+      resourceType: "strain",
+      resourceId: strainId,
+      summary: `Deleted strain ${strain.name}`,
     });
     res.json({ message: "Strain deleted successfully" });
   } catch (error) {

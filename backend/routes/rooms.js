@@ -5,6 +5,7 @@ const Batch = require("../models/Batch");
 const Harvest = require("../models/Harvest");
 const RoomAssignment = require("../models/RoomAssignment");
 const Location = require("../models/Location");
+const { recordAudit } = require("../utils/recordAudit");
 
 const ROOM_POPULATE = ["locationId"];
 
@@ -37,6 +38,12 @@ router.post("/", async (req, res) => {
 
     const savedRoom = await room.save();
     const populatedRoom = await savedRoom.populate(ROOM_POPULATE);
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "room",
+      resourceId: savedRoom._id,
+      summary: `Created room ${savedRoom.name} (${savedRoom.type})`,
+    });
     res.status(201).json(populatedRoom);
   } catch (error) {
     if (error?.code === 11000) {
@@ -110,6 +117,13 @@ router.patch("/:id", async (req, res) => {
     const updatedRoom = await room.save();
     const populatedRoom = await updatedRoom.populate(ROOM_POPULATE);
 
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "room",
+      resourceId: updatedRoom._id,
+      summary: `Updated room ${updatedRoom.name}`,
+    });
+
     res.json(populatedRoom);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -143,6 +157,12 @@ router.delete("/:id", async (req, res) => {
     }
 
     await Room.findOneAndDelete({ tenantId: req.tenantId, _id: roomId });
+    await recordAudit(req, {
+      action: "delete",
+      resourceType: "room",
+      resourceId: roomId,
+      summary: `Deleted room ${room.name}`,
+    });
     res.json({ message: "Room deleted successfully" });
   } catch (error) {
     if (error?.code === 11000) {
