@@ -30,6 +30,9 @@ import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
 import BatchForm from "./components/BatchForm";
+import UpcomingHarvestCard from "./components/UpcomingHarvestCard";
+import RoomReportCard from "./components/RoomReportCard";
+
 
 const DATA_VIEWER_OPTIONS = [
   { key: "strains", label: "Strains" },
@@ -55,6 +58,7 @@ const DATA_REFRESH_EVENTS = [
 function App() {
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [roomAssignments, setRoomAssignments] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -98,6 +102,7 @@ function App() {
     await Promise.all([
       fetchCollection("/api/strains", setStrains),
       fetchCollection("/api/rooms", setRooms),
+      fetchCollection("/api/batches", setBatches),
       fetchCollection("/api/room-assignments", setRoomAssignments),
       fetchCollection("/api/harvests", setHarvests),
     ]);
@@ -125,6 +130,11 @@ function App() {
   const toggleView = (key) => {
     setSelectedViews((prev) => ({ ...prev, [key]: !prev[key] }));
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
+  };
+
+  const openHarvestWindow = () => {
+    setSelectedViews((prev) => ({ ...prev, harvestForm: true }));
+    setMinimizedWindows((prev) => ({ ...prev, harvestForm: false }));
   };
 
   const toggleMinimize = (key) => {
@@ -321,6 +331,17 @@ function App() {
                   </Typography>
                 </CardContent>
               </Card>
+
+              <UpcomingHarvestCard
+                batches={batches}
+                onStartHarvest={openHarvestWindow}
+              />
+
+              <RoomReportCard
+                rooms={rooms}
+                roomAssignments={roomAssignments}
+                onClick={() => toggleView("roomViewer")}
+              />
             </Stack>
           )}
 
