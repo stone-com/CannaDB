@@ -132,8 +132,4 @@ const applyHarvestCalculations = async (harvestDoc) => {
 
 module.exports = {
   applyHarvestCalculations,
-  averagePerPlant,
-  percentChangeWetToDry,
-  justinYieldForStrain,
-  getTotalRoomSquareFeet,
 };

@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
+  Chip,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 
-function CreateMomsForm({ embedded }) {
+// Convert selected Veg-stage production plants into a new mom batch.
+function CreateMomsForm() {
+  // Data sources and controlled fields for the conversion workflow.
   const [batches, setBatches] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [selectedBatchId, setSelectedBatchId] = useState("");
@@ -18,6 +21,7 @@ function CreateMomsForm({ embedded }) {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
+    // Load both batches and rooms together for dropdowns and defaults.
     try {
       const [batchRes, roomRes] = await Promise.all([
         fetch("/api/batches"),
@@ -38,13 +42,19 @@ function CreateMomsForm({ embedded }) {
   };
 
   useEffect(() => {
+    // Load initial dropdown data when the form first appears.
     fetchData();
   }, []);
 
-  const productionBatches = useMemo(
+  const vegProductionBatches = useMemo(
+    // Only production batches in Veg stage can be converted to moms.
     () =>
       batches
-        .filter((batch) => batch.batchType === "production")
+        .filter(
+          (batch) =>
+            batch.batchType === "production" &&
+            String(batch.lifecycleStage || "").toLowerCase() === "veg",
+        )
         .sort((a, b) =>
           (a.batchNumber || "").localeCompare(b.batchNumber || ""),
         ),
@@ -52,14 +62,16 @@ function CreateMomsForm({ embedded }) {
   );
 
   const selectedBatch = useMemo(
+    // Resolve selected source batch id into the full batch object.
     () =>
-      productionBatches.find(
+      vegProductionBatches.find(
         (batch) => String(batch._id) === String(selectedBatchId),
       ) || null,
-    [productionBatches, selectedBatchId],
+    [vegProductionBatches, selectedBatchId],
   );
 
   const availablePlantsByStrain = useMemo(() => {
+    // Convert nested room plant rows into one total per strain for this batch.
     if (!selectedBatch) return [];
 
     const totals = new Map();
@@ -86,6 +98,7 @@ function CreateMomsForm({ embedded }) {
   }, [selectedBatch]);
 
   const momRoomsAtLocation = useMemo(() => {
+    // Limit destination options to Mom rooms at the same location as source batch.
     if (!selectedBatch?.location) return [];
 
     return rooms.filter(
@@ -95,11 +108,12 @@ function CreateMomsForm({ embedded }) {
     );
   }, [rooms, selectedBatch]);
 
+  // Reset dependent selections and initialize cut counts for this source batch.
   const handleBatchChange = (batchId) => {
     setSelectedBatchId(batchId);
     setMessage("");
 
-    const chosenBatch = productionBatches.find(
+    const chosenBatch = vegProductionBatches.find(
       (batch) => String(batch._id) === String(batchId),
     );
 
@@ -126,22 +140,25 @@ function CreateMomsForm({ embedded }) {
   };
 
   const handleCutChange = (strainId, value) => {
+    // Keep strain cut counts non-negative and string-backed for text input control.
     const normalized =
       value === "" ? "" : String(Math.max(0, Number(value) || 0));
     setMomCuts((prev) => ({ ...prev, [strainId]: normalized }));
   };
 
   const totalMomPlants = availablePlantsByStrain.reduce(
+    // Live total helps operators verify how many plants are being converted.
     (sum, strain) => sum + (Number(momCuts[strain.strainId]) || 0),
     0,
   );
 
+  // Submit conversion request and emit events for app-wide refresh.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
     if (!selectedBatch) {
-      setMessage("Please select a source production batch.");
+      setMessage("Please select a source production batch in Veg stage.");
       return;
     }
 
@@ -221,23 +238,40 @@ function CreateMomsForm({ embedded }) {
 
   const body = (
     <>
+      {/* Single form handles source batch selection, room selection, and strain counts. */}
       <Stack component="form" spacing={2} onSubmit={handleSubmit}>
         <TextField
           select
-          label="Source Production Batch"
+          label="Source Production Batch (Veg Only)"
           value={selectedBatchId}
           onChange={(e) => handleBatchChange(e.target.value)}
         >
           <MenuItem value="">Select Batch</MenuItem>
-          {productionBatches.map((batch) => (
+          {vegProductionBatches.map((batch) => (
+            // Each dropdown item shows a batch and its current lifecycle stage.
             <MenuItem key={batch._id} value={batch._id}>
-              {batch.batchNumber} ({batch.lifecycleStage})
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ width: "100%" }}
+              >
+                <Typography variant="body2">{batch.batchNumber}</Typography>
+                <Chip
+                  size="small"
+                  label={batch.lifecycleStage || "N/A"}
+                  color="success"
+                  variant="outlined"
+                />
+              </Stack>
             </MenuItem>
           ))}
         </TextField>
 
         {selectedBatch && (
           <>
+            {/* Room selector is constrained to Mom rooms at the batch location. */}
             <TextField
               select
               label="Mom Room"
@@ -258,6 +292,7 @@ function CreateMomsForm({ embedded }) {
             </Typography>
 
             {availablePlantsByStrain.map((strain) => (
+              // One numeric input per strain for how many plants become moms.
               <TextField
                 key={strain.strainId}
                 type="number"
@@ -282,6 +317,7 @@ function CreateMomsForm({ embedded }) {
         </Button>
 
         {message && (
+          // Same Alert surface is reused for success and error messaging.
           <Alert severity={message.startsWith("Error") ? "error" : "success"}>
             {message}
           </Alert>
@@ -290,14 +326,7 @@ function CreateMomsForm({ embedded }) {
     </>
   );
 
-  if (embedded) return body;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Create Moms</Typography>
-      {body}
-    </Stack>
-  );
+  return body;
 }
 
 export default CreateMomsForm;

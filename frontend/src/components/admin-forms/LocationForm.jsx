@@ -5,11 +5,11 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Typography,
 } from "@mui/material";
 
-// `embedded` decides inline form vs standalone card view.
-function LocationForm({ embedded }) {
+// Create location records tied to a company.
+function LocationForm() {
+  // Dropdown source data.
   const [companies, setCompanies] = useState([]);
 
   // Form values.
@@ -22,6 +22,7 @@ function LocationForm({ embedded }) {
 
   // Load company options.
   const fetchCompanies = async () => {
+    // Company list powers the location->company relationship dropdown.
     try {
       const res = await fetch("/api/companies");
       const data = await res.json();
@@ -32,15 +33,18 @@ function LocationForm({ embedded }) {
   };
 
   useEffect(() => {
+    // Populate company dropdown and keep it synced with company create events.
     fetchCompanies();
 
     // Refresh when a company is created.
+    // Listen for cross-form creation events to keep options fresh.
     const handleCompanyCreated = () => fetchCompanies();
     window.addEventListener("company:created", handleCompanyCreated);
     return () =>
       window.removeEventListener("company:created", handleCompanyCreated);
   }, []);
 
+  // Save the location and broadcast an event for dependent forms.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -79,6 +83,7 @@ function LocationForm({ embedded }) {
   };
 
   const formContent = (
+    // Form body for the location create workflow.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
       <TextField
         select
@@ -114,6 +119,7 @@ function LocationForm({ embedded }) {
         Add Location
       </Button>
 
+      {/* Inline status feedback keeps users in the same workflow context. */}
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}
@@ -122,14 +128,7 @@ function LocationForm({ embedded }) {
     </Stack>
   );
 
-  if (embedded) return formContent;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Add Location</Typography>
-      {formContent}
-    </Stack>
-  );
+  return formContent;
 }
 
 export default LocationForm;

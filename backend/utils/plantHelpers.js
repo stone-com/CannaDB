@@ -24,16 +24,6 @@ function aggregatePlantTotalsMap(roomEntries) {
   return totals;
 }
 
-// Same as aggregatePlantTotalsMap, but return plain objects instead of a Map.
-function aggregatePlantTotalsArray(roomEntries) {
-  return Array.from(aggregatePlantTotalsMap(roomEntries).entries()).map(
-    ([strainId, count]) => ({
-      strainId,
-      count,
-    }),
-  );
-}
-
 // Convert a totals Map back into the { strainId, count } shape used by schemas.
 function mapTotalsToPlants(totalsMap) {
   return Array.from(totalsMap.entries()).map(([strainId, count]) => ({
@@ -129,12 +119,9 @@ function subtractPlantsFromRooms(roomEntries, requestedCuts) {
 }
 
 module.exports = {
-  getStrainId,
   aggregatePlantTotalsMap,
-  aggregatePlantTotalsArray,
   mapTotalsToPlants,
   normalizeRoomPlants,
-  normalizePlantEntries,
   roomEntriesFromAssignments,
   aggregateAssignmentTotalsMap,
   subtractPlantsFromRooms,

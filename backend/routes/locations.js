@@ -64,4 +64,44 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// Update one location.
+router.put("/:id", async (req, res) => {
+  try {
+    const { companyId, nickname, address } = req.body;
+
+    if (!companyId || !nickname) {
+      return res
+        .status(400)
+        .json({ error: "companyId and nickname are required" });
+    }
+
+    const updatedLocation = await Location.findByIdAndUpdate(
+      req.params.id,
+      {
+        companyId,
+        nickname,
+        address: address || null,
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).populate("companyId");
+
+    if (!updatedLocation) {
+      return res.status(404).json({ error: "Location not found" });
+    }
+
+    res.json(updatedLocation);
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        error: "A location with this nickname already exists for that company",
+      });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

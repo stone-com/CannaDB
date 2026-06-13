@@ -12,6 +12,11 @@ import {
   Typography,
 } from "@mui/material";
 
+const SELECT_MENU_PROPS = {
+  disablePortal: true,
+};
+
+// Enter and finalize dry weight totals for harvested strains.
 function DryWeightForm({ harvests, onComplete }) {
   // Current selected batch/strain row.
   const [selectedBatchId, setSelectedBatchId] = useState("");
@@ -21,6 +26,7 @@ function DryWeightForm({ harvests, onComplete }) {
   const [dryWeightsByKey, setDryWeightsByKey] = useState({});
 
   const sortedHarvests = useMemo(
+    // Sorting newest first makes most recent dry-weight tasks easier to reach.
     () =>
       Array.isArray(harvests)
         ? [...harvests].sort(
@@ -30,17 +36,26 @@ function DryWeightForm({ harvests, onComplete }) {
     [harvests],
   );
 
+  // Only include harvests whose batch is in the drying stage.
   const batchesForSelection = useMemo(
+    // Build select-friendly rows so dropdown has batch id + display context.
     () =>
-      sortedHarvests.map((harvest) => ({
-        batchId: harvest?.batchId?._id || "",
-        batchNumber: harvest?.batchId?.batchNumber || "Unknown Batch",
-        harvest,
-      })),
+      sortedHarvests
+        .filter(
+          (harvest) =>
+            String(harvest?.batchId?.lifecycleStage || "").toLowerCase() ===
+            "drying",
+        )
+        .map((harvest) => ({
+          batchId: harvest?.batchId?._id || "",
+          batchNumber: harvest?.batchId?.batchNumber || "Unknown Batch",
+          harvest,
+        })),
     [sortedHarvests],
   );
 
   const selectedHarvest = useMemo(
+    // Resolve selected dropdown value into the full harvest object.
     () =>
       batchesForSelection.find(
         (entry) => String(entry.batchId) === String(selectedBatchId),
@@ -49,6 +64,7 @@ function DryWeightForm({ harvests, onComplete }) {
   );
 
   const harvestStrains = useMemo(() => {
+    // Flatten room->strain nested data into simple rows for button list rendering.
     if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) {
       return [];
     }
@@ -75,6 +91,7 @@ function DryWeightForm({ harvests, onComplete }) {
   }, [selectedHarvest]);
 
   const selectedStrain = useMemo(
+    // Resolve selected key into the full row object used by the right editor.
     () =>
       harvestStrains.find((entry) => entry.key === selectedStrainKey) || null,
     [harvestStrains, selectedStrainKey],
@@ -89,10 +106,12 @@ function DryWeightForm({ harvests, onComplete }) {
   };
 
   const handleStrainClick = (strainKey) => {
+    // Choosing a row updates right-side editor context.
     setSelectedStrainKey(strainKey);
     setDryWeightInput("");
   };
 
+  // Save one typed dry weight value for the selected row.
   const handleSetDryWeight = () => {
     if (!selectedStrainKey) return;
 
@@ -126,6 +145,7 @@ function DryWeightForm({ harvests, onComplete }) {
                 dryWeightsByKey[key] ?? strainEntry?.totalDryWeightGrams ?? 0;
 
               return {
+                // Keep original tote wet weights and write the new dry total.
                 strainId: strainEntry?.strainId?._id,
                 plantCount: strainEntry?.plantCount || 0,
                 totes: (strainEntry?.totes || []).map((tote) => ({
@@ -163,6 +183,7 @@ function DryWeightForm({ harvests, onComplete }) {
   };
 
   const activeDryWeight = useMemo(
+    // Read current value for the selected row from keyed state map.
     () => (selectedStrain ? dryWeightsByKey[selectedStrain.key] : undefined),
     [dryWeightsByKey, selectedStrain],
   );
@@ -173,17 +194,22 @@ function DryWeightForm({ harvests, onComplete }) {
       spacing={2}
       sx={{ height: "100%" }}
     >
+      {/* Left column drives selection of harvest + strain rows. */}
       <Stack spacing={2} sx={{ width: { xs: "100%", md: 420 } }}>
+        {/* Section heading for the dry-weight workflow. */}
         <Typography variant="h6">Dry Weight Entry</Typography>
 
         <TextField
           select
-          label="Batch"
+          label="Batch (Drying Only)"
           value={selectedBatchId}
           onChange={handleBatchChange}
+          // disablePortal prevents menu clipping in portal-heavy window layouts.
+          SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
         >
           <MenuItem value="">Select Batch</MenuItem>
           {batchesForSelection.map(({ batchId, batchNumber, harvest }) => {
+            // Build a verbose dropdown label so users can identify the exact harvest.
             const date = new Date(harvest?.harvestDate);
             const dateText = Number.isNaN(date.getTime())
               ? "N/A"
@@ -205,6 +231,7 @@ function DryWeightForm({ harvests, onComplete }) {
         </TextField>
 
         {selectedHarvest && (
+          // Left-side list acts like a lightweight picker for row editing.
           <Card variant="outlined">
             <CardContent>
               <Typography
@@ -216,6 +243,7 @@ function DryWeightForm({ harvests, onComplete }) {
               </Typography>
               <Stack spacing={1}>
                 {harvestStrains.map((entry) => {
+                  // Each row button opens that strain in the right-side editor.
                   const isActive = selectedStrainKey === entry.key;
                   const hasInputDryWeight =
                     dryWeightsByKey[entry.key] !== undefined;
@@ -245,16 +273,20 @@ function DryWeightForm({ harvests, onComplete }) {
         )}
 
         {selectedBatchId && (
+          // Save button appears once a harvest context exists.
           <Button variant="contained" size="large" onClick={handleSubmit}>
             Save Dry Weights
           </Button>
         )}
       </Stack>
 
+      {/* Right column is focused editor for the active strain row. */}
       <Box sx={{ flex: 1 }}>
+        {/* Full-height card gives a stable editing area while selection changes. */}
         <Card variant="outlined" sx={{ height: "100%" }}>
           <CardContent>
             {selectedStrain ? (
+              // Right-side editor updates whichever row is currently selected.
               <Stack spacing={2}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                   {selectedStrain.strainName} ({selectedStrain.roomName})

@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Alert, Button, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Button, Stack, TextField } from "@mui/material";
 
-// `embedded` decides inline form vs standalone card view.
-function CompanyForm({ embedded }) {
+// Simple create form for company records.
+function CompanyForm() {
+  // Controlled field state.
   const [name, setName] = useState("");
+  // Shared feedback message shown in Alert.
   const [message, setMessage] = useState("");
 
+  // Submit one company and notify listeners so dependent forms can refresh.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -39,6 +42,7 @@ function CompanyForm({ embedded }) {
   };
 
   const formContent = (
+    // MUI Stack with component="form" gives vertical spacing + native submit behavior.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
       <TextField
         label="Company Name"
@@ -50,6 +54,7 @@ function CompanyForm({ embedded }) {
       <Button variant="contained" type="submit">
         Add Company
       </Button>
+      {/* Alert doubles as success/error feedback surface below the form. */}
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}
@@ -58,14 +63,7 @@ function CompanyForm({ embedded }) {
     </Stack>
   );
 
-  if (embedded) return formContent;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Add Company</Typography>
-      {formContent}
-    </Stack>
-  );
+  return formContent;
 }
 
 export default CompanyForm;
