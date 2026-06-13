@@ -39,6 +39,8 @@ import StrainDataViewer from "./components/StrainDataViewer";
 import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
 import Taskbar from "./components/Taskbar";
+import UpcomingHarvestCard from "./components/UpcomingHarvestCard";
+import RoomReportCard from "./components/RoomReportCard";
 
 // Layout sizing constants for the app shell.
 const APP_BAR_HEIGHT = 64;
@@ -73,6 +75,7 @@ function App({ darkMode, onToggleDarkMode }) {
   // Shared datasets used by dashboard cards and panels.
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [roomAssignments, setRoomAssignments] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -121,6 +124,7 @@ function App({ darkMode, onToggleDarkMode }) {
     await Promise.all([
       fetchCollection("/api/strains", setStrains),
       fetchCollection("/api/rooms", setRooms),
+      fetchCollection("/api/batches", setBatches),
       fetchCollection("/api/room-assignments", setRoomAssignments),
       fetchCollection("/api/harvests", setHarvests),
     ]);
@@ -151,6 +155,11 @@ function App({ darkMode, onToggleDarkMode }) {
   const toggleView = (key) => {
     setSelectedViews((prev) => ({ ...prev, [key]: !prev[key] }));
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
+  };
+
+  const openHarvestWindow = () => {
+    setSelectedViews((prev) => ({ ...prev, harvestForm: true }));
+    setMinimizedWindows((prev) => ({ ...prev, harvestForm: false }));
   };
 
   // Minimize or restore one floating window from the taskbar/chips.
@@ -555,6 +564,44 @@ function App({ darkMode, onToggleDarkMode }) {
                   </Card>
                 </Grid>
               </Grid>
+              <Card
+                sx={{
+                  background:
+                    "linear-gradient(120deg, rgba(0,95,115,0.94), rgba(10,147,150,0.9))",
+                  color: "#fff",
+                }}
+              >
+                <CardContent>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ mb: 1 }}
+                  >
+                    <InsightsIcon />
+                    <Typography variant="h5">Operations Workspace</Typography>
+                  </Stack>
+                  <Typography
+                    variant="body1"
+                    sx={{ maxWidth: 780, opacity: 0.95 }}
+                  >
+                    Open any panel from the left rail to run analytics, room
+                    analysis, and harvest workflows in parallel draggable
+                    windows.
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              <UpcomingHarvestCard
+                batches={batches}
+                onStartHarvest={openHarvestWindow}
+              />
+
+              <RoomReportCard
+                rooms={rooms}
+                roomAssignments={roomAssignments}
+                onClick={() => toggleView("roomViewer")}
+              />
             </Stack>
           )}
 
