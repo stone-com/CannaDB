@@ -113,21 +113,20 @@ export default function AdminPanel() {
   // Render the form that belongs to the currently selected workflow.
   function renderActiveForm() {
     // Each condition picks one React component to render in the right panel.
-    if (activeWorkflow.key === "strain") return <StrainForm embedded />;
+    if (activeWorkflow.key === "strain") return <StrainForm />;
     if (activeWorkflow.key === "orgSetup") {
-      return <CompanyLocationSetupForm embedded />;
+      return <CompanyLocationSetupForm />;
     }
-    if (activeWorkflow.key === "room")
-      return <RoomForm embedded section="add" />;
+    if (activeWorkflow.key === "room") return <RoomForm section="add" />;
     if (activeWorkflow.key === "batch") return <BatchForm />;
     if (activeWorkflow.key === "assign") {
-      return <RoomForm embedded section="assign" />;
+      return <RoomForm section="assign" />;
     }
     if (activeWorkflow.key === "destroyPlants") {
-      return <DestroyPlantsForm embedded />;
+      return <DestroyPlantsForm />;
     }
     if (activeWorkflow.key === "createMoms") {
-      return <CreateMomsForm embedded />;
+      return <CreateMomsForm />;
     }
     return null;
   }

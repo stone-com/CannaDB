@@ -5,12 +5,10 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Typography,
 } from "@mui/material";
 
 // Create location records tied to a company.
-// `embedded` decides inline form vs standalone card view.
-function LocationForm({ embedded }) {
+function LocationForm() {
   // Dropdown source data.
   const [companies, setCompanies] = useState([]);
 
@@ -85,7 +83,7 @@ function LocationForm({ embedded }) {
   };
 
   const formContent = (
-    // Shared form body used in both embedded and standalone modes.
+    // Form body for the location create workflow.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
       <TextField
         select
@@ -130,15 +128,7 @@ function LocationForm({ embedded }) {
     </Stack>
   );
 
-  // Embedded mode is used inside AdminPanel's right-side workflow area.
-  if (embedded) return formContent;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Add Location</Typography>
-      {formContent}
-    </Stack>
-  );
+  return formContent;
 }
 
 export default LocationForm;

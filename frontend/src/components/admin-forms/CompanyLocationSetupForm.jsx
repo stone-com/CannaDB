@@ -36,7 +36,7 @@ const ORG_ACTIONS = [
 ];
 
 // Consolidated organization setup workspace with action-based navigation.
-export default function CompanyLocationSetupForm({ embedded }) {
+export default function CompanyLocationSetupForm() {
   const [activeAction, setActiveAction] = useState(ORG_ACTIONS[0].key);
 
   const content = (
@@ -94,19 +94,12 @@ export default function CompanyLocationSetupForm({ embedded }) {
       </Box>
 
       <Box>
-        {activeAction === "addCompany" && <CompanyForm embedded />}
-        {activeAction === "addLocation" && <LocationForm embedded />}
-        {activeAction === "editLocation" && <EditLocationForm embedded />}
+        {activeAction === "addCompany" && <CompanyForm />}
+        {activeAction === "addLocation" && <LocationForm />}
+        {activeAction === "editLocation" && <EditLocationForm />}
       </Box>
     </Stack>
   );
 
-  if (embedded) return content;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Company and Location Setup</Typography>
-      {content}
-    </Stack>
-  );
+  return content;
 }

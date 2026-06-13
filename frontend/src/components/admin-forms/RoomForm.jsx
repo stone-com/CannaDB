@@ -45,7 +45,7 @@ const NEXT_STAGE_BY_BATCH_TYPE = {
 };
 
 // Combined room management form and plant assignment workflow.
-function RoomForm({ embedded, section }) {
+function RoomForm({ section }) {
   // Source datasets used for both room management and assignment flows.
   const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -997,25 +997,9 @@ function RoomForm({ embedded, section }) {
     </Stack>
   );
 
-  if (embedded && section === "add") return addRoomForm;
-  if (embedded && section === "assign") return assignRoomForm;
+  if (section === "assign") return assignRoomForm;
 
-  return (
-    // Standalone mode shows both room CRUD and assignment forms in one page.
-    <Stack spacing={3}>
-      <Stack spacing={1}>
-        <Typography variant="h6">Room Management</Typography>
-        {addRoomForm}
-      </Stack>
-
-      <Divider />
-
-      <Stack spacing={1}>
-        <Typography variant="h6">Assign Batch To Room</Typography>
-        {assignRoomForm}
-      </Stack>
-    </Stack>
-  );
+  return addRoomForm;
 }
 
 export default RoomForm;

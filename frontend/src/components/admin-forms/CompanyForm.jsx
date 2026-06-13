@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Alert, Button, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Button, Stack, TextField } from "@mui/material";
 
 // Simple create form for company records.
-// `embedded` decides inline form vs standalone card view.
-function CompanyForm({ embedded }) {
+function CompanyForm() {
   // Controlled field state.
   const [name, setName] = useState("");
   // Shared feedback message shown in Alert.
@@ -64,16 +63,7 @@ function CompanyForm({ embedded }) {
     </Stack>
   );
 
-  // In embedded mode, return just fields/buttons (no extra heading wrapper).
-  if (embedded) return formContent;
-
-  return (
-    // Standalone mode wraps the same form with a local section title.
-    <Stack spacing={2}>
-      <Typography variant="h6">Add Company</Typography>
-      {formContent}
-    </Stack>
-  );
+  return formContent;
 }
 
 export default CompanyForm;

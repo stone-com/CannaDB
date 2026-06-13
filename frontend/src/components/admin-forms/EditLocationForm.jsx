@@ -5,11 +5,10 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Typography,
 } from "@mui/material";
 
 // Edit existing locations including company assignment and address metadata.
-export default function EditLocationForm({ embedded }) {
+export default function EditLocationForm() {
   const [companies, setCompanies] = useState([]);
   const [locations, setLocations] = useState([]);
   const [selectedLocationId, setSelectedLocationId] = useState("");
@@ -193,12 +192,5 @@ export default function EditLocationForm({ embedded }) {
     </Stack>
   );
 
-  if (embedded) return formContent;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Edit Location</Typography>
-      {formContent}
-    </Stack>
-  );
+  return formContent;
 }

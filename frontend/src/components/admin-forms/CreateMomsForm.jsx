@@ -10,7 +10,7 @@ import {
 } from "@mui/material";
 
 // Convert selected Veg-stage production plants into a new mom batch.
-function CreateMomsForm({ embedded }) {
+function CreateMomsForm() {
   // Data sources and controlled fields for the conversion workflow.
   const [batches, setBatches] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -326,15 +326,7 @@ function CreateMomsForm({ embedded }) {
     </>
   );
 
-  // Embedded mode is used when this form is rendered from AdminPanel workflow list.
-  if (embedded) return body;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Create Moms</Typography>
-      {body}
-    </Stack>
-  );
+  return body;
 }
 
 export default CreateMomsForm;

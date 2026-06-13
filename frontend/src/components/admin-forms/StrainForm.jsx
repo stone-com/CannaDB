@@ -6,12 +6,10 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Typography,
 } from "@mui/material";
 
 // Add/edit/remove workflow for strain records.
-// `embedded` decides inline form vs standalone card view.
-function StrainForm({ embedded }) {
+function StrainForm() {
   // Mode drives both API method and visible fields.
   const [mode, setMode] = useState("add");
   const [strains, setStrains] = useState([]);
@@ -278,16 +276,7 @@ function StrainForm({ embedded }) {
     </>
   );
 
-  // Inline mode for accordion panels.
-  if (embedded) return formContent;
-
-  // Standalone page/card mode.
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Strain Management</Typography>
-      {formContent}
-    </Stack>
-  );
+  return formContent;
 }
 
 export default StrainForm;

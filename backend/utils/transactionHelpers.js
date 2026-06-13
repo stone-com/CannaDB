@@ -36,6 +36,5 @@ async function runWithOptionalTransaction(mongoose, work) {
 }
 
 module.exports = {
-  isTransactionUnsupported,
   runWithOptionalTransaction,
 };

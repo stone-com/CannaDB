@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 
 // Controlled destruction workflow that reduces strain counts inside a batch.
-function DestroyPlantsForm({ embedded }) {
+function DestroyPlantsForm() {
   // Controlled form fields and dialog state.
   const [batches, setBatches] = useState([]);
   const [selectedBatchId, setSelectedBatchId] = useState("");
@@ -353,15 +353,7 @@ function DestroyPlantsForm({ embedded }) {
     </Stack>
   );
 
-  // Embedded mode omits standalone title wrapper.
-  if (embedded) return content;
-
-  return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Destroy Plants</Typography>
-      {content}
-    </Stack>
-  );
+  return content;
 }
 
 export default DestroyPlantsForm;
