@@ -48,8 +48,8 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
       variant="outlined"
       sx={{
         borderColor: "primary.main",
-        background:
-          "linear-gradient(135deg, rgba(0,95,115,0.08), rgba(255,255,255,0.98))",
+        background: "secondary.main"
+          
       }}
     >
       <CardContent>
