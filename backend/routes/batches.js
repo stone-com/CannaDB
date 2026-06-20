@@ -165,14 +165,30 @@ async function buildUniqueMomBatchNumber(
   throw new Error("Unable to generate a unique mom batch number");
 }
 
+// New batches start in the Clone room at the chosen location.
+async function findCloneRoom(tenantId, locationId) {
+  return Room.findOne({
+    tenantId,
+    locationId,
+    type: "Clone",
+  }).sort({ createdAt: 1 });
+}
+
 // Batch create/read and movement endpoints.
 // Always include tenantId: req.tenantId in every database query.
 
 // POST /api/batches — create a new batch.
 router.post("/", async (req, res) => {
   try {
-    const { batchNumber, cloneDate, harvestDate, location, rooms, batchType } =
-      req.body;
+    const {
+      batchNumber,
+      cloneDate,
+      harvestDate,
+      location,
+      rooms,
+      batchType,
+      plants,
+    } = req.body;
 
     if (!batchNumber || !cloneDate) {
       return res
@@ -180,21 +196,64 @@ router.post("/", async (req, res) => {
         .json({ error: "batchNumber and cloneDate are required" });
     }
 
-    // New batches start in Clone stage.
-    const batch = new Batch({
+    const startedAt = new Date(cloneDate);
+    let batchRooms = Array.isArray(rooms) ? rooms : [];
+    let cloneRoom = null;
+    const hasPlants = Array.isArray(plants) && plants.length > 0;
+
+    // When plants are included, put the batch in that location's Clone room.
+    if (hasPlants) {
+      if (!location) {
+        return res.status(400).json({
+          error: "location is required when creating a batch with plants",
+        });
+      }
+
+      cloneRoom = await findCloneRoom(req.tenantId, location);
+
+      if (!cloneRoom) {
+        return res.status(400).json({
+          error: "No Clone room found at the selected location",
+        });
+      }
+
+      batchRooms = [{ roomId: cloneRoom._id, plants }];
+    }
+
+    const savedBatch = await Batch.create({
       tenantId: req.tenantId,
       batchNumber,
       cloneDate,
       harvestDate: harvestDate || null,
       location: location || null,
-      rooms: rooms || [],
+      rooms: batchRooms,
       batchType: batchType || "production",
       lifecycleStage: "Clone",
-      stageStartedAt: new Date(cloneDate),
+      stageStartedAt: startedAt,
     });
 
-    const savedBatch = await batch.save();
-    const populatedBatch = await savedBatch.populate(BATCH_POPULATE);
+    if (cloneRoom) {
+      await RoomAssignment.create({
+        tenantId: req.tenantId,
+        batchId: savedBatch._id,
+        roomId: cloneRoom._id,
+        assignedPlants: plants,
+        active: true,
+        source: "manual",
+        startedAt,
+      });
+    }
+
+    const batchDoc = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: savedBatch._id,
+    }).populate(BATCH_POPULATE);
+
+    const [populatedBatch] = await attachDerivedRoomsToBatches(
+      [batchDoc],
+      req.tenantId,
+    );
+
     await recordAudit(req, {
       action: "create",
       resourceType: "batch",
@@ -202,6 +261,7 @@ router.post("/", async (req, res) => {
       batchId: savedBatch._id,
       summary: `Created batch ${savedBatch.batchNumber}`,
     });
+
     res.status(201).json(populatedBatch);
   } catch (error) {
     if (error.code === 11000) {

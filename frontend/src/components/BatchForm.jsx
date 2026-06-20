@@ -63,7 +63,8 @@ function BatchForm() {
   );
 
   // Simple form readiness check for required fields.
-  const canSubmit = batchNumber.trim() && cloneDate && plants.length > 0;
+  const canSubmit =
+    batchNumber.trim() && cloneDate && selectedLocation && plants.length > 0;
 
   // Add a strain/count row, merging duplicates into a single running total.
   function addPlant() {
@@ -133,6 +134,7 @@ function BatchForm() {
       setSelectedStrain("");
       setCount("");
       setPlants([]);
+      setSelectedLocation("");
     } catch (error) {
       console.error("Error submitting batch form:", error);
       setMessage(`Error: ${error.message || "Error submitting batch form."}`);
@@ -180,9 +182,11 @@ function BatchForm() {
               }}
             />
             <TextField
-            select label="location"
+            select
+            label="Location"
             value={selectedLocation}
             onChange={(e) => setSelectedLocation(e.target.value)}
+            required
             >
             <MenuItem value="">Select a location</MenuItem>
             {locations.map((location) => (
