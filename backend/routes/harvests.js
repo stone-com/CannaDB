@@ -1,3 +1,8 @@
+/**
+ * Harvest API routes — wet harvest intake and dry weight updates.
+ * Always include tenantId: req.tenantId in every database query.
+ */
+
 const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
@@ -8,6 +13,7 @@ const RoomAssignment = require("../models/RoomAssignment");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
 const { recordAudit } = require("../utils/recordAudit");
 
+// POST /api/harvests — record wet harvest weights for a batch.
 router.post("/", async (req, res) => {
   try {
     const { batchId, locationId, harvestNumber, rooms, harvestDate } = req.body;

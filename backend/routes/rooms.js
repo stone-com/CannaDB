@@ -1,3 +1,8 @@
+/**
+ * Room API routes.
+ * Every query includes tenantId: req.tenantId (set by requireLogin middleware).
+ */
+
 const express = require("express");
 const router = express.Router();
 const Room = require("../models/Room");

@@ -1,12 +1,16 @@
+/**
+ * Harvest math — wet/dry weights, averages, and yield per square foot.
+ */
+
 const Room = require("../models/Room");
 
-// Convert unknown input to a safe number.
+// Safely converts a value to a number, or returns a fallback.
 const toNumber = (value, fallback = 0) => {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
 };
 
-// Average weight per plant.
+// Divides weight by plant count to get average grams per plant.
 const averagePerPlant = (weight, plantCount) => {
   if (plantCount <= 0) {
     return null;
@@ -14,7 +18,7 @@ const averagePerPlant = (weight, plantCount) => {
   return weight / plantCount;
 };
 
-// Percent change from wet to dry weight.
+// Calculates percent change from wet weight to dry weight.
 const percentChangeWetToDry = (wetWeight, dryWeight) => {
   if (wetWeight <= 0) {
     return null;
@@ -22,7 +26,7 @@ const percentChangeWetToDry = (wetWeight, dryWeight) => {
   return ((dryWeight - wetWeight) / wetWeight) * 100;
 };
 
-// Yield formula for one strain entry.
+// Yield formula: dry grams per square foot for one strain in the harvest.
 const justinYieldForStrain = ({
   strainPlantCount,
   totalPlantCount,
@@ -43,7 +47,7 @@ const justinYieldForStrain = ({
   return dryWeight / y;
 };
 
-// Sum square footage for all selected rooms.
+// Adds up square footage for all rooms in a harvest.
 const getTotalRoomSquareFeet = async (rooms) => {
   const roomIds = Array.isArray(rooms)
     ? rooms.map((entry) => entry?.roomId).filter(Boolean)
@@ -60,18 +64,15 @@ const getTotalRoomSquareFeet = async (rooms) => {
   );
 };
 
-// Recalculate all derived harvest fields before save.
+// Recalculates all computed fields on a harvest document before it is saved.
 const applyHarvestCalculations = async (harvestDoc) => {
-  // 1) Load total room size.
   const rooms = Array.isArray(harvestDoc.rooms) ? harvestDoc.rooms : [];
   const totalRoomSquareFeet = await getTotalRoomSquareFeet(rooms);
 
-  // 2) Flatten room strains for harvest-level totals.
   const allStrains = rooms.flatMap((roomEntry) =>
     Array.isArray(roomEntry?.strains) ? roomEntry.strains : [],
   );
 
-  // 3) Total plant count across all rooms.
   harvestDoc.totalPlantCount = allStrains.reduce(
     (sum, strain) => sum + toNumber(strain.plantCount, 0),
     0,
@@ -80,14 +81,12 @@ const applyHarvestCalculations = async (harvestDoc) => {
   let totalWetWeightGrams = 0;
   let totalDryWeightGrams = 0;
 
-  // 4) Recompute each strain's derived fields.
   rooms.forEach((roomEntry) => {
     const roomStrains = Array.isArray(roomEntry?.strains)
       ? roomEntry.strains
       : [];
 
     roomStrains.forEach((strain) => {
-      // Parse input values.
       const plantCount = toNumber(strain.plantCount, 0);
       const wetWeight = Array.isArray(strain.totes)
         ? strain.totes.reduce(
@@ -97,7 +96,6 @@ const applyHarvestCalculations = async (harvestDoc) => {
         : 0;
       const dryWeight = toNumber(strain.totalDryWeightGrams, 0);
 
-      // Save per-strain calculations.
       strain.totalWetWeightGrams = wetWeight;
       strain.totalDryWeightGrams = dryWeight;
       strain.wetPlantAvgWeightGrams = averagePerPlant(wetWeight, plantCount);
@@ -113,13 +111,11 @@ const applyHarvestCalculations = async (harvestDoc) => {
         dryWeight,
       });
 
-      // Add to harvest totals.
       totalWetWeightGrams += wetWeight;
       totalDryWeightGrams += dryWeight;
     });
   });
 
-  // 5) Save final harvest totals.
   harvestDoc.totalWetWeightGrams = totalWetWeightGrams;
   harvestDoc.totalDryWeightGrams = totalDryWeightGrams;
   harvestDoc.totalPercentChangeWetToDry = percentChangeWetToDry(

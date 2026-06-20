@@ -12,6 +12,8 @@ import CompostIcon from '@mui/icons-material/Compost';
 import YardIcon from '@mui/icons-material/Yard';
 import { formatDate } from "../utils/formatDate";
 
+// This card highlights the next scheduled harvest on the dashboard.
+// It shows batch details, plant counts by strain, and a button to start harvesting.
 function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
   const upcomingBatch = useMemo(() => {
     if (!Array.isArray(batches)) return null;
@@ -59,6 +61,7 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
           spacing={2}
           alignItems={{ xs: "flex-start", md: "center" }}
         >
+          {/* Harvest details: date, batch number, and plant counts */}
           <Stack spacing={1} sx={{ flex: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <CompostIcon color="primary" />
@@ -100,6 +103,7 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
             )}
           </Stack>
 
+          {/* Start harvest action button */}
           <Stack spacing={1.5} sx={{ minWidth: { xs: "100%", md: 220 } }}>
             <Divider sx={{ display: { xs: "block", md: "none" } }} />
             <Button variant="contained" size="large" onClick={onStartHarvest}>

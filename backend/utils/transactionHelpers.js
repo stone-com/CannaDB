@@ -1,4 +1,8 @@
-// Checks whether Mongo rejected transactions because the current setup does not support them.
+/**
+ * Helpers for running database work inside a transaction when MongoDB supports it.
+ */
+
+// Returns true when this MongoDB setup cannot use transactions (common on local dev).
 function isTransactionUnsupported(error) {
   const message = String(error?.message || "");
   return (
@@ -7,8 +11,7 @@ function isTransactionUnsupported(error) {
   );
 }
 
-// Runs a block of database work inside a transaction when possible.
-// If the database does not support transactions, it runs the same work once without one.
+// Runs work(session) inside a transaction when possible, otherwise runs it once without one.
 async function runWithOptionalTransaction(mongoose, work) {
   const session = await mongoose.startSession();
 

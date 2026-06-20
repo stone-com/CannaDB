@@ -9,7 +9,8 @@ import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 
-// Dedicated full-page panel view (like Admin) — no sidebar, no floating window.
+// This component shows a full-page panel (like Admin) instead of a floating window.
+// It has a title bar with buttons to exit full screen or close the panel.
 export default function PanelView({
   title,
   onExitFullscreen,
@@ -18,6 +19,7 @@ export default function PanelView({
 }) {
   return (
     <Stack sx={{ height: "100%", minHeight: 0 }}>
+      {/* Panel header with title and window controls */}
       <Paper
         elevation={0}
         sx={(theme) => ({
@@ -34,6 +36,7 @@ export default function PanelView({
           {title}
         </Typography>
 
+        {/* Exit full screen and close buttons */}
         <Stack
           direction="row"
           spacing={0.25}
@@ -63,6 +66,7 @@ export default function PanelView({
         </Stack>
       </Paper>
 
+      {/* Scrollable main content area */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: 3 }}>
         {children}
       </Box>

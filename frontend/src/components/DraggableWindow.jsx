@@ -11,6 +11,8 @@ let globalZIndex = 1200;
 const APP_BAR_HEIGHT = 64;
 const TASKBAR_HEIGHT = 64;
 
+// This component renders a movable, resizable floating window on the screen.
+// Users can drag the title bar, resize from the corner, minimize, or go full screen.
 export default function DraggableWindow({
   title,
   onClose,
@@ -35,10 +37,12 @@ export default function DraggableWindow({
 
   sizeRef.current = size;
 
+  // Brings this window to the front so it appears above other windows.
   const bringToFront = () => {
     setZIndex(++globalZIndex);
   };
 
+  // Starts dragging when the user presses the mouse on the title bar.
   const handleTitleMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -53,6 +57,7 @@ export default function DraggableWindow({
     };
   };
 
+  // Starts resizing when the user presses the mouse on the corner handle.
   const handleResizeMouseDown = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -68,7 +73,9 @@ export default function DraggableWindow({
     };
   };
 
+  // Listens for mouse move and mouse up events to handle drag and resize.
   useEffect(() => {
+    // Updates window position or size while the user moves the mouse.
     const onMouseMove = (e) => {
       if (!interaction.current) return;
 
@@ -103,6 +110,7 @@ export default function DraggableWindow({
       }
     };
 
+    // Stops drag or resize when the user releases the mouse button.
     const onMouseUp = () => {
       interaction.current = null;
     };
@@ -116,6 +124,7 @@ export default function DraggableWindow({
     };
   }, [leftBound]);
 
+  // Keeps the window inside the visible screen area when layout bounds change.
   useEffect(() => {
     const maxX = Math.max(leftBound, window.innerWidth - sizeRef.current.w);
     const maxY = Math.max(
@@ -164,6 +173,7 @@ export default function DraggableWindow({
           overflow: "visible",
         }}
       >
+        {/* Title bar: drag handle, title text, and window buttons */}
         <Box
           onMouseDown={handleTitleMouseDown}
           sx={(theme) => ({
@@ -187,6 +197,7 @@ export default function DraggableWindow({
             </Typography>
           </Stack>
 
+          {/* Minimize, full screen, and close buttons */}
           <Stack
             direction="row"
             spacing={0.25}
@@ -219,10 +230,12 @@ export default function DraggableWindow({
           </Stack>
         </Box>
 
+        {/* Scrollable content area */}
         <Stack sx={{ flex: 1, minHeight: 0, overflow: "auto", p: 2 }}>
           {children}
         </Stack>
 
+        {/* Bottom-right corner handle for resizing */}
         <Box
           onMouseDown={handleResizeMouseDown}
           sx={(theme) => ({

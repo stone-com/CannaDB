@@ -1,3 +1,4 @@
+// HarvestReportPage — pick a harvest to view totals, room breakdowns, and per-strain weight metrics.
 import { Fragment, useMemo, useState } from "react";
 import {
   Accordion,
@@ -24,12 +25,14 @@ import WarehouseIcon from "@mui/icons-material/Warehouse";
 import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
+// Round a number to one decimal place (returns null if the value is not a valid number).
 const roundToTenth = (value) => {
   const num = Number(value);
   if (!Number.isFinite(num)) return null;
   return Math.round(num * 10) / 10;
 };
 
+// Format a weight number for display with one decimal place, or "N/A" when missing.
 const formatHarvestMetric = (value) => {
   if (value === null || value === undefined || value === "N/A") return "N/A";
   if (typeof value === "string" && value.trim() === "") return "N/A";
@@ -43,11 +46,13 @@ const formatHarvestMetric = (value) => {
   });
 };
 
+// Format a percentage value for display, adding a "%" suffix when valid.
 const formatHarvestPercent = (value) => {
   const formatted = formatHarvestMetric(value);
   return formatted === "N/A" ? formatted : `${formatted}%`;
 };
 
+// Join all tote wet weights into a comma-separated string for display.
 const formatToteWeights = (totes) => {
   if (!Array.isArray(totes) || totes.length === 0) return "None";
   return totes
@@ -55,9 +60,8 @@ const formatToteWeights = (totes) => {
     .join(", ");
 };
 
-// Build dropdown label for one harvest.
+// Build the text label shown for each harvest in the dropdown selector.
 const buildHarvestOptionLabel = (harvest) => {
-  // This helper keeps dropdown label formatting in one place.
   if (!harvest) return "N/A";
 
   const dateText = formatDate(harvest.harvestDate);
@@ -73,7 +77,7 @@ const buildHarvestOptionLabel = (harvest) => {
   return `${dateText} — ${harvestNumberText} — ${locationText} — ${roomNames || "No Rooms"}`;
 };
 
-// Read-only harvest analytics page with room and strain drill-down.
+// Main component: shows harvest summary cards, metadata, and room-by-room strain tables.
 function HarvestReportPage({ harvests }) {
   // Dropdown selection + row expansion state for the report view.
   const [selectedHarvestId, setSelectedHarvestId] = useState("");
@@ -373,6 +377,7 @@ function HarvestReportPage({ harvests }) {
             </Grid>
           </Paper>
 
+          {/* Room accordions — each room lists its strains in a sortable table. */}
           {roomSections.length === 0 ? (
             <Alert severity="info">
               No room/strain rows found for this harvest.
@@ -498,6 +503,7 @@ function HarvestReportPage({ harvests }) {
                         />
                       </Box>
 
+                      {/* Expanded strain detail card — shows averages and tote weights. */}
                       {section.strainRows.map((row) => (
                         <Fragment key={`${row.key}-detail`}>
                           {expandedRowKey === row.key && (

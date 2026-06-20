@@ -10,7 +10,8 @@
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
-// Bottom app bar for page navigation and open panel chips.
+// This bar sits at the bottom of the screen for main page navigation.
+// It also shows chips for each open panel so users can switch between them.
 export default function Taskbar({ tabs, activePage, onNavigate }) {
   const visibleTabs = tabs.filter((tab) => tab.visible);
   const navValue =
@@ -28,6 +29,7 @@ export default function Taskbar({ tabs, activePage, onNavigate }) {
       }}
     >
       <Toolbar sx={{ gap: 2, minHeight: "64px !important" }}>
+        {/* Main navigation: Dashboard and Admin pages */}
         <BottomNavigation
           showLabels
           value={navValue}
@@ -46,6 +48,7 @@ export default function Taskbar({ tabs, activePage, onNavigate }) {
           />
         </BottomNavigation>
 
+        {/* Open panel tabs shown as clickable chips */}
         <Box sx={{ flex: 1, overflowX: "auto", pb: 0.4, minWidth: 0 }}>
           <Stack direction="row" spacing={1}>
             {visibleTabs.map((tab) => (

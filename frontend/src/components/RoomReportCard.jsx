@@ -1,6 +1,8 @@
 import { Button, Card, CardContent, Stack, Typography } from "@mui/material";
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 
+// This card summarizes room and plant counts on the dashboard.
+// It breaks totals down by room type and links to the full rooms view.
 function RoomReportCard({ rooms = [], roomAssignments = [], onClick }) {
   const activeAssignments = Array.isArray(roomAssignments)
     ? roomAssignments.filter((assignment) => assignment?.active !== false)
@@ -88,6 +90,7 @@ function RoomReportCard({ rooms = [], roomAssignments = [], onClick }) {
         background: "secondary.main"
       }}>
       <CardContent>
+        {/* Summary stats and breakdown by room type */}
         <Stack spacing={1}>
           <Typography variant="h6">Room Report</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -111,6 +114,7 @@ function RoomReportCard({ rooms = [], roomAssignments = [], onClick }) {
             })}
           </Stack>
         </Stack>
+        {/* Button to open the full rooms panel */}
         <Button variant="contained" onClick={onClick} sx={{ mt: 1.5 }}>
           <MeetingRoomIcon sx={{ mr: 1 }} />
           View Rooms

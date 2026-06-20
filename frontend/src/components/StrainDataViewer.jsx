@@ -1,3 +1,4 @@
+// StrainDataViewer — searchable table of all strains with plant counts, harvest dates, and yield history.
 import { Fragment, useMemo, useState } from "react";
 import {
   Accordion,
@@ -18,8 +19,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { DataGrid } from "@mui/x-data-grid";
 import { formatDate } from "../utils/formatDate";
 
-// Read-only strain analytics combining assignment and harvest history.
-// Show strain totals and yield metrics.
+// Main component: builds strain summary rows from assignments and harvest records.
 function StrainDataViewer({ strains, roomAssignments, harvests }) {
   // Only one strain details panel can be open at a time.
   const [expandedStrainId, setExpandedStrainId] = useState(null);
@@ -148,8 +148,8 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [strains, roomAssignments, harvests]);
 
+  // Open or close the detail accordion when a table row is clicked.
   const toggleExpandedRow = (strainId) => {
-    // Click once to open details, click again to close same row.
     setExpandedStrainId((prev) => (prev === strainId ? null : strainId));
   };
 
@@ -196,7 +196,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       flex: 0.8,
       minWidth: 120,
       renderCell: ({ value }) => (
-        // Type rendered as chip for quick visual grouping.
+        // Show strain type as a small outlined chip in the table cell.
         <Chip size="small" label={value} variant="outlined" />
       ),
     },
@@ -279,6 +279,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
         </Stack>
       </Paper>
 
+      {/* Strain summary table — click a row to expand details below. */}
       <Box sx={{ height: 380, width: "100%" }}>
         <DataGrid
           // DataGrid gives sorting/pagination behavior without custom table plumbing.
@@ -302,11 +303,10 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
         />
       </Box>
 
+      {/* Expanded detail accordions — one appears below the table for the clicked strain. */}
       {filteredRows.map((row) => (
-        // Render details accordion only for the row currently expanded.
         <Fragment key={row.strainId}>
           {expandedStrainId === row.strainId && (
-            // Accordion reveals secondary details only for the selected row.
             <Accordion
               defaultExpanded
               elevation={0}
@@ -353,8 +353,9 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                     No plant/room data available yet.
                   </Typography>
                 ) : (
-                  // Secondary grid shows where this strain currently lives by room/batch.
-                  <Box sx={{ height: 300 }}>
+                  <>
+                    {/* Room/batch breakdown table for this strain. */}
+                    <Box sx={{ height: 300 }}>
                     <DataGrid
                       rows={row.plantsByRoom.map((item, index) => ({
                         // Row IDs combine strain + index so DataGrid keys stay stable.
@@ -414,6 +415,7 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                       })}
                     />
                   </Box>
+                  </>
                 )}
               </AccordionDetails>
             </Accordion>

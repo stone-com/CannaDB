@@ -1,3 +1,9 @@
+/**
+ * Strain API routes.
+ * Rule: every database query must include tenantId: req.tenantId.
+ * req.tenantId is set automatically by requireLogin before this code runs.
+ */
+
 const express = require("express");
 const router = express.Router();
 const Strain = require("../models/Strain");
@@ -6,6 +12,7 @@ const Harvest = require("../models/Harvest");
 const RoomAssignment = require("../models/RoomAssignment");
 const { recordAudit } = require("../utils/recordAudit");
 
+// POST /api/strains — create a new strain.
 router.post("/", async (req, res) => {
   try {
     const { name, type, status } = req.body;

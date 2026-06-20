@@ -166,8 +166,9 @@ async function buildUniqueMomBatchNumber(
 }
 
 // Batch create/read and movement endpoints.
+// Always include tenantId: req.tenantId in every database query.
 
-// Create batch.
+// POST /api/batches — create a new batch.
 router.post("/", async (req, res) => {
   try {
     const { batchNumber, cloneDate, harvestDate, location, rooms, batchType } =
@@ -211,7 +212,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List batches.
+// GET /api/batches — list all batches for this tenant.
 router.get("/", async (req, res) => {
   try {
     await autoPromoteDueBatchesToHarvestReady(req.tenantId);
@@ -226,7 +227,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Move batch to a room and advance its stage.
+// POST /api/batches/:id/move — move a batch to a room and advance its stage.
 router.post("/:id/move", async (req, res) => {
   try {
     const { roomId, notes } = req.body;

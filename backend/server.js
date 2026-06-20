@@ -2,12 +2,11 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const { requireAuth } = require("./middleware/auth");
+const { requireLogin } = require("./middleware/requireLogin");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Allow frontend requests and parse JSON bodies.
 app.use(cors());
 app.use(express.json());
 
@@ -19,7 +18,7 @@ mongoose
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
-// Public routes — no login required.
+// PUBLIC ROUTES (no login required)
 app.get("/api/health", (req, res) => {
   const stateByCode = {
     0: "disconnected",
@@ -42,11 +41,10 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Login route is public. /api/auth/me checks its own token inside the route file.
 app.use("/api/auth", require("./routes/auth"));
 
-// Everything below this line requires a valid login token.
-app.use(requireAuth);
+// PROTECTED ROUTES — requireLogin runs first and sets req.user + req.tenantId
+app.use(requireLogin);
 
 app.use("/api/strains", require("./routes/strains"));
 app.use("/api/batches", require("./routes/batches"));

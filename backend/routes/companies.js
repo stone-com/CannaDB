@@ -1,11 +1,17 @@
+/**
+ * Company API routes.
+ * Always include tenantId: req.tenantId in queries (set by requireLogin).
+ */
+
 const express = require("express");
 const router = express.Router();
 const Company = require("../models/Company");
 const { recordAudit } = require("../utils/recordAudit");
 
 // Company create/read endpoints.
-// req.tenantId comes from auth middleware — always include it in queries.
+// req.tenantId comes from requireLogin middleware — always include it in queries.
 
+// POST /api/companies — create a company.
 router.post("/", async (req, res) => {
   try {
     const { name } = req.body;
@@ -35,6 +41,7 @@ router.post("/", async (req, res) => {
   }
 });
 
+// GET /api/companies — list all companies for this tenant.
 router.get("/", async (req, res) => {
   try {
     const companies = await Company.find({ tenantId: req.tenantId });
@@ -44,6 +51,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /api/companies/:id — get one company.
 router.get("/:id", async (req, res) => {
   try {
     const company = await Company.findOne({

@@ -1,3 +1,8 @@
+/**
+ * Main app shell — dashboard, sidebar, floating panels, admin, and activity log.
+ * Loads shared data (strains, batches, rooms, etc.) and passes it to child components.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -40,12 +45,13 @@ import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
-import RoomViewer from "./components/RoomViewer";
+import RoomViewerPanel from "./components/RoomViewerPanel";
 import DraggableWindow from "./components/DraggableWindow";
 import PanelView from "./components/PanelView";
 import Taskbar from "./components/Taskbar";
 import UpcomingHarvestCard from "./components/UpcomingHarvestCard";
 import RoomReportCard from "./components/RoomReportCard";
+import { apiGet } from "./utils/api";
 
 // Layout sizing constants for the app shell.
 const APP_BAR_HEIGHT = 64;
@@ -134,9 +140,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
   // Generic fetch helper for API collections.
   const fetchCollection = useCallback(async (path, setter) => {
     try {
-      const res = await fetch(path);
-      if (!res.ok) throw new Error(`Failed to fetch ${path}`);
-      const data = await res.json();
+      const data = await apiGet(path);
       setter(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(`Error fetching ${path}:`, err);
@@ -186,7 +190,9 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
           const nextFullscreen = { ...fullscreen, [key]: false };
           setActiveFullscreenKey((current) => {
             if (current !== key) return current;
-            return Object.keys(nextFullscreen).find((k) => nextFullscreen[k]) || null;
+            return (
+              Object.keys(nextFullscreen).find((k) => nextFullscreen[k]) || null
+            );
           });
           return nextFullscreen;
         });
@@ -197,6 +203,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
   };
 
+  // Opens the harvest intake panel from the dashboard shortcut.
   const openHarvestWindow = () => {
     setSelectedViews((prev) => ({ ...prev, harvestForm: true }));
     setMinimizedWindows((prev) => ({ ...prev, harvestForm: false }));
@@ -411,7 +418,9 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
       return <HarvestReportPage harvests={harvests} />;
     }
     if (key === "roomViewer") {
-      return <RoomViewer rooms={rooms} roomAssignments={roomAssignments} />;
+      return (
+        <RoomViewerPanel rooms={rooms} roomAssignments={roomAssignments} />
+      );
     }
     if (key === "harvestForm") {
       return (
@@ -447,6 +456,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     return null;
   };
 
+  // Switches between dashboard, admin, and activity log pages from the taskbar.
   const handleTaskbarNavigate = (page) => {
     setActivePage(page);
     if (page === "dashboard") {
@@ -454,6 +464,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     }
   };
 
+  // Creates one taskbar chip config object for an open panel.
   const buildTaskbarTab = (key, label) => ({
     key,
     label,
@@ -882,10 +893,13 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
               leftBound={dashboardSidebarWidth}
               defaultX={480}
               defaultY={200}
-              defaultW={700}
-              defaultH={440}
+              defaultW={980}
+              defaultH={620}
             >
-              <RoomViewer rooms={rooms} roomAssignments={roomAssignments} />
+              <RoomViewerPanel
+                rooms={rooms}
+                roomAssignments={roomAssignments}
+              />
             </DraggableWindow>
           )}
           {selectedViews.harvestForm && !fullscreenWindows.harvestForm && (

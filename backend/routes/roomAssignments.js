@@ -1,3 +1,8 @@
+/**
+ * Room assignment API — which batch is in which room.
+ * Always include tenantId: req.tenantId in every database query.
+ */
+
 const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
@@ -25,6 +30,7 @@ const ROOM_ASSIGNMENT_POPULATE = [
   "assignedPlants.strainId",
 ];
 
+// GET /api/room-assignments — list assignments (active only by default).
 router.get("/", async (req, res) => {
   try {
     const activeOnly = req.query.active !== "false";

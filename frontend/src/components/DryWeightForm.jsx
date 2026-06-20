@@ -11,12 +11,14 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { apiPatch } from "../utils/api";
 
 const SELECT_MENU_PROPS = {
   disablePortal: true,
 };
 
-// Enter and finalize dry weight totals for harvested strains.
+// This form lets users enter final dry weights for strains after harvest.
+// Users pick a drying batch, set weights per strain, then save them to the server.
 function DryWeightForm({ harvests, onComplete }) {
   // Current selected batch/strain row.
   const [selectedBatchId, setSelectedBatchId] = useState("");
@@ -97,7 +99,7 @@ function DryWeightForm({ harvests, onComplete }) {
     [harvestStrains, selectedStrainKey],
   );
 
-  // Reset form state when batch changes.
+  // Clears strain and weight fields when the user picks a different batch.
   const handleBatchChange = (e) => {
     setSelectedBatchId(e.target.value);
     setSelectedStrainKey(null);
@@ -105,13 +107,13 @@ function DryWeightForm({ harvests, onComplete }) {
     setDryWeightsByKey({});
   };
 
+  // Selects a strain row so the user can enter its dry weight on the right.
   const handleStrainClick = (strainKey) => {
-    // Choosing a row updates right-side editor context.
     setSelectedStrainKey(strainKey);
     setDryWeightInput("");
   };
 
-  // Save one typed dry weight value for the selected row.
+  // Saves the typed dry weight value for the currently selected strain.
   const handleSetDryWeight = () => {
     if (!selectedStrainKey) return;
 
@@ -127,7 +129,7 @@ function DryWeightForm({ harvests, onComplete }) {
     }));
   };
 
-  // Save dry weights back to the harvest.
+  // Sends all dry weights to the server and finalizes the harvest record.
   const handleSubmit = async () => {
     if (!selectedHarvest) {
       window.alert("Please select a harvest.");
@@ -158,21 +160,10 @@ function DryWeightForm({ harvests, onComplete }) {
         }),
       );
 
-      const res = await fetch(`/api/harvests/${selectedHarvest._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rooms: updatedRooms,
-          finalizeDryWeights: true,
-        }),
+      await apiPatch(`/api/harvests/${selectedHarvest._id}`, {
+        rooms: updatedRooms,
+        finalizeDryWeights: true,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to save dry weights");
-      }
-
-      await res.json();
 
       if (onComplete) {
         await onComplete();
@@ -194,11 +185,12 @@ function DryWeightForm({ harvests, onComplete }) {
       spacing={2}
       sx={{ height: "100%" }}
     >
-      {/* Left column drives selection of harvest + strain rows. */}
+      {/* Left side: batch picker, strain list, and save button */}
       <Stack spacing={2} sx={{ width: { xs: "100%", md: 420 } }}>
-        {/* Section heading for the dry-weight workflow. */}
+        {/* Page title */}
         <Typography variant="h6">Dry Weight Entry</Typography>
 
+        {/* Batch dropdown (only batches in drying stage) */}
         <TextField
           select
           label="Batch (Drying Only)"
@@ -230,8 +222,8 @@ function DryWeightForm({ harvests, onComplete }) {
           })}
         </TextField>
 
+        {/* Strain buttons showing dry weight status per row */}
         {selectedHarvest && (
-          // Left-side list acts like a lightweight picker for row editing.
           <Card variant="outlined">
             <CardContent>
               <Typography
@@ -280,9 +272,8 @@ function DryWeightForm({ harvests, onComplete }) {
         )}
       </Stack>
 
-      {/* Right column is focused editor for the active strain row. */}
+      {/* Right side: dry weight editor for the selected strain */}
       <Box sx={{ flex: 1 }}>
-        {/* Full-height card gives a stable editing area while selection changes. */}
         <Card variant="outlined" sx={{ height: "100%" }}>
           <CardContent>
             {selectedStrain ? (

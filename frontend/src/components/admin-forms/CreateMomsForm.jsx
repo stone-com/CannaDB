@@ -8,8 +8,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { apiGet, apiPost } from "../../utils/api";
 
-// Convert selected Veg-stage production plants into a new mom batch.
+// This form converts plants from a Veg production batch into a new mom batch.
+// Users pick a source batch, choose a mom room, set counts per strain, then submit.
 function CreateMomsForm() {
   // Data sources and controlled fields for the conversion workflow.
   const [batches, setBatches] = useState([]);
@@ -20,17 +22,12 @@ function CreateMomsForm() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Loads batches and rooms from the server for the dropdowns.
   const fetchData = async () => {
-    // Load both batches and rooms together for dropdowns and defaults.
     try {
-      const [batchRes, roomRes] = await Promise.all([
-        fetch("/api/batches"),
-        fetch("/api/rooms"),
-      ]);
-
       const [batchData, roomData] = await Promise.all([
-        batchRes.json(),
-        roomRes.json(),
+        apiGet("/api/batches"),
+        apiGet("/api/rooms"),
       ]);
 
       setBatches(Array.isArray(batchData) ? batchData : []);
@@ -194,21 +191,13 @@ function CreateMomsForm() {
     try {
       setSubmitting(true);
 
-      const res = await fetch(`/api/batches/${selectedBatch._id}/create-moms`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const result = await apiPost(
+        `/api/batches/${selectedBatch._id}/create-moms`,
+        {
           momRoomId: selectedMomRoomId,
           plants: plantsPayload,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to create mom batch");
-      }
-
-      const result = await res.json();
+        },
+      );
 
       window.dispatchEvent(
         new CustomEvent("batch:updated", { detail: result.sourceBatch }),
@@ -240,6 +229,7 @@ function CreateMomsForm() {
     <>
       {/* Single form handles source batch selection, room selection, and strain counts. */}
       <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+        {/* Source batch picker (Veg production batches only) */}
         <TextField
           select
           label="Source Production Batch (Veg Only)"
@@ -271,7 +261,7 @@ function CreateMomsForm() {
 
         {selectedBatch && (
           <>
-            {/* Room selector is constrained to Mom rooms at the batch location. */}
+            {/* Destination mom room picker */}
             <TextField
               select
               label="Mom Room"
@@ -287,12 +277,13 @@ function CreateMomsForm() {
               ))}
             </TextField>
 
+            {/* Instructions for strain cut counts */}
             <Typography variant="body2" color="text.secondary">
               Select how many plants from each strain to convert to moms.
             </Typography>
 
+            {/* One count input per strain */}
             {availablePlantsByStrain.map((strain) => (
-              // One numeric input per strain for how many plants become moms.
               <TextField
                 key={strain.strainId}
                 type="number"
@@ -312,12 +303,13 @@ function CreateMomsForm() {
           </>
         )}
 
+        {/* Submit button */}
         <Button variant="contained" type="submit" disabled={submitting}>
           {submitting ? "Creating..." : "Create Mom Batch"}
         </Button>
 
+        {/* Success or error message */}
         {message && (
-          // Same Alert surface is reused for success and error messaging.
           <Alert severity={message.startsWith("Error") ? "error" : "success"}>
             {message}
           </Alert>
