@@ -23,7 +23,8 @@ function BatchForm() {
   const [strains, setStrains] = useState([]);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [locations, setLocations] = useState([]); 
   // Load strain options used in the strain dropdown.
   useEffect(() => {
     // Local helper keeps fetching logic close to where it is used.
@@ -41,7 +42,17 @@ function BatchForm() {
         console.error("Error fetching strains:", error);
       }
     }
+    async function fetchLocations() {
+      try {
+        const response = await fetch("/api/locations");
+        const data = await response.json();
+        setLocations(data);
+      } catch (error) {
+        console.error("Error fetching locations:", error);
+      }
+    }
     fetchStrains();
+    fetchLocations();
   }, []);
 
   const totalPlants = useMemo(
@@ -102,6 +113,7 @@ function BatchForm() {
       harvestDate: harvestDate || null,
       cloneDate,
       plants,
+      location: selectedLocation
     };
 
     try {
@@ -150,6 +162,7 @@ function BatchForm() {
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
       <Typography variant="h6">Create New Batch</Typography>
       {/* Card groups core batch metadata fields. */}
+      {console.log(locations)}
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2}>
@@ -183,6 +196,19 @@ function BatchForm() {
                 htmlInput: { placeholder: "" },
               }}
             />
+            <TextField
+            select label="location"
+            value={selectedLocation}
+            onChange={(e) => setSelectedLocation(e.target.value)}
+            >
+            <MenuItem value="">Select a location</MenuItem>
+            {locations.map((location) => (
+              <MenuItem key={location._id} value={location._id}>
+                {location.nickname}
+              </MenuItem>
+            ))}
+            </TextField>
+            {console.log(selectedLocation)}  
           </Stack>
         </CardContent>
       </Card>
