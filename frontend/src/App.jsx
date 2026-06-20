@@ -3,6 +3,7 @@ import {
   Alert,
   AppBar,
   Box,
+  Button,
   Card,
   CardContent,
   Divider,
@@ -31,13 +32,17 @@ import AssessmentIcon from "@mui/icons-material/Assessment";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import AgricultureIcon from "@mui/icons-material/Agriculture";
 import ScaleIcon from "@mui/icons-material/Scale";
+import LogoutIcon from "@mui/icons-material/Logout";
+import HistoryIcon from "@mui/icons-material/History";
 import AdminPanel from "./components/AdminPanel";
+import AuditLogPage from "./components/AuditLogPage";
 import HarvestForm from "./components/HarvestForm";
 import DryWeightForm from "./components/DryWeightForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
 import RoomViewer from "./components/RoomViewer";
 import DraggableWindow from "./components/DraggableWindow";
+import PanelView from "./components/PanelView";
 import Taskbar from "./components/Taskbar";
 import UpcomingHarvestCard from "./components/UpcomingHarvestCard";
 import RoomReportCard from "./components/RoomReportCard";
@@ -59,6 +64,14 @@ const HARVEST_OPTIONS = [
   { key: "dryWeightForm", label: "Add Dry Weights", icon: ScaleIcon },
 ];
 
+const PANEL_KEYS = [
+  "strains",
+  "harvestReport",
+  "roomViewer",
+  "harvestForm",
+  "dryWeightForm",
+];
+
 const DATA_REFRESH_EVENTS = [
   "company:created",
   "location:created",
@@ -71,7 +84,7 @@ const DATA_REFRESH_EVENTS = [
 ];
 
 // Main application shell and dashboard/workspace coordinator.
-function App({ darkMode, onToggleDarkMode }) {
+function App({ darkMode, onToggleDarkMode, onLogout }) {
   // Shared datasets used by dashboard cards and panels.
   const [strains, setStrains] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -99,6 +112,18 @@ function App({ darkMode, onToggleDarkMode }) {
     harvestForm: false,
     dryWeightForm: false,
   });
+
+  // Tracks which panels are in full-screen mode.
+  const [fullscreenWindows, setFullscreenWindows] = useState({
+    strains: false,
+    harvestReport: false,
+    roomViewer: false,
+    harvestForm: false,
+    dryWeightForm: false,
+  });
+
+  // Which full-screen panel is currently visible (when several are maximized).
+  const [activeFullscreenKey, setActiveFullscreenKey] = useState(null);
 
   const [toast, setToast] = useState({
     open: false,
@@ -153,7 +178,22 @@ function App({ darkMode, onToggleDarkMode }) {
 
   // Toggle panel visibility and always un-minimize when opened.
   const toggleView = (key) => {
-    setSelectedViews((prev) => ({ ...prev, [key]: !prev[key] }));
+    setSelectedViews((prev) => {
+      const opening = !prev[key];
+
+      if (!opening) {
+        setFullscreenWindows((fullscreen) => {
+          const nextFullscreen = { ...fullscreen, [key]: false };
+          setActiveFullscreenKey((current) => {
+            if (current !== key) return current;
+            return Object.keys(nextFullscreen).find((k) => nextFullscreen[k]) || null;
+          });
+          return nextFullscreen;
+        });
+      }
+
+      return { ...prev, [key]: opening };
+    });
     setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
   };
 
@@ -165,6 +205,68 @@ function App({ darkMode, onToggleDarkMode }) {
   // Minimize or restore one floating window from the taskbar/chips.
   const toggleMinimize = (key) => {
     setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // One taskbar chip per open panel — show, hide, or switch full-screen panels.
+  const handleTaskbarPanelClick = (key) => {
+    if (!selectedViews[key]) return;
+
+    setActivePage("dashboard");
+
+    if (minimizedWindows[key]) {
+      setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
+      if (fullscreenWindows[key]) {
+        setActiveFullscreenKey(key);
+      }
+      return;
+    }
+
+    if (fullscreenWindows[key]) {
+      if (activeFullscreenKey === key) {
+        setMinimizedWindows((prev) => {
+          const nextMinimized = { ...prev, [key]: true };
+          setActiveFullscreenKey((current) => {
+            if (current !== key) return current;
+            return (
+              PANEL_KEYS.find(
+                (panelKey) =>
+                  panelKey !== key &&
+                  selectedViews[panelKey] &&
+                  fullscreenWindows[panelKey] &&
+                  !nextMinimized[panelKey],
+              ) || null
+            );
+          });
+          return nextMinimized;
+        });
+      } else {
+        setActiveFullscreenKey(key);
+      }
+      return;
+    }
+
+    toggleMinimize(key);
+  };
+
+  // Expand a panel to full screen, or restore it to floating mode.
+  const toggleFullscreen = (key) => {
+    setFullscreenWindows((prev) => {
+      const entering = !prev[key];
+      const next = { ...prev, [key]: entering };
+
+      if (entering) {
+        setMinimizedWindows((minimized) => ({ ...minimized, [key]: false }));
+        setActivePage("dashboard");
+        setActiveFullscreenKey(key);
+      } else {
+        setActiveFullscreenKey((current) => {
+          if (current !== key) return current;
+          return Object.keys(next).find((k) => next[k]) || null;
+        });
+      }
+
+      return next;
+    });
   };
 
   // Dashboard KPI values.
@@ -273,9 +375,96 @@ function App({ darkMode, onToggleDarkMode }) {
     };
   }, [historicalAvgDryPerPlant, roomAssignments]);
 
-  // Sidebar width only affects dashboard mode.
+  const isPanelView =
+    activePage === "dashboard" &&
+    activeFullscreenKey &&
+    selectedViews[activeFullscreenKey] &&
+    fullscreenWindows[activeFullscreenKey] &&
+    !minimizedWindows[activeFullscreenKey];
+
+  const isPanelActiveInTaskbar = (key) => {
+    if (minimizedWindows[key]) return false;
+    if (fullscreenWindows[key]) return activeFullscreenKey === key;
+    return !isPanelView;
+  };
+
+  const getPanelTitle = (key) => {
+    if (key === "strains") return `Strains (${strains.length})`;
+    if (key === "harvestReport") return "Harvest Report";
+    if (key === "roomViewer") return "Room Viewer";
+    if (key === "harvestForm") return "Add Harvest";
+    if (key === "dryWeightForm") return "Add Dry Weights";
+    return "Panel";
+  };
+
+  const renderWorkspacePanel = (key) => {
+    if (key === "strains") {
+      return (
+        <StrainDataViewer
+          strains={strains}
+          roomAssignments={roomAssignments}
+          harvests={harvests}
+        />
+      );
+    }
+    if (key === "harvestReport") {
+      return <HarvestReportPage harvests={harvests} />;
+    }
+    if (key === "roomViewer") {
+      return <RoomViewer rooms={rooms} roomAssignments={roomAssignments} />;
+    }
+    if (key === "harvestForm") {
+      return (
+        <HarvestForm
+          onComplete={async () => {
+            await fetchAllData();
+            toggleView("harvestForm");
+            setToast({
+              open: true,
+              message: "Harvest created successfully.",
+              severity: "success",
+            });
+          }}
+        />
+      );
+    }
+    if (key === "dryWeightForm") {
+      return (
+        <DryWeightForm
+          harvests={harvests}
+          onComplete={async () => {
+            await fetchAllData();
+            toggleView("dryWeightForm");
+            setToast({
+              open: true,
+              message: "Dry weights saved successfully.",
+              severity: "success",
+            });
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
+  const handleTaskbarNavigate = (page) => {
+    setActivePage(page);
+    if (page === "dashboard") {
+      setActiveFullscreenKey(null);
+    }
+  };
+
+  const buildTaskbarTab = (key, label) => ({
+    key,
+    label,
+    visible: activePage === "dashboard" && selectedViews[key],
+    active: isPanelActiveInTaskbar(key),
+    onClick: () => handleTaskbarPanelClick(key),
+  });
+
+  // Sidebar width only on dashboard home — hidden for admin, activity log, and panel views.
   const dashboardSidebarWidth =
-    activePage === "dashboard"
+    activePage === "dashboard" && !isPanelView
       ? sidebarExpanded
         ? SIDEBAR_EXPANDED_WIDTH
         : SIDEBAR_COLLAPSED_WIDTH
@@ -320,6 +509,26 @@ function App({ darkMode, onToggleDarkMode }) {
             >
               {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
             </IconButton>
+            <Button
+              size="small"
+              variant={activePage === "auditLogs" ? "contained" : "outlined"}
+              startIcon={<HistoryIcon />}
+              onClick={() =>
+                setActivePage((page) =>
+                  page === "auditLogs" ? "dashboard" : "auditLogs",
+                )
+              }
+            >
+              Activity
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<LogoutIcon />}
+              onClick={onLogout}
+            >
+              Log out
+            </Button>
           </Stack>
         </Toolbar>
       </AppBar>
@@ -330,7 +539,7 @@ function App({ darkMode, onToggleDarkMode }) {
       <Box
         sx={{ display: "flex", minHeight: `calc(100vh - ${APP_BAR_HEIGHT}px)` }}
       >
-        {activePage === "dashboard" && (
+        {activePage === "dashboard" && !isPanelView && (
           /* Permanent MUI Drawer used as the dashboard launcher rail. */
           <Drawer
             variant="permanent"
@@ -515,7 +724,17 @@ function App({ darkMode, onToggleDarkMode }) {
           {/* LinearProgress gives users immediate feedback during API refreshes. */}
           {loadingData && <LinearProgress />}
 
-          {activePage === "dashboard" && (
+          {isPanelView && !loadingData && (
+            <PanelView
+              title={getPanelTitle(activeFullscreenKey)}
+              onExitFullscreen={() => toggleFullscreen(activeFullscreenKey)}
+              onClose={() => toggleView(activeFullscreenKey)}
+            >
+              {renderWorkspacePanel(activeFullscreenKey)}
+            </PanelView>
+          )}
+
+          {activePage === "dashboard" && !isPanelView && (
             // Dashboard page body: upcoming harvest, KPIs, and workspace intro.
             <Stack spacing={2}>
               {/* Hero summary card with nearest upcoming harvest details. */}
@@ -607,19 +826,21 @@ function App({ darkMode, onToggleDarkMode }) {
 
           {/* Admin page body is delegated to AdminPanel component. */}
           {activePage === "admin" && <AdminPanel />}
+
+          {activePage === "auditLogs" && <AuditLogPage />}
         </Box>
       </Box>
 
-      {!loadingData && activePage === "dashboard" && (
+      {!loadingData && activePage === "dashboard" && !isPanelView && (
         <>
-          {/* Each viewer/form mounts inside the same draggable window shell. */}
-          {selectedViews.strains && (
+          {selectedViews.strains && !fullscreenWindows.strains && (
             // Floating analytics window for strain-level live and historical metrics.
             <DraggableWindow
               title={`Strains (${strains.length})`}
               onClose={() => toggleView("strains")}
               isMinimized={minimizedWindows.strains}
               onMinimize={() => toggleMinimize("strains")}
+              onToggleFullscreen={() => toggleFullscreen("strains")}
               leftBound={dashboardSidebarWidth}
               defaultX={480}
               defaultY={80}
@@ -633,13 +854,14 @@ function App({ darkMode, onToggleDarkMode }) {
               />
             </DraggableWindow>
           )}
-          {selectedViews.harvestReport && (
+          {selectedViews.harvestReport && !fullscreenWindows.harvestReport && (
             // Floating report window for room/strain harvest breakdowns.
             <DraggableWindow
               title="Harvest Report"
               onClose={() => toggleView("harvestReport")}
               isMinimized={minimizedWindows.harvestReport}
               onMinimize={() => toggleMinimize("harvestReport")}
+              onToggleFullscreen={() => toggleFullscreen("harvestReport")}
               leftBound={dashboardSidebarWidth}
               defaultX={630}
               defaultY={230}
@@ -649,13 +871,14 @@ function App({ darkMode, onToggleDarkMode }) {
               <HarvestReportPage harvests={harvests} />
             </DraggableWindow>
           )}
-          {selectedViews.roomViewer && (
+          {selectedViews.roomViewer && !fullscreenWindows.roomViewer && (
             // Floating room-focused window for assignments and composition charts.
             <DraggableWindow
               title="Room Viewer"
               onClose={() => toggleView("roomViewer")}
               isMinimized={minimizedWindows.roomViewer}
               onMinimize={() => toggleMinimize("roomViewer")}
+              onToggleFullscreen={() => toggleFullscreen("roomViewer")}
               leftBound={dashboardSidebarWidth}
               defaultX={480}
               defaultY={200}
@@ -665,13 +888,14 @@ function App({ darkMode, onToggleDarkMode }) {
               <RoomViewer rooms={rooms} roomAssignments={roomAssignments} />
             </DraggableWindow>
           )}
-          {selectedViews.harvestForm && (
+          {selectedViews.harvestForm && !fullscreenWindows.harvestForm && (
             // Floating workflow window for entering wet harvest tote data.
             <DraggableWindow
               title="Add Harvest"
               onClose={() => toggleView("harvestForm")}
               isMinimized={minimizedWindows.harvestForm}
               onMinimize={() => toggleMinimize("harvestForm")}
+              onToggleFullscreen={() => toggleFullscreen("harvestForm")}
               leftBound={dashboardSidebarWidth}
               defaultX={240}
               defaultY={100}
@@ -691,13 +915,14 @@ function App({ darkMode, onToggleDarkMode }) {
               />
             </DraggableWindow>
           )}
-          {selectedViews.dryWeightForm && (
+          {selectedViews.dryWeightForm && !fullscreenWindows.dryWeightForm && (
             // Floating workflow window for entering/finalizing dry weights.
             <DraggableWindow
               title="Add Dry Weights"
               onClose={() => toggleView("dryWeightForm")}
               isMinimized={minimizedWindows.dryWeightForm}
               onMinimize={() => toggleMinimize("dryWeightForm")}
+              onToggleFullscreen={() => toggleFullscreen("dryWeightForm")}
               leftBound={dashboardSidebarWidth}
               defaultX={240}
               defaultY={140}
@@ -723,44 +948,13 @@ function App({ darkMode, onToggleDarkMode }) {
 
       <Taskbar
         activePage={activePage}
-        onNavigate={setActivePage}
-        // Each tab object describes how taskbar should render and interact.
+        onNavigate={handleTaskbarNavigate}
         tabs={[
-          {
-            key: "strains",
-            label: `Strains (${strains.length})`,
-            visible: activePage === "dashboard" && selectedViews.strains,
-            minimized: minimizedWindows.strains,
-            onClick: () => toggleMinimize("strains"),
-          },
-          {
-            key: "harvestReport",
-            label: "Harvest Report",
-            visible: activePage === "dashboard" && selectedViews.harvestReport,
-            minimized: minimizedWindows.harvestReport,
-            onClick: () => toggleMinimize("harvestReport"),
-          },
-          {
-            key: "roomViewer",
-            label: "Room Viewer",
-            visible: activePage === "dashboard" && selectedViews.roomViewer,
-            minimized: minimizedWindows.roomViewer,
-            onClick: () => toggleMinimize("roomViewer"),
-          },
-          {
-            key: "harvestForm",
-            label: "Add Harvest",
-            visible: activePage === "dashboard" && selectedViews.harvestForm,
-            minimized: minimizedWindows.harvestForm,
-            onClick: () => toggleMinimize("harvestForm"),
-          },
-          {
-            key: "dryWeightForm",
-            label: "Add Dry Weights",
-            visible: activePage === "dashboard" && selectedViews.dryWeightForm,
-            minimized: minimizedWindows.dryWeightForm,
-            onClick: () => toggleMinimize("dryWeightForm"),
-          },
+          buildTaskbarTab("strains", `Strains (${strains.length})`),
+          buildTaskbarTab("harvestReport", "Harvest Report"),
+          buildTaskbarTab("roomViewer", "Room Viewer"),
+          buildTaskbarTab("harvestForm", "Add Harvest"),
+          buildTaskbarTab("dryWeightForm", "Add Dry Weights"),
         ]}
       />
 

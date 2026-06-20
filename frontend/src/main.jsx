@@ -2,6 +2,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import ThemeRoot from "./ThemeRoot.jsx";
+import { installAuthFetch } from "./utils/api.js";
+
+// Attach login token to all /api requests before React renders.
+installAuthFetch();
 
 // React app entry point and top-level providers.
 // We mount the entire React tree into the single #root element in index.html.

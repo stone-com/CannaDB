@@ -6,10 +6,8 @@ const Batch = require("../models/Batch");
 const Room = require("../models/Room");
 const RoomAssignment = require("../models/RoomAssignment");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
+const { recordAudit } = require("../utils/recordAudit");
 
-// Harvest create/read/update endpoints.
-
-// Create harvest.
 router.post("/", async (req, res) => {
   try {
     const { batchId, locationId, harvestNumber, rooms, harvestDate } = req.body;
@@ -20,6 +18,7 @@ router.post("/", async (req, res) => {
 
     await Batch.updateMany(
       {
+        tenantId: req.tenantId,
         batchType: "production",
         harvestId: null,
         harvestDate: { $ne: null, $lte: new Date() },
@@ -36,9 +35,10 @@ router.post("/", async (req, res) => {
     const result = await runWithOptionalTransaction(
       mongoose,
       async (session) => {
-        // Load the source batch first so we can validate that it exists
-        // and confirm it has not already been harvested.
-        const batchQuery = Batch.findById(batchId);
+        const batchQuery = Batch.findOne({
+          tenantId: req.tenantId,
+          _id: batchId,
+        });
         if (session) batchQuery.session(session);
         const batch = await batchQuery;
 
@@ -63,7 +63,6 @@ router.post("/", async (req, res) => {
           };
         }
 
-        // Always work with a clean array, even if the client sends nothing.
         const normalizedRooms = Array.isArray(rooms) ? rooms : [];
         const uniqueRoomIds = [
           ...new Set(
@@ -74,11 +73,11 @@ router.post("/", async (req, res) => {
         ];
 
         if (uniqueRoomIds.length > 0) {
-          // Validate that every selected room exists and belongs to the
-          // expected location for this batch/harvest.
-          const roomQuery = Room.find({ _id: { $in: uniqueRoomIds } }).select(
-            "_id locationId",
-          );
+          const roomQuery = Room.find({
+            tenantId: req.tenantId,
+            _id: { $in: uniqueRoomIds },
+          }).select("_id locationId");
+
           if (session) roomQuery.session(session);
           const roomDocs = await roomQuery;
 
@@ -122,9 +121,8 @@ router.post("/", async (req, res) => {
           }
         }
 
-        // Create the harvest record. The Harvest model calculates its own
-        // totals and derived metrics before save.
         const harvest = new Harvest({
+          tenantId: req.tenantId,
           batchId,
           locationId,
           harvestNumber,
@@ -136,10 +134,9 @@ router.post("/", async (req, res) => {
           session ? { session } : undefined,
         );
 
-        // Claim the batch only if it still has no harvest.
-        // This prevents two concurrent requests from creating two harvests.
         const updatedBatch = await Batch.findOneAndUpdate(
           {
+            tenantId: req.tenantId,
             _id: batchId,
             harvestId: null,
           },
@@ -152,8 +149,6 @@ router.post("/", async (req, res) => {
         );
 
         if (!updatedBatch) {
-          // In non-transaction fallback mode, delete the harvest we just made
-          // so we do not leave behind an orphaned duplicate record.
           if (session) {
             const conflictError = new Error(
               "This batch already has a harvest record",
@@ -162,16 +157,19 @@ router.post("/", async (req, res) => {
             throw conflictError;
           }
 
-          await Harvest.findByIdAndDelete(savedHarvest._id);
+          await Harvest.findOneAndDelete({
+            tenantId: req.tenantId,
+            _id: savedHarvest._id,
+          });
+
           return {
             status: 409,
             body: { error: "This batch already has a harvest record" },
           };
         }
 
-        // Harvesting ends any active room assignments for that batch.
         await RoomAssignment.updateMany(
-          { batchId, active: true },
+          { tenantId: req.tenantId, batchId, active: true },
           { $set: { active: false, endedAt: new Date() } },
           session ? { session } : undefined,
         );
@@ -184,13 +182,24 @@ router.post("/", async (req, res) => {
       return res.status(result.status).json(result.body);
     }
 
-    // Load readable room/strain/location data for the frontend response.
-    const populatedHarvest = await Harvest.findById(result.harvestId).populate([
+    const populatedHarvest = await Harvest.findOne({
+      tenantId: req.tenantId,
+      _id: result.harvestId,
+    }).populate([
       "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",
     ]);
+
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "harvest",
+      resourceId: populatedHarvest._id,
+      batchId: populatedHarvest.batchId?._id || populatedHarvest.batchId,
+      summary: `Created harvest ${populatedHarvest.harvestNumber || populatedHarvest._id}`,
+    });
+
     res.status(201).json(populatedHarvest);
   } catch (error) {
     if (error?.code === 11000) {
@@ -215,11 +224,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List harvests.
 router.get("/", async (req, res) => {
   try {
-    // Return all harvests with related location, batch, room, and strain info.
-    const harvests = await Harvest.find().populate([
+    const harvests = await Harvest.find({ tenantId: req.tenantId }).populate([
       "locationId",
       "batchId",
       "rooms.roomId",
@@ -231,26 +238,28 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get one harvest.
 router.get("/:id", async (req, res) => {
   try {
-    // Return one full harvest record with all related references populated.
-    const harvest = await Harvest.findById(req.params.id).populate([
+    const harvest = await Harvest.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    }).populate([
       "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",
     ]);
+
     if (!harvest) {
       return res.status(404).json({ error: "Harvest not found" });
     }
+
     res.json(harvest);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Patch harvest fields.
 router.patch("/:id", async (req, res) => {
   try {
     const {
@@ -264,8 +273,11 @@ router.patch("/:id", async (req, res) => {
     const result = await runWithOptionalTransaction(
       mongoose,
       async (session) => {
-        // Load the existing harvest so we can update only the fields the client sent.
-        const harvestQuery = Harvest.findById(req.params.id);
+        const harvestQuery = Harvest.findOne({
+          tenantId: req.tenantId,
+          _id: req.params.id,
+        });
+
         if (session) harvestQuery.session(session);
         const harvest = await harvestQuery;
 
@@ -273,21 +285,21 @@ router.patch("/:id", async (req, res) => {
           return { status: 404, body: { error: "Harvest not found" } };
         }
 
-        // Update only fields sent by the client.
         if (locationId !== undefined) harvest.locationId = locationId;
         if (harvestNumber !== undefined) harvest.harvestNumber = harvestNumber;
         if (rooms !== undefined) harvest.rooms = rooms;
         if (harvestDate !== undefined) harvest.harvestDate = harvestDate;
 
-        // Saving re-runs the Harvest model calculations so totals stay in sync.
         const updatedHarvest = await harvest.save(
           session ? { session } : undefined,
         );
 
         if (finalizeDryWeights === true) {
-          const batchQuery = Batch.findById(harvest.batchId).select(
-            "lifecycleStage",
-          );
+          const batchQuery = Batch.findOne({
+            tenantId: req.tenantId,
+            _id: harvest.batchId,
+          }).select("lifecycleStage");
+
           if (session) batchQuery.session(session);
           const sourceBatch = await batchQuery;
 
@@ -305,9 +317,8 @@ router.patch("/:id", async (req, res) => {
             };
           }
 
-          // Once dry weights are finalized, mark the source batch as completed.
-          await Batch.findByIdAndUpdate(
-            harvest.batchId,
+          await Batch.findOneAndUpdate(
+            { tenantId: req.tenantId, _id: harvest.batchId },
             {
               lifecycleStage: "Completed",
               stageStartedAt: new Date(),
@@ -324,13 +335,26 @@ router.patch("/:id", async (req, res) => {
       return res.status(result.status).json(result.body);
     }
 
-    // Return the updated harvest with readable related data.
-    const populatedHarvest = await Harvest.findById(result.harvestId).populate([
+    const populatedHarvest = await Harvest.findOne({
+      tenantId: req.tenantId,
+      _id: result.harvestId,
+    }).populate([
       "locationId",
       "batchId",
       "rooms.roomId",
       "rooms.strains.strainId",
     ]);
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "harvest",
+      resourceId: populatedHarvest._id,
+      batchId: populatedHarvest.batchId?._id || populatedHarvest.batchId,
+      summary: finalizeDryWeights === true
+        ? `Finalized dry weights for harvest ${populatedHarvest.harvestNumber || populatedHarvest._id}`
+        : `Updated harvest ${populatedHarvest.harvestNumber || populatedHarvest._id}`,
+    });
+
     res.json(populatedHarvest);
   } catch (error) {
     if (error?.code === 11000) {

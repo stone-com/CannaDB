@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 // A room inside a location (Flower, Veg, Drying, etc.).
 const roomSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Tenant",
+    required: true,
+    index: true,
+  },
   // Parent location for this room.
   locationId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -38,7 +44,7 @@ const roomSchema = new mongoose.Schema({
   },
 });
 
-roomSchema.index({ locationId: 1, name: 1 }, { unique: true });
-roomSchema.index({ locationId: 1, type: 1, createdAt: -1 });
+roomSchema.index({ tenantId: 1, locationId: 1, name: 1 }, { unique: true });
+roomSchema.index({ tenantId: 1, locationId: 1, type: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Room", roomSchema);

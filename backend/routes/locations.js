@@ -1,10 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const Company = require("../models/Company");
 const Location = require("../models/Location");
+const { recordAudit } = require("../utils/recordAudit");
 
-// Location create/read endpoints.
-
-// Create location.
 router.post("/", async (req, res) => {
   try {
     const { companyId, nickname, address } = req.body;
@@ -15,16 +14,30 @@ router.post("/", async (req, res) => {
         .json({ error: "companyId and nickname are required" });
     }
 
-    // Create the location document from the form data.
+    const company = await Company.findOne({
+      tenantId: req.tenantId,
+      _id: companyId,
+    });
+
+    if (!company) {
+      return res.status(400).json({ error: "Invalid company for this tenant" });
+    }
+
     const location = new Location({
+      tenantId: req.tenantId,
       companyId,
       nickname,
       address: address || null,
     });
 
-    // Save first, then populate company details for the response.
     const savedLocation = await location.save();
     const populatedLocation = await savedLocation.populate("companyId");
+    await recordAudit(req, {
+      action: "create",
+      resourceType: "location",
+      resourceId: savedLocation._id,
+      summary: `Created location ${savedLocation.nickname}`,
+    });
     res.status(201).json(populatedLocation);
   } catch (error) {
     if (error?.code === 11000) {
@@ -37,34 +50,34 @@ router.post("/", async (req, res) => {
   }
 });
 
-// List locations with company data.
 router.get("/", async (req, res) => {
   try {
-    // Return all locations and include the related company for each one.
-    const locations = await Location.find().populate("companyId");
+    const locations = await Location.find({ tenantId: req.tenantId }).populate(
+      "companyId",
+    );
     res.json(locations);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get one location with company data.
 router.get("/:id", async (req, res) => {
   try {
-    // Return one location and include its company details.
-    const location = await Location.findById(req.params.id).populate(
-      "companyId",
-    );
+    const location = await Location.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    }).populate("companyId");
+
     if (!location) {
       return res.status(404).json({ error: "Location not found" });
     }
+
     res.json(location);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Update one location.
 router.put("/:id", async (req, res) => {
   try {
     const { companyId, nickname, address } = req.body;
@@ -75,8 +88,17 @@ router.put("/:id", async (req, res) => {
         .json({ error: "companyId and nickname are required" });
     }
 
-    const updatedLocation = await Location.findByIdAndUpdate(
-      req.params.id,
+    const company = await Company.findOne({
+      tenantId: req.tenantId,
+      _id: companyId,
+    });
+
+    if (!company) {
+      return res.status(400).json({ error: "Invalid company for this tenant" });
+    }
+
+    const updatedLocation = await Location.findOneAndUpdate(
+      { tenantId: req.tenantId, _id: req.params.id },
       {
         companyId,
         nickname,
@@ -91,6 +113,13 @@ router.put("/:id", async (req, res) => {
     if (!updatedLocation) {
       return res.status(404).json({ error: "Location not found" });
     }
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "location",
+      resourceId: updatedLocation._id,
+      summary: `Updated location ${updatedLocation.nickname}`,
+    });
 
     res.json(updatedLocation);
   } catch (error) {
