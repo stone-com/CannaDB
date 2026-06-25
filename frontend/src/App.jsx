@@ -60,6 +60,7 @@ import {
 
 // Layout sizing constants for the app shell.
 const APP_BAR_HEIGHT = 64;
+const TASKBAR_HEIGHT = 64;
 const SIDEBAR_EXPANDED_WIDTH = 320;
 const SIDEBAR_COLLAPSED_WIDTH = 88;
 
@@ -214,13 +215,15 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     setMinimizedWindows((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // One taskbar chip per open panel — show, hide, or switch full-screen panels.
+  // One taskbar chip per open panel — restore from admin/minimized, or toggle on dashboard.
   const handleTaskbarPanelClick = (key) => {
     if (!selectedViews[key]) return;
 
-    setActivePage("dashboard");
+    const shouldRestore =
+      activePage !== "dashboard" || minimizedWindows[key];
 
-    if (minimizedWindows[key]) {
+    if (shouldRestore) {
+      setActivePage("dashboard");
       setMinimizedWindows((prev) => ({ ...prev, [key]: false }));
       if (fullscreenWindows[key]) {
         setActiveFullscreenKey(key);
@@ -252,7 +255,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
       return;
     }
 
-    toggleMinimize(key);
+    setMinimizedWindows((prev) => ({ ...prev, [key]: true }));
   };
 
   // Update one panel's floating geometry and save it for the session.
@@ -398,7 +401,20 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     fullscreenWindows[activeFullscreenKey] &&
     !minimizedWindows[activeFullscreenKey];
 
+  // Fullscreen panels scroll internally — keep the page shell from scrolling behind them.
+  useEffect(() => {
+    if (!isPanelView) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isPanelView]);
+
   const isPanelActiveInTaskbar = (key) => {
+    if (activePage !== "dashboard") return false;
     if (minimizedWindows[key]) return false;
     if (fullscreenWindows[key]) return activeFullscreenKey === key;
     return !isPanelView;
@@ -468,7 +484,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
   const buildTaskbarTab = (key, label) => ({
     key,
     label,
-    visible: activePage === "dashboard" && selectedViews[key],
+    visible: selectedViews[key],
     active: isPanelActiveInTaskbar(key),
     onClick: () => handleTaskbarPanelClick(key),
   });
@@ -484,6 +500,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
   // Decide whether a panel is floating, full screen, or hidden (but still mounted).
   const getPanelDisplayMode = (key) => {
     if (!selectedViews[key]) return "closed";
+    if (activePage !== "dashboard") return "hidden";
     if (minimizedWindows[key]) return "hidden";
     if (
       fullscreenWindows[key] &&
@@ -497,7 +514,14 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", pb: 10 }}>
+    <Box
+      sx={{
+        height: isPanelView ? "100vh" : undefined,
+        minHeight: isPanelView ? undefined : "100vh",
+        pb: isPanelView ? 0 : 10,
+        overflow: isPanelView ? "hidden" : undefined,
+      }}
+    >
       {/* Fixed top app bar. Width shifts when dashboard sidebar is expanded/collapsed. */}
       <AppBar
         position="fixed"
@@ -563,7 +587,16 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
       <Toolbar />
 
       <Box
-        sx={{ display: "flex", minHeight: `calc(100vh - ${APP_BAR_HEIGHT}px)` }}
+        sx={{
+          display: "flex",
+          minHeight: isPanelView
+            ? 0
+            : `calc(100vh - ${APP_BAR_HEIGHT}px)`,
+          height: isPanelView
+            ? `calc(100vh - ${APP_BAR_HEIGHT}px - ${TASKBAR_HEIGHT}px)`
+            : undefined,
+          overflow: isPanelView ? "hidden" : undefined,
+        }}
       >
         {activePage === "dashboard" && !isPanelView && (
           /* Permanent MUI Drawer used as the dashboard launcher rail. */
@@ -741,6 +774,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
           </Drawer>
         )}
 
+        {!isPanelView && (
         <Box
           sx={{
             flex: 1,
@@ -750,7 +784,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
           {/* LinearProgress gives users immediate feedback during API refreshes. */}
           {loadingData && <LinearProgress />}
 
-          {activePage === "dashboard" && !isPanelView && (
+          {activePage === "dashboard" && (
             // Dashboard page body: upcoming harvest, KPIs, and workspace intro.
             <Stack spacing={2}>
               {/* Hero summary card with nearest upcoming harvest details. */}
@@ -845,10 +879,10 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
 
           {activePage === "auditLogs" && <AuditLogPage />}
         </Box>
+        )}
       </Box>
 
       {!loadingData &&
-        activePage === "dashboard" &&
         PANEL_KEYS.map((key) => {
           const displayMode = getPanelDisplayMode(key);
           if (displayMode === "closed") return null;
