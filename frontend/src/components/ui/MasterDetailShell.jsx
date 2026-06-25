@@ -31,6 +31,8 @@ export default function MasterDetailShell({
   defaultSidebarExpanded = true,
   sidebarExpandedWidth = 260,
   sidebarCollapsedWidth = 72,
+  collapseTooltipExpanded = "Collapse sidebar",
+  collapseTooltipCollapsed = "Expand sidebar",
   sx,
 }) {
   const [internalExpanded, setInternalExpanded] = useState(defaultSidebarExpanded);
@@ -84,10 +86,10 @@ export default function MasterDetailShell({
             justifyContent: isExpanded ? "flex-end" : "center",
           }}
         >
-          <Tooltip title={isExpanded ? "Collapse list" : "Expand list"}>
+          <Tooltip title={isExpanded ? collapseTooltipExpanded : collapseTooltipCollapsed}>
             <IconButton
               size="small"
-              aria-label={isExpanded ? "Collapse list" : "Expand list"}
+              aria-label={isExpanded ? collapseTooltipExpanded : collapseTooltipCollapsed}
               onClick={() => setExpanded(!isExpanded)}
             >
               {isExpanded ? (

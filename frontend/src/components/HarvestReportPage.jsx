@@ -24,12 +24,10 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
-import AssessmentIcon from "@mui/icons-material/Assessment";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import GrassIcon from "@mui/icons-material/Grass";
 import ScaleIcon from "@mui/icons-material/Scale";
 import WarehouseIcon from "@mui/icons-material/Warehouse";
-import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import StatCard from "./ui/StatCard";
 import MasterDetailShell from "./ui/MasterDetailShell";
 import AnalyticsDataGrid from "./ui/AnalyticsDataGrid";
@@ -296,104 +294,92 @@ function HarvestReportPage({ harvests }) {
     >
       <Box
         sx={(theme) => ({
-          p: 2,
+          px: 1.25,
+          py: 1,
           borderBottom: "1px solid",
           borderColor: "divider",
-          background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+          flexShrink: 0,
+          background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.08)}, ${alpha(theme.palette.background.paper, 0.98)})`,
         })}
       >
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box
-            sx={(theme) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              display: "grid",
-              placeItems: "center",
-              bgcolor: alpha(theme.palette.primary.main, 0.14),
-              color: "primary.main",
-              flexShrink: 0,
-            })}
-          >
-            <AssessmentIcon fontSize="small" />
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 800 }} noWrap>
-              {selectedHarvest.harvestNumber || "Harvest"}
-            </Typography>
-            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-              <Chip
-                size="small"
-                icon={<CalendarTodayIcon />}
-                label={formatDate(selectedHarvest.harvestDate)}
-                variant="outlined"
-              />
-              <Chip size="small" label={selectedHarvest.locationId?.nickname || "—"} />
-            </Stack>
-          </Box>
+        <Stack
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          flexWrap="wrap"
+          useFlexGap
+          sx={{ mb: 0.75 }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 800 }} noWrap>
+            {selectedHarvest.harvestNumber || "Harvest"}
+          </Typography>
+          <Chip
+            size="small"
+            icon={<CalendarTodayIcon sx={{ fontSize: "0.9rem !important" }} />}
+            label={formatDate(selectedHarvest.harvestDate)}
+            variant="outlined"
+            sx={{ height: 24 }}
+          />
+          <Chip
+            size="small"
+            label={selectedHarvest.locationId?.nickname || "—"}
+            sx={{ height: 24 }}
+          />
         </Stack>
-      </Box>
 
-      <Box
-        sx={{
-          p: 2,
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        <Grid container spacing={1.5} sx={{ mb: 2, flexShrink: 0 }}>
+        <Grid container spacing={0.75}>
           <Grid size={{ xs: 6, sm: 3 }}>
             <StatCard
-              label="Total plants"
+              compact
+              label="Plants"
               value={formatHarvestMetric(selectedHarvest.totalPlantCount)}
               icon={<GrassIcon fontSize="small" />}
             />
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <StatCard
-              label="Total wet"
+              compact
+              label="Wet"
               value={`${formatHarvestMetric(selectedHarvest.totalWetWeightGrams)} g`}
               icon={<ScaleIcon fontSize="small" />}
             />
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <StatCard
-              label="Total dry"
+              compact
+              label="Dry"
               value={`${formatHarvestMetric(selectedHarvest.totalDryWeightGrams)} g`}
               icon={<ScaleIcon fontSize="small" />}
             />
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <StatCard
+              compact
               label="Yield / sq ft"
               value={formatHarvestMetric(selectedHarvest.totalYieldGramsPerSquareFoot)}
               icon={<WarehouseIcon fontSize="small" />}
             />
           </Grid>
         </Grid>
+      </Box>
 
-        <Divider sx={{ mb: 2, flexShrink: 0 }} />
-
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5, flexShrink: 0 }}>
-          Room breakdown
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mb: 1.5, flexShrink: 0 }}
-        >
-          Pick a room tab, then click a strain row to open the inspector beside the table.
-        </Typography>
-
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          p: 1.25,
+          pt: 1,
+        }}
+      >
         {roomSections.length === 0 ? (
           <Alert severity="info" sx={{ borderRadius: 2 }}>
             No room breakdown recorded for this harvest.
           </Alert>
         ) : (
-          <Stack spacing={1.5} sx={{ flex: 1, minHeight: 0 }}>
+          <Stack spacing={1} sx={{ flex: 1, minHeight: 0 }}>
             {roomSections.length > 1 ? (
               <Tabs
                 value={selectedRoomTab}
@@ -403,7 +389,13 @@ function HarvestReportPage({ harvests }) {
                 }}
                 variant="scrollable"
                 scrollButtons="auto"
-                sx={{ borderBottom: 1, borderColor: "divider", flexShrink: 0 }}
+                sx={{
+                  borderBottom: 1,
+                  borderColor: "divider",
+                  flexShrink: 0,
+                  minHeight: 36,
+                  "& .MuiTab-root": { minHeight: 36, py: 0.5, fontSize: "0.8125rem" },
+                }}
               >
                 {roomSections.map((section, index) => (
                   <Tab
@@ -416,165 +408,112 @@ function HarvestReportPage({ harvests }) {
             ) : null}
 
             {activeRoomSection ? (
-              <>
-                <Paper
-                  variant="outlined"
-                  sx={(theme) => ({
-                    px: 1.5,
-                    py: 1.25,
-                    borderRadius: 2,
-                    bgcolor: alpha(theme.palette.background.default, 0.45),
-                    flexShrink: 0,
-                  })}
-                >
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: "flex-start", sm: "center" }}
-                    spacing={1}
-                  >
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <MeetingRoomIcon fontSize="small" color="action" />
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {activeRoomSection.roomName}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {activeRoomSection.roomType}
-                          {activeRoomSection.roomSqFoot !== null
-                            ? ` · ${formatHarvestMetric(activeRoomSection.roomSqFoot)} sq ft`
-                            : ""}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                    <Chip
-                      size="small"
-                      color="secondary"
-                      label={`${formatHarvestMetric(activeRoomSection.roomDryTotal)} g dry · ${activeRoomSection.strainRows.length} strains`}
-                    />
-                  </Stack>
-                </Paper>
-
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    flex: 1,
-                    minHeight: 160,
-                    display: "flex",
-                    flexDirection: "column",
-                    borderRadius: 2,
-                    overflow: "hidden",
-                  }}
-                >
+              <Paper
+                variant="outlined"
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
+                <Box sx={{ flex: 1, minHeight: 0, display: "flex" }}>
                   <Box
                     sx={{
-                      px: 1.5,
-                      py: 1,
-                      borderBottom: "1px solid",
-                      borderColor: "divider",
-                      flexShrink: 0,
-                      bgcolor: "action.hover",
+                      flex: 1,
+                      minWidth: 0,
+                      minHeight: 0,
+                      display: "flex",
+                      flexDirection: "column",
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary">
-                      {selectedStrainRow
-                        ? "Inspector open — click the row again or ✕ to close"
-                        : "Click a strain row to inspect averages and tote weights"}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ flex: 1, minHeight: 0, display: "flex" }}>
-                    <Box
-                      sx={{
-                        flex: 1,
-                        minWidth: 0,
-                        minHeight: 0,
-                        display: "flex",
-                        flexDirection: "column",
+                    <AnalyticsDataGrid
+                      fill
+                      hideFooter={activeRoomSection.strainRows.length <= 8}
+                      rows={activeRoomSection.strainRows.map((row) => ({
+                        ...row,
+                        id: row.key,
+                      }))}
+                      columns={strainGridColumns}
+                      onRowClick={(params) => handleStrainRowClick(params.id)}
+                      getRowClassName={(params) =>
+                        params.id === selectedStrainKey ? "analytics-row-selected" : ""
+                      }
+                      gridSx={{
+                        border: "none",
+                        borderRadius: 0,
+                        "& .analytics-row-selected": {
+                          bgcolor: "action.selected",
+                        },
                       }}
-                    >
-                      <AnalyticsDataGrid
-                        fill
-                        hideFooter={activeRoomSection.strainRows.length <= 8}
-                        rows={activeRoomSection.strainRows.map((row) => ({
-                          ...row,
-                          id: row.key,
-                        }))}
-                        columns={strainGridColumns}
-                        onRowClick={(params) => handleStrainRowClick(params.id)}
-                        getRowClassName={(params) =>
-                          params.id === selectedStrainKey ? "analytics-row-selected" : ""
-                        }
-                        gridSx={{
-                          border: "none",
-                          borderRadius: 0,
-                          "& .analytics-row-selected": {
-                            bgcolor: "action.selected",
-                          },
-                        }}
-                      />
-                    </Box>
-
-                    <GridDetailRail
-                      open={Boolean(selectedStrainRow)}
-                      title={selectedStrainRow?.strainName || "Strain"}
-                      subtitle="Harvest breakdown"
-                      onClose={() => setSelectedStrainKey(null)}
-                    >
-                      {selectedStrainRow ? (
-                        <Stack spacing={2}>
-                          <DetailMetricGrid
-                            metrics={[
-                              {
-                                label: "Plants harvested",
-                                value: formatHarvestMetric(selectedStrainRow.plantCount),
-                              },
-                              {
-                                label: "Wet avg / plant",
-                                value: `${formatHarvestMetric(selectedStrainRow.wetPlantAvgWeightGrams)} g`,
-                              },
-                              {
-                                label: "Dry avg / plant",
-                                value: `${formatHarvestMetric(selectedStrainRow.dryPlantAvgWeightGrams)} g`,
-                              },
-                              {
-                                label: "Wet → dry change",
-                                value: formatHarvestPercent(
-                                  selectedStrainRow.percentChangeWetToDry,
-                                ),
-                              },
-                              {
-                                label: "Total wet",
-                                value: `${formatHarvestMetric(selectedStrainRow.totalWetWeightGrams)} g`,
-                              },
-                              {
-                                label: "Total dry",
-                                value: `${formatHarvestMetric(selectedStrainRow.totalDryWeightGrams)} g`,
-                              },
-                              {
-                                label: "Yield / sq ft",
-                                value: formatHarvestMetric(
-                                  selectedStrainRow.yieldGramsPerSquareFoot,
-                                ),
-                              },
-                            ]}
-                          />
-
-                          <Divider />
-
-                          <DetailChipList
-                            label="Tote wet weights (g)"
-                            values={(selectedStrainRow.totes || []).map(
-                              (tote, index) =>
-                                `#${index + 1} · ${formatHarvestMetric(tote?.wetWeight ?? 0)} g`,
-                            )}
-                          />
-                        </Stack>
-                      ) : null}
-                    </GridDetailRail>
+                    />
                   </Box>
-                </Paper>
-              </>
+
+                  <GridDetailRail
+                    open={Boolean(selectedStrainRow)}
+                    title={selectedStrainRow?.strainName || "Strain"}
+                    subtitle={
+                      activeRoomSection.roomName !== "—"
+                        ? activeRoomSection.roomName
+                        : "Harvest breakdown"
+                    }
+                    onClose={() => setSelectedStrainKey(null)}
+                  >
+                    {selectedStrainRow ? (
+                      <Stack spacing={2}>
+                        <DetailMetricGrid
+                          metrics={[
+                            {
+                              label: "Plants harvested",
+                              value: formatHarvestMetric(selectedStrainRow.plantCount),
+                            },
+                            {
+                              label: "Wet avg / plant",
+                              value: `${formatHarvestMetric(selectedStrainRow.wetPlantAvgWeightGrams)} g`,
+                            },
+                            {
+                              label: "Dry avg / plant",
+                              value: `${formatHarvestMetric(selectedStrainRow.dryPlantAvgWeightGrams)} g`,
+                            },
+                            {
+                              label: "Wet → dry change",
+                              value: formatHarvestPercent(
+                                selectedStrainRow.percentChangeWetToDry,
+                              ),
+                            },
+                            {
+                              label: "Total wet",
+                              value: `${formatHarvestMetric(selectedStrainRow.totalWetWeightGrams)} g`,
+                            },
+                            {
+                              label: "Total dry",
+                              value: `${formatHarvestMetric(selectedStrainRow.totalDryWeightGrams)} g`,
+                            },
+                            {
+                              label: "Yield / sq ft",
+                              value: formatHarvestMetric(
+                                selectedStrainRow.yieldGramsPerSquareFoot,
+                              ),
+                            },
+                          ]}
+                        />
+
+                        <Divider />
+
+                        <DetailChipList
+                          label="Tote wet weights (g)"
+                          values={(selectedStrainRow.totes || []).map(
+                            (tote, index) =>
+                              `#${index + 1} · ${formatHarvestMetric(tote?.wetWeight ?? 0)} g`,
+                          )}
+                        />
+                      </Stack>
+                    ) : null}
+                  </GridDetailRail>
+                </Box>
+              </Paper>
             ) : null}
           </Stack>
         )}
@@ -587,37 +526,20 @@ function HarvestReportPage({ harvests }) {
   );
 
   return (
-    <Stack
-      spacing={2}
-      sx={{
-        height: "100%",
-        minHeight: 0,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>
-          Harvest Report
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Browse harvest runs on the left, then review weights by room and strain.
-        </Typography>
-      </Stack>
-
-      <MasterDetailShell
-        sidebarCollapsible
-        sidebarExpanded={harvestListExpanded}
-        onSidebarExpandedChange={setHarvestListExpanded}
-        sidebarExpandedWidth={248}
-        sidebarCollapsedWidth={72}
-        mobileSidebarHeight={280}
-        sidebarHeader={sidebarHeader}
-        sidebar={sidebar}
-        detail={detail}
-      />
-    </Stack>
+    <MasterDetailShell
+      sx={{ flex: 1, minHeight: 0, height: "100%" }}
+      sidebarCollapsible
+      sidebarExpanded={harvestListExpanded}
+      onSidebarExpandedChange={setHarvestListExpanded}
+      sidebarExpandedWidth={248}
+      sidebarCollapsedWidth={72}
+      mobileSidebarHeight={280}
+      collapseTooltipExpanded="Collapse harvest list"
+      collapseTooltipCollapsed="Expand harvest list"
+      sidebarHeader={sidebarHeader}
+      sidebar={sidebar}
+      detail={detail}
+    />
   );
 }
 
