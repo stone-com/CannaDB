@@ -10,6 +10,7 @@ const DEFAULT_PAGE_SIZES = [5, 10, 25, 50];
 
 export default function AnalyticsDataGrid({
   height = 360,
+  fill = false,
   hideFooter = false,
   pageSizeOptions = DEFAULT_PAGE_SIZES,
   initialPageSize = 10,
@@ -17,8 +18,25 @@ export default function AnalyticsDataGrid({
   gridSx,
   ...props
 }) {
+  const containerSx = fill
+    ? {
+        width: "100%",
+        flex: 1,
+        minHeight: 220,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        ...sx,
+      }
+    : {
+        width: "100%",
+        height,
+        minHeight: hideFooter ? 220 : height,
+        ...sx,
+      };
+
   return (
-    <Box sx={{ width: "100%", height, minHeight: hideFooter ? 220 : height, ...sx }}>
+    <Box sx={containerSx}>
       <DataGrid
         disableRowSelectionOnClick
         hideFooter={hideFooter}
@@ -31,6 +49,7 @@ export default function AnalyticsDataGrid({
           borderColor: "divider",
           borderRadius: 2,
           bgcolor: alpha(theme.palette.background.paper, 0.96),
+          ...(fill ? { flex: 1, minHeight: 0 } : {}),
           "& .MuiDataGrid-columnHeaders": {
             bgcolor: alpha(theme.palette.primary.main, 0.1),
             fontWeight: 700,
