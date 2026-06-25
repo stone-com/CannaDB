@@ -262,8 +262,17 @@ export default function WorkspacePanel({
           </Stack>
         </Box>
 
-        {/* Panel body — stays mounted when switching modes */}
-        <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: { xs: 2, md: 2.5 } }}>
+        {/* Panel body — flex column so workspace pages can fill available height */}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflow: "auto",
+            display: "flex",
+            flexDirection: "column",
+            p: { xs: 2, md: 2.5 },
+          }}
+        >
           {children}
         </Box>
 

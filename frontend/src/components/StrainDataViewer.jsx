@@ -346,8 +346,17 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                 </Stack>
               </Box>
 
-              <Box sx={{ p: 2, overflow: "auto", flex: 1, minHeight: 0 }}>
-                <Grid container spacing={1.5} sx={{ mb: 2 }}>
+              <Box
+                sx={{
+                  p: 2,
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                }}
+              >
+                <Grid container spacing={1.5} sx={{ mb: 2, flexShrink: 0 }}>
                   <Grid size={{ xs: 6, sm: 3 }}>
                     <StatCard label="Live plants" value={selectedStrain.totalPlants} />
                   </Grid>
@@ -371,9 +380,9 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                   </Grid>
                 </Grid>
 
-                <Divider sx={{ mb: 2 }} />
+                <Divider sx={{ mb: 2, flexShrink: 0 }} />
 
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, flexShrink: 0 }}>
                   Current room placements
                 </Typography>
 
@@ -382,14 +391,12 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                     This strain is not assigned to any active room yet.
                   </Alert>
                 ) : (
-                  <AnalyticsDataGrid
-                    height={Math.min(
-                      420,
-                      Math.max(240, selectedStrain.plantsByRoom.length * 52 + 56),
-                    )}
-                    hideFooter={selectedStrain.plantsByRoom.length <= 8}
-                    initialPageSize={10}
-                    rows={selectedStrain.plantsByRoom.map((placement, index) => ({
+                  <Box sx={{ flex: 1, minHeight: 160, display: "flex", flexDirection: "column" }}>
+                    <AnalyticsDataGrid
+                      fill
+                      hideFooter={selectedStrain.plantsByRoom.length <= 8}
+                      initialPageSize={10}
+                      rows={selectedStrain.plantsByRoom.map((placement, index) => ({
                       id: `${selectedStrain.strainId}-${index}`,
                       locationName: placement.locationName,
                       roomName: placement.roomName,
@@ -442,13 +449,14 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
                         minWidth: 120,
                       },
                     ]}
-                  />
+                    />
+                  </Box>
                 )}
 
                 {selectedStrain.totalHarvestPlantCount > 0 ? (
                   <>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography variant="subtitle2" color="text.secondary">
+                    <Divider sx={{ my: 2, flexShrink: 0 }} />
+                    <Typography variant="subtitle2" color="text.secondary" sx={{ flexShrink: 0 }}>
                       Historical harvests:{" "}
                       {formatGrams(selectedStrain.totalDryWeightGrams)} dry from{" "}
                       {selectedStrain.totalHarvestPlantCount.toLocaleString()} plants
@@ -464,8 +472,17 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   );
 
   return (
-    <Stack spacing={2} sx={{ height: "100%", minHeight: 480 }}>
-      <Stack spacing={0.5}>
+    <Stack
+      spacing={2}
+      sx={{
+        height: "100%",
+        minHeight: 0,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
         <Typography variant="h5" sx={{ fontWeight: 800 }}>
           Strain Inventory
         </Typography>
@@ -475,7 +492,6 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       </Stack>
 
       <MasterDetailShell
-        height={540}
         mobileSidebarHeight={300}
         sidebarHeader={sidebarHeader}
         sidebar={sidebar}

@@ -985,8 +985,17 @@ function HarvestForm({ onComplete }) {
   );
 
   return (
-    <Stack spacing={2}>
-      <Box>
+    <Stack
+      spacing={2}
+      sx={{
+        height: "100%",
+        minHeight: 0,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Box sx={{ flexShrink: 0 }}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>
           Harvest intake
         </Typography>
@@ -996,7 +1005,6 @@ function HarvestForm({ onComplete }) {
       </Box>
 
       <MasterDetailShell
-        height={560}
         mobileSidebarHeight={320}
         sidebarHeader={sidebarHeader}
         sidebar={sidebar}

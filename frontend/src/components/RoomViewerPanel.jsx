@@ -615,12 +615,22 @@ export default function RoomViewerPanel({ rooms, roomAssignments }) {
     );
 
     return (
-      <Stack spacing={2} sx={{ height: "100%", minHeight: 480 }}>
+      <Stack
+        spacing={2}
+        sx={{
+          height: "100%",
+          minHeight: 0,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <Paper
           variant="outlined"
           sx={(theme) => ({
             p: 1.5,
             borderRadius: 2,
+            flexShrink: 0,
             background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.08)}, ${alpha(theme.palette.background.paper, 0.98)})`,
           })}
         >
@@ -645,18 +655,31 @@ export default function RoomViewerPanel({ rooms, roomAssignments }) {
           </Stack>
         </Paper>
 
-        <RoomViewer
-          rooms={rooms}
-          roomAssignments={roomAssignments}
-          initialRoomId={selectedRoomId}
-        />
+        <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          <RoomViewer
+            rooms={rooms}
+            roomAssignments={roomAssignments}
+            initialRoomId={selectedRoomId}
+          />
+        </Box>
       </Stack>
     );
   }
 
   return (
-    <Stack spacing={2.5} sx={{ width: "100%", minWidth: 0, minHeight: 480 }}>
-      <Stack spacing={0.5}>
+    <Stack
+      spacing={2.5}
+      sx={{
+        width: "100%",
+        minWidth: 0,
+        height: "100%",
+        minHeight: 0,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
         <Typography variant="h5" sx={{ fontWeight: 800 }}>
           Room Overview
         </Typography>
@@ -665,10 +688,10 @@ export default function RoomViewerPanel({ rooms, roomAssignments }) {
         </Typography>
       </Stack>
 
-      <Grid container spacing={2} sx={{ minHeight: { md: 520 }, flex: 1, minWidth: 0 }}>
+      <Grid container spacing={2} sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
         <Grid
           size={{ xs: 12, md: 3.5, lg: 3 }}
-          sx={{ height: { xs: "auto", md: "100%" }, minHeight: { md: 520 } }}
+          sx={{ height: { xs: "auto", md: "100%" }, minHeight: { xs: 360, md: 0 }, display: "flex" }}
         >
           <RoomOverviewFilters
             overviewStats={overviewStats}
@@ -687,7 +710,11 @@ export default function RoomViewerPanel({ rooms, roomAssignments }) {
           />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 8.5, lg: 9 }} sx={{ minWidth: 0 }}>
+        <Grid
+          size={{ xs: 12, md: 8.5, lg: 9 }}
+          sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}
+        >
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
           {locations.length === 0 ? (
             <Alert severity="info" sx={{ borderRadius: 2 }}>
               No rooms found yet.
@@ -724,6 +751,7 @@ export default function RoomViewerPanel({ rooms, roomAssignments }) {
               ))}
             </Stack>
           )}
+          </Box>
         </Grid>
       </Grid>
     </Stack>
