@@ -759,32 +759,13 @@ function DryWeightForm({ harvests, onComplete }) {
   );
 
   return (
-    <Stack
-      spacing={2}
-      sx={{
-        height: "100%",
-        minHeight: 0,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Box sx={{ flexShrink: 0 }}>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-          Dry weight entry
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Record final dry weights and release drying rooms when complete.
-        </Typography>
-      </Box>
-
-      <MasterDetailShell
-        mobileSidebarHeight={320}
-        sidebarHeader={sidebarHeader}
-        sidebar={sidebar}
-        detail={detail}
-      />
-    </Stack>
+    <MasterDetailShell
+      sx={{ flex: 1, minHeight: 0, height: "100%" }}
+      mobileSidebarHeight={320}
+      sidebarHeader={sidebarHeader}
+      sidebar={sidebar}
+      detail={detail}
+    />
   );
 }
 

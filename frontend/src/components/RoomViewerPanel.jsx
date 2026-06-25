@@ -17,8 +17,10 @@ import {
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import PlaceIcon from "@mui/icons-material/Place";
@@ -30,6 +32,7 @@ import {
   stageColor,
 } from "../utils/roomOverviewHelpers";
 import StatCard from "./ui/StatCard";
+import MasterDetailShell from "./ui/MasterDetailShell";
 import RoomViewer from "./RoomViewer";
 
 function shortDate(value) {
@@ -333,7 +336,50 @@ function FilterCheckboxRow({ label, checked, onChange, count, accentColor }) {
   );
 }
 
+function CollapsedFilterRail({ overviewStats, hasActiveFilters, totalRoomCount }) {
+  return (
+    <Stack spacing={1.5} alignItems="center" sx={{ py: 1.25, px: 0.5 }}>
+      <Tooltip
+        title={`${overviewStats.roomCount} of ${totalRoomCount} rooms shown`}
+        placement="right"
+      >
+        <Box sx={{ textAlign: "center" }}>
+          <Typography variant="caption" sx={{ fontWeight: 800, display: "block", lineHeight: 1.1 }}>
+            {overviewStats.roomCount}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>
+            rooms
+          </Typography>
+        </Box>
+      </Tooltip>
+
+      <Tooltip
+        title={`${overviewStats.totalPlants.toLocaleString()} live plants`}
+        placement="right"
+      >
+        <Box sx={{ textAlign: "center" }}>
+          <Typography variant="caption" sx={{ fontWeight: 800, display: "block", lineHeight: 1.1 }}>
+            {overviewStats.totalPlants >= 1000
+              ? `${Math.round(overviewStats.totalPlants / 1000)}k`
+              : overviewStats.totalPlants}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6rem" }}>
+            plants
+          </Typography>
+        </Box>
+      </Tooltip>
+
+      {hasActiveFilters ? (
+        <Tooltip title="Filters active — expand to edit" placement="right">
+          <FilterAltIcon color="primary" sx={{ fontSize: "1.1rem" }} />
+        </Tooltip>
+      ) : null}
+    </Stack>
+  );
+}
+
 function RoomOverviewFilters({
+  expanded = true,
   overviewStats,
   searchQuery,
   onSearchChange,
@@ -348,15 +394,23 @@ function RoomOverviewFilters({
   hasActiveFilters,
   onClearFilters,
 }) {
+  if (!expanded) {
+    return (
+      <CollapsedFilterRail
+        overviewStats={overviewStats}
+        hasActiveFilters={hasActiveFilters}
+        totalRoomCount={totalRoomCount}
+      />
+    );
+  }
+
   return (
-    <Paper
-      variant="outlined"
+    <Box
       sx={{
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        borderRadius: 2,
-        overflow: "hidden",
+        minHeight: 0,
       }}
     >
       <Box sx={{ px: 1.25, py: 1.1, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -481,12 +535,13 @@ function RoomOverviewFilters({
           ) : null}
         </Stack>
       </Box>
-    </Paper>
+    </Box>
   );
 }
 
 export default function RoomViewerPanel({ rooms, roomAssignments }) {
   const [selectedRoomId, setSelectedRoomId] = useState(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocationIds, setSelectedLocationIds] = useState([]);
   const [selectedRoomTypes, setSelectedRoomTypes] = useState([]);
@@ -666,94 +721,79 @@ export default function RoomViewerPanel({ rooms, roomAssignments }) {
     );
   }
 
-  return (
-    <Stack
-      spacing={2.5}
-      sx={{
-        width: "100%",
-        minWidth: 0,
-        height: "100%",
-        minHeight: 0,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>
-          Room Overview
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Browse every room by location. Click a room for batch and strain details.
-        </Typography>
-      </Stack>
+  const filterSidebar = (
+    <RoomOverviewFilters
+      expanded={filtersExpanded}
+      overviewStats={overviewStats}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      selectedLocationIds={selectedLocationIds}
+      onToggleLocation={toggleLocation}
+      selectedRoomTypes={selectedRoomTypes}
+      onToggleRoomType={toggleRoomType}
+      filterOptions={filterOptions}
+      locationCounts={locationCounts}
+      typeCounts={typeCounts}
+      totalRoomCount={totalRoomCount}
+      hasActiveFilters={hasActiveFilters}
+      onClearFilters={clearFilters}
+    />
+  );
 
-      <Grid container spacing={2} sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
-        <Grid
-          size={{ xs: 12, md: 3.5, lg: 3 }}
-          sx={{ height: { xs: "auto", md: "100%" }, minHeight: { xs: 360, md: 0 }, display: "flex" }}
-        >
-          <RoomOverviewFilters
-            overviewStats={overviewStats}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            selectedLocationIds={selectedLocationIds}
-            onToggleLocation={toggleLocation}
-            selectedRoomTypes={selectedRoomTypes}
-            onToggleRoomType={toggleRoomType}
-            filterOptions={filterOptions}
-            locationCounts={locationCounts}
-            typeCounts={typeCounts}
-            totalRoomCount={totalRoomCount}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={clearFilters}
-          />
-        </Grid>
+  const roomGrid = (
+    <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      {locations.length === 0 ? (
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          No rooms found yet.
+        </Alert>
+      ) : filteredLocations.length === 0 ? (
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          No rooms match your search or filters.
+        </Alert>
+      ) : (
+        <Stack spacing={2}>
+          {filteredLocations.map((location) => (
+            <Paper key={location.locationId} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                <PlaceIcon fontSize="small" color="primary" />
+                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                  {location.locationName}
+                </Typography>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  icon={<MeetingRoomIcon />}
+                  label={`${location.rooms.length} rooms`}
+                />
+              </Stack>
 
-        <Grid
-          size={{ xs: 12, md: 8.5, lg: 9 }}
-          sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}
-        >
-          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-          {locations.length === 0 ? (
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
-              No rooms found yet.
-            </Alert>
-          ) : filteredLocations.length === 0 ? (
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
-              No rooms match your search or filters.
-            </Alert>
-          ) : (
-            <Stack spacing={2}>
-              {filteredLocations.map((location) => (
-                <Paper key={location.locationId} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-                    <PlaceIcon fontSize="small" color="primary" />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                      {location.locationName}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      icon={<MeetingRoomIcon />}
-                      label={`${location.rooms.length} rooms`}
-                    />
-                  </Stack>
-
-                  <Grid container spacing={1.5}>
-                    {location.rooms.map((card) => (
-                      <Grid key={card.room._id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-                        <RoomOverviewCard card={card} onSelect={setSelectedRoomId} />
-                      </Grid>
-                    ))}
+              <Grid container spacing={1.5}>
+                {location.rooms.map((card) => (
+                  <Grid key={card.room._id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+                    <RoomOverviewCard card={card} onSelect={setSelectedRoomId} />
                   </Grid>
-                </Paper>
-              ))}
-            </Stack>
-          )}
-          </Box>
-        </Grid>
-      </Grid>
-    </Stack>
+                ))}
+              </Grid>
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+
+  return (
+    <MasterDetailShell
+      sx={{ flex: 1, minHeight: 0, height: "100%" }}
+      sidebarCollapsible
+      sidebarExpanded={filtersExpanded}
+      onSidebarExpandedChange={setFiltersExpanded}
+      sidebarExpandedWidth={248}
+      sidebarCollapsedWidth={72}
+      mobileSidebarHeight={360}
+      collapseTooltipExpanded="Collapse filters"
+      collapseTooltipCollapsed="Expand filters"
+      sidebar={filterSidebar}
+      detail={roomGrid}
+    />
   );
 }

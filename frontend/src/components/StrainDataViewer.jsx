@@ -472,32 +472,13 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
   );
 
   return (
-    <Stack
-      spacing={2}
-      sx={{
-        height: "100%",
-        minHeight: 0,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Stack spacing={0.5} sx={{ flexShrink: 0 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>
-          Strain Inventory
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Browse strains on the left, then review placements and projected yield on the right.
-        </Typography>
-      </Stack>
-
-      <MasterDetailShell
-        mobileSidebarHeight={300}
-        sidebarHeader={sidebarHeader}
-        sidebar={sidebar}
-        detail={detail}
-      />
-    </Stack>
+    <MasterDetailShell
+      sx={{ flex: 1, minHeight: 0, height: "100%" }}
+      mobileSidebarHeight={300}
+      sidebarHeader={sidebarHeader}
+      sidebar={sidebar}
+      detail={detail}
+    />
   );
 }
 
