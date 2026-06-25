@@ -49,16 +49,35 @@ function buildRoomCard(room, assignmentsForThisRoom) {
   const strainLines = countPlantsByStrain(assignmentsForThisRoom);
   const totalPlants = strainLines.reduce((sum, line) => sum + line.count, 0);
 
-  const batch = assignmentsForThisRoom.map((a) => a?.batchId).find(Boolean);
-  const startedAt = assignmentsForThisRoom[0]?.startedAt || null;
+  const batches = [];
+  const seenBatchIds = new Set();
+
+  for (const assignment of assignmentsForThisRoom) {
+    const batch = assignment?.batchId;
+    const batchId = String(batch?._id || batch || "");
+    if (!batchId || seenBatchIds.has(batchId)) continue;
+    seenBatchIds.add(batchId);
+    batches.push(batch);
+  }
+
+  const batchCount = batches.length;
+  const firstBatch = batches[0] || null;
+  let batchChipLabel = null;
+
+  if (batchCount === 1) {
+    batchChipLabel = firstBatch?.batchNumber || null;
+  } else if (batchCount > 1) {
+    batchChipLabel = `${batchCount} batches`;
+  }
 
   return {
     room,
     strainLines,
     totalPlants,
-    batchNumber: batch?.batchNumber || null,
-    lifecycleStage: batch?.lifecycleStage || null,
-    headerDate: batch?.harvestDate || startedAt,
+    batchChipLabel,
+    batchCount,
+    lifecycleStage: firstBatch?.lifecycleStage || null,
+    headerDate: firstBatch?.harvestDate || assignmentsForThisRoom[0]?.startedAt || null,
   };
 }
 

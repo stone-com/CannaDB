@@ -10,8 +10,7 @@ const Batch = require("../models/Batch");
 const Room = require("../models/Room");
 const RoomAssignment = require("../models/RoomAssignment");
 const {
-  aggregateAssignmentTotalsMap,
-  aggregatePlantTotalsMap,
+  aggregateBatchPlantsMap,
   mapTotalsToPlants,
 } = require("../utils/plantHelpers");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
@@ -124,19 +123,14 @@ router.post("/", async (req, res) => {
 
         const now = new Date();
 
-        const activeAssignmentsQuery = RoomAssignment.find({
-          tenantId: req.tenantId,
-          batchId: normalizedBatchId,
-          active: true,
-        }).select("assignedPlants");
+        const assignmentTotals = aggregateBatchPlantsMap(batch.plants);
 
-        if (session) activeAssignmentsQuery.session(session);
-        const activeAssignments = await activeAssignmentsQuery;
-
-        const assignmentTotals =
-          activeAssignments.length > 0
-            ? aggregateAssignmentTotalsMap(activeAssignments)
-            : aggregatePlantTotalsMap(batch.rooms);
+        if (assignmentTotals.size === 0) {
+          return {
+            status: 400,
+            body: { error: "Batch has no plants to assign to a room" },
+          };
+        }
 
         await RoomAssignment.updateMany(
           { tenantId: req.tenantId, batchId: normalizedBatchId, active: true },

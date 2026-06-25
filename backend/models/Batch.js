@@ -36,30 +36,20 @@ const batchSchema = new mongoose.Schema({
     ref: "Location",
     default: null,
   },
-  // Planned plants per room.
-  // Current live occupancy is stored in RoomAssignment.
-  rooms: [
+  // Total plants in this batch by strain. Room placement lives in RoomAssignment.
+  plants: [
     {
-      roomId: {
+      strainId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Room",
+        ref: "Strain",
         required: true,
       },
-      plants: [
-        {
-          strainId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Strain",
-            required: true,
-          },
-          count: {
-            type: Number,
-            required: true,
-            default: 0,
-            min: 0,
-          },
-        },
-      ],
+      count: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: 0,
+      },
     },
   ],
   lifecycleStage: {
@@ -88,5 +78,6 @@ const batchSchema = new mongoose.Schema({
 batchSchema.index({ tenantId: 1, batchNumber: 1 }, { unique: true });
 batchSchema.index({ tenantId: 1, lifecycleStage: 1, batchType: 1, harvestDate: 1 });
 batchSchema.index({ tenantId: 1, location: 1, lifecycleStage: 1, createdAt: -1 });
+batchSchema.index({ tenantId: 1, "plants.strainId": 1 });
 
 module.exports = mongoose.model("Batch", batchSchema);

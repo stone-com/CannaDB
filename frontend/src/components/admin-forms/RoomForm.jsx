@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";import {
   Typography,
 } from "@mui/material";
 import { formatDate } from "../../utils/formatDate";
+import { getBatchStrainTotals, getRoomNamesForBatch } from "../../utils/batchHelpers";
 import {
   apiDelete,
   apiGet,
@@ -55,6 +56,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [roomAssignments, setRoomAssignments] = useState([]);
 
   const [formData, setFormData] = useState({
     locationId: "",
@@ -117,30 +119,46 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
     }
   };
 
+  const fetchRoomAssignments = async () => {
+    try {
+      const data = await apiGet("/api/room-assignments?active=true");
+      setRoomAssignments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching room assignments:", error);
+    }
+  };
+
   useEffect(() => {
     // Load data on mount and listen for create/update events from other forms.
     fetchLocations();    fetchRooms();
     fetchBatches();
+    fetchRoomAssignments();
 
     // Refresh all data when a new location is created elsewhere in the app.
     const handleLocationCreated = () => {      fetchLocations();
       fetchRooms();
       fetchBatches();
+      fetchRoomAssignments();
     };
 
     // Refresh rooms and batches when a room or batch is created/updated elsewhere.
     const handleRoomOrBatchUpdated = () => {      fetchRooms();
       fetchBatches();
+      fetchRoomAssignments();
     };
 
     window.addEventListener("location:created", handleLocationCreated);
     window.addEventListener("room:created", handleRoomOrBatchUpdated);
     window.addEventListener("batch:created", handleRoomOrBatchUpdated);
+    window.addEventListener("batch:updated", handleRoomOrBatchUpdated);
+    window.addEventListener("roomAssignment:created", handleRoomOrBatchUpdated);
 
     return () => {
       window.removeEventListener("location:created", handleLocationCreated);
       window.removeEventListener("room:created", handleRoomOrBatchUpdated);
       window.removeEventListener("batch:created", handleRoomOrBatchUpdated);
+      window.removeEventListener("batch:updated", handleRoomOrBatchUpdated);
+      window.removeEventListener("roomAssignment:created", handleRoomOrBatchUpdated);
     };
   }, []);
 
@@ -172,33 +190,15 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
     [selectableBatches, assignmentData.batchId],
   );
 
-  const batchPlantTotals = useMemo(() => {
-    // Convert nested room plant rows into one total per strain for validation.
-    if (!selectedBatch) return [];
+  const batchPlantTotals = useMemo(
+    () => getBatchStrainTotals(selectedBatch),
+    [selectedBatch],
+  );
 
-    const totals = new Map();
-
-    (selectedBatch.rooms || []).forEach((roomEntry) => {
-      (roomEntry?.plants || []).forEach((plantEntry) => {
-        const strainId = String(
-          plantEntry?.strainId?._id || plantEntry?.strainId,
-        );
-        if (!strainId || strainId === "undefined") return;
-
-        const strainName = plantEntry?.strainId?.name || "Unknown Strain";
-        const current = totals.get(strainId) || {
-          strainId,
-          strainName,
-          totalCount: 0,
-        };
-
-        current.totalCount += Number(plantEntry?.count) || 0;
-        totals.set(strainId, current);
-      });
-    });
-
-    return Array.from(totals.values());
-  }, [selectedBatch]);
+  const currentRoomNames = useMemo(
+    () => getRoomNamesForBatch(selectedBatch?._id, roomAssignments),
+    [selectedBatch, roomAssignments],
+  );
 
   const assignableRooms = useMemo(() => {
     // If batch has a location, only allow rooms from that same location.
@@ -263,7 +263,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
       Object.fromEntries(
         batchPlantTotals.map((plant) => [
           plant.strainId,
-          String(plant.totalCount),
+          String(plant.count),
         ]),
       ),
     );
@@ -449,7 +449,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
               return {
                 strainId: plant.strainId,
                 count: planned,
-                max: plant.totalCount,
+                max: plant.count,
               };
             })
             .filter((plant) => plant.count > 0);
@@ -457,7 +457,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
           const hasExceeded = batchPlantTotals.some(
             (plant) =>
               (Number(wholeMoveCounts?.[plant.strainId]) || 0) >
-              plant.totalCount,
+              plant.count,
           );
 
           if (hasExceeded) {
@@ -508,8 +508,8 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
 
         const hasMismatch = batchPlantTotals.some((plant) =>
           destroyUnallocatedPlants
-            ? totalsByStrain[plant.strainId] > plant.totalCount
-            : totalsByStrain[plant.strainId] !== plant.totalCount,
+            ? totalsByStrain[plant.strainId] > plant.count
+            : totalsByStrain[plant.strainId] !== plant.count,
         );
 
         if (hasMismatch) {
@@ -717,19 +717,11 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
                 Next Stage: <strong>{nextStage || "N/A"}</strong>
               </Typography>
               <Typography variant="body2">
-                Current Room Plan:{" "}
+                Current Rooms:{" "}
                 <strong>
-                  {(selectedBatch.rooms || []).length > 0
-                    ? selectedBatch.rooms
-                        .map((entry) => {
-                          const room = rooms.find(
-                            (candidate) =>
-                              String(candidate._id) === String(entry.roomId),
-                          );
-                          return room?.name || "Unknown Room";
-                        })
-                        .join(", ")
-                    : "No room plan set"}
+                  {currentRoomNames.length > 0
+                    ? currentRoomNames.join(", ")
+                    : "No room assignments yet"}
                 </strong>
               </Typography>
             </Stack>
@@ -820,7 +812,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
                       label={`${plant.strainName} To Move`}
                       value={
                         wholeMoveCounts?.[plant.strainId] ??
-                        String(plant.totalCount)
+                        String(plant.count)
                       }
                       onChange={(e) =>
                         handleWholeMoveCountChange(
@@ -828,7 +820,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
                           e.target.value,
                         )
                       }
-                      helperText={`Available: ${plant.totalCount}`}
+                      helperText={`Available: ${plant.count}`}
                     />
                   ))}
                 </>
@@ -855,7 +847,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
                 // Live running total for each strain across all split destination cards.
                 <Typography key={`totals-${plant.strainId}`} variant="body2">
                   {plant.strainName}: {getAllocatedCount(plant.strainId)} /{" "}
-                  {plant.totalCount}
+                  {plant.count}
                 </Typography>
               ))}
 

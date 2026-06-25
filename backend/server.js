@@ -27,6 +27,10 @@ app.get("/api/health", (req, res) => {
     3: "disconnecting",
   };
 
+  app.get("/api/ping", (req, res) => {
+    res.status(200).send("Awake");
+  });
+
   const dbStateCode = mongoose.connection.readyState;
   const dbState = stateByCode[dbStateCode] || "unknown";
   const healthy = dbStateCode === 1;

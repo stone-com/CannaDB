@@ -129,27 +129,28 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ error: "Strain not found" });
     }
 
-    const [batchRef, assignmentRef, harvestRef] = await Promise.all([
-      Batch.exists({
-        tenantId: req.tenantId,
-        "rooms.plants.strainId": strainId,
-      }),
-      RoomAssignment.exists({
-        tenantId: req.tenantId,
-        "assignedPlants.strainId": strainId,
-      }),
-      Harvest.exists({
-        tenantId: req.tenantId,
-        "rooms.strains.strainId": strainId,
-      }),
-    ]);
+    const harvestRef = await Harvest.exists({
+      tenantId: req.tenantId,
+      "rooms.strains.strainId": strainId,
+    });
 
-    if (batchRef || assignmentRef || harvestRef) {
+    if (harvestRef) {
       return res.status(409).json({
         error:
-          "Cannot delete strain because it is referenced by one or more batches, room assignments, or harvests",
+          "Cannot delete strain because it is referenced by one or more harvests",
       });
     }
+
+    await Promise.all([
+      Batch.updateMany(
+        { tenantId: req.tenantId, "plants.strainId": strainId },
+        { $pull: { plants: { strainId } } },
+      ),
+      RoomAssignment.updateMany(
+        { tenantId: req.tenantId, "assignedPlants.strainId": strainId },
+        { $pull: { assignedPlants: { strainId } } },
+      ),
+    ]);
 
     await Strain.findOneAndDelete({
       tenantId: req.tenantId,

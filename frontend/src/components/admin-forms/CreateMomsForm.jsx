@@ -9,6 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { apiGet, apiPost } from "../../utils/api";
+import { getBatchStrainTotals } from "../../utils/batchHelpers";
 
 // This form converts plants from a Veg production batch into a new mom batch.
 // Users pick a source batch, choose a mom room, set counts per strain, then submit.
@@ -67,32 +68,10 @@ function CreateMomsForm() {
     [vegProductionBatches, selectedBatchId],
   );
 
-  const availablePlantsByStrain = useMemo(() => {
-    // Convert nested room plant rows into one total per strain for this batch.
-    if (!selectedBatch) return [];
-
-    const totals = new Map();
-
-    (selectedBatch.rooms || []).forEach((roomEntry) => {
-      (roomEntry?.plants || []).forEach((plantEntry) => {
-        const strainId = String(
-          plantEntry?.strainId?._id || plantEntry?.strainId || "",
-        );
-        if (!strainId) return;
-
-        const current = totals.get(strainId) || {
-          strainId,
-          strainName: plantEntry?.strainId?.name || "Unknown Strain",
-          totalCount: 0,
-        };
-
-        current.totalCount += Number(plantEntry?.count) || 0;
-        totals.set(strainId, current);
-      });
-    });
-
-    return Array.from(totals.values());
-  }, [selectedBatch]);
+  const availablePlantsByStrain = useMemo(
+    () => getBatchStrainTotals(selectedBatch),
+    [selectedBatch],
+  );
 
   const momRoomsAtLocation = useMemo(() => {
     // Limit destination options to Mom rooms at the same location as source batch.
@@ -123,15 +102,8 @@ function CreateMomsForm() {
     setSelectedMomRoomId(defaultMomRoom?._id || "");
 
     const initialCuts = {};
-    (chosenBatch?.rooms || []).forEach((roomEntry) => {
-      (roomEntry?.plants || []).forEach((plantEntry) => {
-        const strainId = String(
-          plantEntry?.strainId?._id || plantEntry?.strainId,
-        );
-        if (strainId && !(strainId in initialCuts)) {
-          initialCuts[strainId] = "0";
-        }
-      });
+    getBatchStrainTotals(chosenBatch).forEach((row) => {
+      initialCuts[row.strainId] = "0";
     });
     setMomCuts(initialCuts);
   };
@@ -180,7 +152,7 @@ function CreateMomsForm() {
       const source = availablePlantsByStrain.find(
         (strain) => strain.strainId === entry.strainId,
       );
-      return entry.count > (source?.totalCount || 0);
+      return entry.count > (source?.count || 0);
     });
 
     if (overdrawn) {
@@ -287,8 +259,8 @@ function CreateMomsForm() {
               <TextField
                 key={strain.strainId}
                 type="number"
-                label={`${strain.strainName} (available: ${strain.totalCount})`}
-                inputProps={{ min: 0, max: strain.totalCount }}
+                label={`${strain.strainName} (available: ${strain.count})`}
+                inputProps={{ min: 0, max: strain.count }}
                 value={momCuts[strain.strainId] || "0"}
                 onChange={(e) =>
                   handleCutChange(strain.strainId, e.target.value)

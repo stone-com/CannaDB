@@ -110,7 +110,9 @@ function StrainForm() {
         setMessage("Strain updated successfully.");
       } else {
         resetForm();
-        setMessage("Strain removed successfully.");
+        setMessage(
+          "Strain removed from batches, room assignments, and the strain list.",
+        );
       }
 
       setTimeout(() => setMessage(""), 3000);
@@ -198,8 +200,8 @@ function StrainForm() {
         {/* Warning shown in remove mode */}
         {mode === "remove" && (
           <Alert severity="warning">
-            This will permanently remove the selected strain if it is not
-            referenced by existing records.
+            This removes the strain and clears it from all batches and room
+            assignments. Strains used in harvest records cannot be deleted.
           </Alert>
         )}
 

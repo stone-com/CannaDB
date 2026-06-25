@@ -5,18 +5,16 @@ const Batch = require("../models/Batch");
 const Room = require("../models/Room");
 const RoomAssignment = require("../models/RoomAssignment");
 const {
-  aggregatePlantTotalsMap,
-  aggregateAssignmentTotalsMap,
+  aggregateBatchPlantsMap,
   mapTotalsToPlants,
-  normalizeRoomPlants,
   roomEntriesFromAssignments,
   subtractPlantsFromRooms,
+  subtractPlantsFromBatchPlants,
 } = require("../utils/plantHelpers");
 const { runWithOptionalTransaction } = require("../utils/transactionHelpers");
 const { recordAudit } = require("../utils/recordAudit");
 
-// Populate strain details inside each batch room/plant entry.
-const BATCH_POPULATE = "rooms.plants.strainId";
+const BATCH_POPULATE = "plants.strainId";
 
 // Shared populate config for room assignment responses.
 // This keeps room details, batch summary info, and strain details in one payload.
@@ -73,34 +71,16 @@ async function autoPromoteDueBatchesToHarvestReady(tenantId, session = null) {
   await Batch.updateMany(query, update);
 }
 
-// Get the current total plants for a batch by strain.
-// Active room assignments are the main source of truth.
-// If none exist yet, fall back to the batch's stored room data.
-async function getCurrentBatchTotals(
-  batchId,
-  fallbackRooms,
-  tenantId,
-  session = null,
-) {
-  const assignmentQuery = RoomAssignment.find({
-    tenantId,
-    batchId,
-    active: true,
-  }).select("roomId assignedPlants");
+// Get current plant totals for a batch from its stored plants array.
+async function getCurrentBatchTotals(batchId, tenantId, session = null) {
+  const batchQuery = Batch.findOne({ tenantId, _id: batchId }).select("plants");
+  if (session) batchQuery.session(session);
 
-  if (session) assignmentQuery.session(session);
-
-  const activeAssignments = await assignmentQuery;
-
-  if (activeAssignments.length === 0) {
-    return aggregatePlantTotalsMap(fallbackRooms);
-  }
-
-  return aggregateAssignmentTotalsMap(activeAssignments);
+  const batch = await batchQuery;
+  return aggregateBatchPlantsMap(batch?.plants);
 }
 
-// Replace each batch's rooms with rooms built from active assignments when available.
-// This lets the API return the live room state without needing duplicate active data on Batch.
+// Attach a computed `rooms` array to batch API responses (from active assignments).
 async function attachDerivedRoomsToBatches(batches, tenantId) {
   if (!Array.isArray(batches) || batches.length === 0) {
     return [];
@@ -132,11 +112,8 @@ async function attachDerivedRoomsToBatches(batches, tenantId) {
   return batches.map((batch) => {
     const batchObject =
       typeof batch.toObject === "function" ? batch.toObject() : { ...batch };
-    const derivedRooms = roomsByBatchId.get(String(batch._id));
-
-    if (Array.isArray(derivedRooms) && derivedRooms.length > 0) {
-      batchObject.rooms = derivedRooms;
-    }
+    const derivedRooms = roomsByBatchId.get(String(batch._id)) || [];
+    batchObject.rooms = derivedRooms;
 
     return batchObject;
   });
@@ -185,7 +162,6 @@ router.post("/", async (req, res) => {
       cloneDate,
       harvestDate,
       location,
-      rooms,
       batchType,
       plants,
     } = req.body;
@@ -197,7 +173,6 @@ router.post("/", async (req, res) => {
     }
 
     const startedAt = new Date(cloneDate);
-    let batchRooms = Array.isArray(rooms) ? rooms : [];
     let cloneRoom = null;
     const hasPlants = Array.isArray(plants) && plants.length > 0;
 
@@ -216,8 +191,6 @@ router.post("/", async (req, res) => {
           error: "No Clone room found at the selected location",
         });
       }
-
-      batchRooms = [{ roomId: cloneRoom._id, plants }];
     }
 
     const savedBatch = await Batch.create({
@@ -226,7 +199,7 @@ router.post("/", async (req, res) => {
       cloneDate,
       harvestDate: harvestDate || null,
       location: location || null,
-      rooms: batchRooms,
+      plants: hasPlants ? plants : [],
       batchType: batchType || "production",
       lifecycleStage: "Clone",
       stageStartedAt: startedAt,
@@ -337,12 +310,7 @@ router.post("/:id/move", async (req, res) => {
           batchId: batch._id,
           roomId,
           assignedPlants: mapTotalsToPlants(
-            await getCurrentBatchTotals(
-              batch._id,
-              batch.rooms,
-              req.tenantId,
-              session,
-            ),
+            await getCurrentBatchTotals(batch._id, req.tenantId, session),
           ),
           active: true,
           source: "manual",
@@ -423,14 +391,13 @@ router.post("/:id/assign-rooms", async (req, res) => {
     const batch = await Batch.findOne({
       tenantId: req.tenantId,
       _id: req.params.id,
-    });
+    }).populate(BATCH_POPULATE);
     if (!batch) {
       return res.status(404).json({ error: "Batch not found" });
     }
 
     const currentTotals = await getCurrentBatchTotals(
       batch._id,
-      batch.rooms,
       req.tenantId,
     );
     const normalizedMode = mode === "split" ? "split" : "whole";
@@ -590,6 +557,20 @@ router.post("/:id/assign-rooms", async (req, res) => {
       }
     }
 
+    let updatedBatchPlants = null;
+    if (destroyUnallocated === true) {
+      const newTotals = new Map();
+      normalizedAssignments.forEach((entry) => {
+        entry.plants.forEach((plant) => {
+          newTotals.set(
+            plant.strainId,
+            (newTotals.get(plant.strainId) || 0) + plant.count,
+          );
+        });
+      });
+      updatedBatchPlants = mapTotalsToPlants(newTotals);
+    }
+
     const { savedAssignmentIds } = await runWithOptionalTransaction(
       mongoose,
       async (session) => {
@@ -624,7 +605,6 @@ router.post("/:id/assign-rooms", async (req, res) => {
         );
 
         if (advanceStage === true) {
-          // Optionally advance the batch stage as part of the room move.
           const stageMap =
             NEXT_STAGE_BY_BATCH_TYPE[batch.batchType] ||
             NEXT_STAGE_BY_BATCH_TYPE.production;
@@ -640,7 +620,11 @@ router.post("/:id/assign-rooms", async (req, res) => {
           batch.stageStartedAt = now;
         }
 
-        if (advanceStage === true) {
+        if (updatedBatchPlants !== null) {
+          batch.plants = updatedBatchPlants;
+        }
+
+        if (advanceStage === true || updatedBatchPlants !== null) {
           await batch.save(session ? { session } : undefined);
         }
 
@@ -728,7 +712,6 @@ router.post("/:id/create-moms", async (req, res) => {
     // Figure out how many plants are currently available to cut from the source batch.
     const availableTotals = await getCurrentBatchTotals(
       sourceBatch._id,
-      sourceBatch.rooms,
       req.tenantId,
     );
     const requestedCuts = new Map();
@@ -798,10 +781,13 @@ router.post("/:id/create-moms", async (req, res) => {
         if (session) activeAssignmentsQuery.session(session);
         const activeSourceAssignments = await activeAssignmentsQuery;
 
-        const sourceRoomEntries =
-          activeSourceAssignments.length > 0
-            ? roomEntriesFromAssignments(activeSourceAssignments)
-            : normalizeRoomPlants(sourceBatch.rooms);
+        if (activeSourceAssignments.length === 0) {
+          throw new Error("Source batch has no active room assignments");
+        }
+
+        const sourceRoomEntries = roomEntriesFromAssignments(
+          activeSourceAssignments,
+        );
 
         // Remove the requested mom cuts from the source batch room totals.
         const updatedSourceRooms = subtractPlantsFromRooms(
@@ -810,11 +796,11 @@ router.post("/:id/create-moms", async (req, res) => {
         );
         const momPlants = mapTotalsToPlants(requestedCuts);
 
-        if (activeSourceAssignments.length === 0) {
-          // If the batch has no active assignments yet, fall back to saving on Batch.rooms.
-          sourceBatch.rooms = updatedSourceRooms;
-          await sourceBatch.save(session ? { session } : undefined);
-        }
+        sourceBatch.plants = subtractPlantsFromBatchPlants(
+          sourceBatch.plants,
+          requestedCuts,
+        );
+        await sourceBatch.save(session ? { session } : undefined);
 
         const momBatchNumber = await buildUniqueMomBatchNumber(
           sourceBatch.batchNumber,
@@ -829,12 +815,7 @@ router.post("/:id/create-moms", async (req, res) => {
           harvestDate: null,
           batchType: "mom",
           location: sourceBatch.location,
-          rooms: [
-            {
-              roomId: momRoom._id,
-              plants: momPlants,
-            },
-          ],
+          plants: momPlants,
           lifecycleStage: "Mom",
           stageStartedAt: now,
         });
@@ -842,34 +823,31 @@ router.post("/:id/create-moms", async (req, res) => {
           session ? { session } : undefined,
         );
 
-        if (activeSourceAssignments.length > 0) {
-          // Update the source batch's active room assignments after the cut.
-          await RoomAssignment.bulkWrite(
-            activeSourceAssignments.map((assignment) => {
-              const roomEntry = updatedSourceRooms.find(
-                (entry) => String(entry.roomId) === String(assignment.roomId),
-              );
+        await RoomAssignment.bulkWrite(
+          activeSourceAssignments.map((assignment) => {
+            const roomEntry = updatedSourceRooms.find(
+              (entry) => String(entry.roomId) === String(assignment.roomId),
+            );
 
-              return {
-                updateOne: {
-                  filter: { _id: assignment._id },
-                  update: {
-                    $set: roomEntry
-                      ? {
-                          assignedPlants: roomEntry.plants,
-                        }
-                      : {
-                          assignedPlants: [],
-                          active: false,
-                          endedAt: now,
-                        },
-                  },
+            return {
+              updateOne: {
+                filter: { _id: assignment._id },
+                update: {
+                  $set: roomEntry
+                    ? {
+                        assignedPlants: roomEntry.plants,
+                      }
+                    : {
+                        assignedPlants: [],
+                        active: false,
+                        endedAt: now,
+                      },
                 },
-              };
-            }),
-            session ? { session } : undefined,
-          );
-        }
+              },
+            };
+          }),
+          session ? { session } : undefined,
+        );
 
         // Create the first active room assignment for the new mom batch.
         const momAssignment = new RoomAssignment({
@@ -935,6 +913,12 @@ router.post("/:id/create-moms", async (req, res) => {
       });
     }
 
+    if (
+      String(error?.message || "").includes("no active room assignments")
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
     res.status(500).json({ error: error.message });
   }
 });
@@ -965,7 +949,6 @@ router.post("/:id/destroy-plants", async (req, res) => {
 
     const currentTotals = await getCurrentBatchTotals(
       batch._id,
-      batch.rooms,
       req.tenantId,
     );
     const available = currentTotals.get(normalizedStrainId) || 0;
@@ -993,143 +976,96 @@ router.post("/:id/destroy-plants", async (req, res) => {
         let remaining = removeCount;
         const changedAssignmentIdsLocal = [];
 
-        if (activeAssignments.length > 0) {
-          const bulkUpdates = [];
+        if (activeAssignments.length === 0) {
+          throw new Error("No active room assignments found for this batch");
+        }
 
-          activeAssignments.forEach((assignment) => {
-            if (remaining <= 0) return;
+        const bulkUpdates = [];
 
-            const assignedPlants = Array.isArray(assignment.assignedPlants)
-              ? assignment.assignedPlants.map((plant) => ({
-                  strainId: plant.strainId,
-                  count: Number(plant.count) || 0,
-                }))
-              : [];
+        activeAssignments.forEach((assignment) => {
+          if (remaining <= 0) return;
 
-            let assignmentChanged = false;
+          const assignedPlants = Array.isArray(assignment.assignedPlants)
+            ? assignment.assignedPlants.map((plant) => ({
+                strainId: plant.strainId,
+                count: Number(plant.count) || 0,
+              }))
+            : [];
 
-            const updatedPlants = assignedPlants
-              .map((plant) => {
-                const thisStrainId = String(plant.strainId || "");
-                if (thisStrainId !== normalizedStrainId || remaining <= 0) {
-                  return plant;
-                }
+          let assignmentChanged = false;
 
-                const removable = Math.min(plant.count, remaining);
-                remaining -= removable;
-                assignmentChanged = true;
+          const updatedPlants = assignedPlants
+            .map((plant) => {
+              const thisStrainId = String(plant.strainId || "");
+              if (thisStrainId !== normalizedStrainId || remaining <= 0) {
+                return plant;
+              }
 
-                return {
-                  ...plant,
-                  count: plant.count - removable,
-                };
-              })
-              .filter((plant) => plant.count > 0);
+              const removable = Math.min(plant.count, remaining);
+              remaining -= removable;
+              assignmentChanged = true;
 
-            if (!assignmentChanged) return;
+              return {
+                ...plant,
+                count: plant.count - removable,
+              };
+            })
+            .filter((plant) => plant.count > 0);
 
-            changedAssignmentIdsLocal.push(assignment._id);
+          if (!assignmentChanged) return;
 
-            if (updatedPlants.length === 0) {
-              bulkUpdates.push({
-                updateOne: {
-                  filter: { _id: assignment._id },
-                  update: {
-                    $set: {
-                      assignedPlants: [],
-                      active: false,
-                      endedAt: now,
-                      notes:
-                        notes ||
-                        "Automatically closed after plant destruction removed all plants",
-                    },
-                  },
-                },
-              });
-              return;
-            }
+          changedAssignmentIdsLocal.push(assignment._id);
 
+          if (updatedPlants.length === 0) {
             bulkUpdates.push({
               updateOne: {
                 filter: { _id: assignment._id },
                 update: {
                   $set: {
-                    assignedPlants: updatedPlants,
-                    notes: notes || assignment.notes || null,
+                    assignedPlants: [],
+                    active: false,
+                    endedAt: now,
+                    notes:
+                      notes ||
+                      "Automatically closed after plant destruction removed all plants",
                   },
                 },
               },
             });
+            return;
+          }
+
+          bulkUpdates.push({
+            updateOne: {
+              filter: { _id: assignment._id },
+              update: {
+                $set: {
+                  assignedPlants: updatedPlants,
+                  notes: notes || assignment.notes || null,
+                },
+              },
+            },
           });
-
-          if (remaining > 0) {
-            throw new Error("Unable to allocate requested destruction amount");
-          }
-
-          if (bulkUpdates.length > 0) {
-            await RoomAssignment.bulkWrite(
-              bulkUpdates,
-              session ? { session } : undefined,
-            );
-          }
-
-          const refreshedAssignmentsQuery = RoomAssignment.find({
-            tenantId: req.tenantId,
-            batchId: batch._id,
-            active: true,
-          }).select("roomId assignedPlants");
-          if (session) refreshedAssignmentsQuery.session(session);
-          const refreshedAssignments = await refreshedAssignmentsQuery;
-
-          batch.rooms = roomEntriesFromAssignments(refreshedAssignments);
-          await batch.save(session ? { session } : undefined);
-
-          return { changedAssignmentIds: changedAssignmentIdsLocal };
-        }
-
-        const updatedRooms = normalizeRoomPlants(batch.rooms)
-          .map((roomEntry) => {
-            const nextPlants = (
-              Array.isArray(roomEntry?.plants) ? roomEntry.plants : []
-            )
-              .map((plantEntry) => {
-                const thisStrainId = String(
-                  plantEntry?.strainId?._id || plantEntry?.strainId || "",
-                );
-
-                if (thisStrainId !== normalizedStrainId || remaining <= 0) {
-                  return {
-                    strainId: plantEntry.strainId,
-                    count: Number(plantEntry.count) || 0,
-                  };
-                }
-
-                const plantCount = Number(plantEntry.count) || 0;
-                const removable = Math.min(plantCount, remaining);
-                remaining -= removable;
-
-                return {
-                  strainId: plantEntry.strainId,
-                  count: plantCount - removable,
-                };
-              })
-              .filter((plant) => plant.count > 0);
-
-            return {
-              roomId: roomEntry.roomId,
-              plants: nextPlants,
-            };
-          })
-          .filter((roomEntry) => roomEntry.plants.length > 0);
+        });
 
         if (remaining > 0) {
           throw new Error("Unable to allocate requested destruction amount");
         }
 
-        batch.rooms = updatedRooms;
+        if (bulkUpdates.length > 0) {
+          await RoomAssignment.bulkWrite(
+            bulkUpdates,
+            session ? { session } : undefined,
+          );
+        }
+
+        batch.plants = subtractPlantsFromBatchPlants(
+          batch.plants,
+          new Map([[normalizedStrainId, removeCount]]),
+        );
         await batch.save(session ? { session } : undefined);
 
-        return { changedAssignmentIds: [] };
+        return { changedAssignmentIds: changedAssignmentIdsLocal };
       },
     );
 

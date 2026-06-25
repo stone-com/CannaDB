@@ -122,11 +122,38 @@ function subtractPlantsFromRooms(roomEntries, requestedCuts) {
   return updatedRooms.filter((roomEntry) => roomEntry.plants.length > 0);
 }
 
+// Adds up plant counts by strain from a batch's plants array.
+function aggregateBatchPlantsMap(plants) {
+  const totals = new Map();
+
+  normalizePlantEntries(plants).forEach((plant) => {
+    totals.set(
+      plant.strainId,
+      (totals.get(plant.strainId) || 0) + plant.count,
+    );
+  });
+
+  return totals;
+}
+
+// Removes plant counts from a batch plants list.
+function subtractPlantsFromBatchPlants(plants, requestedCuts) {
+  const updatedRooms = subtractPlantsFromRooms(
+    [{ roomId: null, plants: normalizePlantEntries(plants) }],
+    requestedCuts,
+  );
+
+  return updatedRooms[0]?.plants || [];
+}
+
 module.exports = {
   aggregatePlantTotalsMap,
+  aggregateBatchPlantsMap,
   mapTotalsToPlants,
+  normalizePlantEntries,
   normalizeRoomPlants,
   roomEntriesFromAssignments,
   aggregateAssignmentTotalsMap,
   subtractPlantsFromRooms,
+  subtractPlantsFromBatchPlants,
 };

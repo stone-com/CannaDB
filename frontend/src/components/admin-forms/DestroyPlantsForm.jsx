@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import { apiGet, apiPost } from "../../utils/api";
+import { getBatchStrainTotals } from "../../utils/batchHelpers";
 
 // This form lets admins permanently remove plants from a batch by strain.
 // It requires a confirmation dialog before the destructive action is sent to the server.
@@ -67,34 +68,10 @@ function DestroyPlantsForm() {
     [batches, selectedBatchId],
   );
 
-  const strainTotals = useMemo(() => {
-    // Build per-strain available counts from the selected batch's room plant data.
-    if (!selectedBatch) return [];
-
-    const totals = new Map();
-    (selectedBatch.rooms || []).forEach((roomEntry) => {
-      (roomEntry?.plants || []).forEach((plantEntry) => {
-        const strainId = String(
-          plantEntry?.strainId?._id || plantEntry?.strainId || "",
-        );
-        if (!strainId) return;
-
-        const strainName = plantEntry?.strainId?.name || "Unknown Strain";
-        const current = totals.get(strainId) || {
-          strainId,
-          strainName,
-          count: 0,
-        };
-
-        current.count += Number(plantEntry?.count) || 0;
-        totals.set(strainId, current);
-      });
-    });
-
-    return Array.from(totals.values()).sort((a, b) =>
-      a.strainName.localeCompare(b.strainName),
-    );
-  }, [selectedBatch]);
+  const strainTotals = useMemo(
+    () => getBatchStrainTotals(selectedBatch),
+    [selectedBatch],
+  );
 
   const selectedStrain = useMemo(
     // Resolve strain id into selected strain totals row.

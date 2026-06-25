@@ -25,7 +25,7 @@ function shortDate(value) {
 
 // One room card in the overview — click to open details.
 function RoomCard({ card, onSelect }) {
-  const { room, strainLines, totalPlants, batchNumber, lifecycleStage, headerDate } = card;
+  const { room, strainLines, totalPlants, batchChipLabel, batchCount, lifecycleStage, headerDate } = card;
   const empty = strainLines.length === 0;
 
   return (
@@ -65,8 +65,8 @@ function RoomCard({ card, onSelect }) {
         <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.75 }}>
           <Chip
             size="small"
-            label={batchNumber || "Empty"}
-            color={batchNumber ? stageColor(lifecycleStage) : "default"}
+            label={batchChipLabel || "Empty"}
+            color={batchCount === 1 ? stageColor(lifecycleStage) : "default"}
             variant="outlined"
             sx={{ height: 22, fontSize: "0.7rem" }}
           />
