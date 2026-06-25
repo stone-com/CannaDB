@@ -1,4 +1,8 @@
-// Return a plain string strain ID from either a populated doc or raw ObjectId.
+/**
+ * Plant count helpers used by batch and room-assignment routes.
+ */
+
+// Gets a strain ID string from a plant entry (handles populated or plain IDs).
 function getStrainId(plantEntry) {
   if (!plantEntry?.strainId) return null;
   if (typeof plantEntry.strainId === "string") return plantEntry.strainId;
@@ -6,7 +10,7 @@ function getStrainId(plantEntry) {
   return String(plantEntry.strainId);
 }
 
-// Sum plant counts by strain across a batch-style rooms array.
+// Adds up plant counts by strain across all rooms in a batch.
 function aggregatePlantTotalsMap(roomEntries) {
   const totals = new Map();
 
@@ -24,7 +28,7 @@ function aggregatePlantTotalsMap(roomEntries) {
   return totals;
 }
 
-// Convert a totals Map back into the { strainId, count } shape used by schemas.
+// Converts a totals Map into the { strainId, count } array shape used in schemas.
 function mapTotalsToPlants(totalsMap) {
   return Array.from(totalsMap.entries()).map(([strainId, count]) => ({
     strainId,
@@ -32,7 +36,7 @@ function mapTotalsToPlants(totalsMap) {
   }));
 }
 
-// Clean a flat plants array so every entry has a string strainId and valid count.
+// Cleans a flat plants array so every entry has a valid strainId and count.
 function normalizePlantEntries(plantEntries) {
   return (Array.isArray(plantEntries) ? plantEntries : [])
     .map((plant) => ({
@@ -42,7 +46,7 @@ function normalizePlantEntries(plantEntries) {
     .filter((plant) => plant.strainId && plant.count > 0);
 }
 
-// Turn active room assignments into the same room/plant shape used elsewhere.
+// Turns active room assignments into the same room/plant shape used on batches.
 function roomEntriesFromAssignments(assignments) {
   return (Array.isArray(assignments) ? assignments : [])
     .filter((assignment) => assignment?.active !== false)
@@ -53,7 +57,7 @@ function roomEntriesFromAssignments(assignments) {
     .filter((roomEntry) => roomEntry.roomId && roomEntry.plants.length > 0);
 }
 
-// Sum plant counts by strain using active room assignment records.
+// Adds up plant counts by strain from active room assignment records.
 function aggregateAssignmentTotalsMap(assignments) {
   const totals = new Map();
 
@@ -69,7 +73,7 @@ function aggregateAssignmentTotalsMap(assignments) {
   return totals;
 }
 
-// Clean a rooms array so each room only keeps valid plant entries.
+// Cleans a rooms array so each room only keeps valid plant entries.
 function normalizeRoomPlants(roomEntries) {
   return (Array.isArray(roomEntries) ? roomEntries : [])
     .map((roomEntry) => ({
@@ -84,7 +88,7 @@ function normalizeRoomPlants(roomEntries) {
     .filter((roomEntry) => roomEntry.roomId && roomEntry.plants.length > 0);
 }
 
-// Remove requested plant counts from room data, used when cutting moms from a batch.
+// Removes plant counts from rooms when cutting moms from a production batch.
 function subtractPlantsFromRooms(roomEntries, requestedCuts) {
   const updatedRooms = normalizeRoomPlants(roomEntries);
   const remainingCuts = new Map(
@@ -118,11 +122,38 @@ function subtractPlantsFromRooms(roomEntries, requestedCuts) {
   return updatedRooms.filter((roomEntry) => roomEntry.plants.length > 0);
 }
 
+// Adds up plant counts by strain from a batch's plants array.
+function aggregateBatchPlantsMap(plants) {
+  const totals = new Map();
+
+  normalizePlantEntries(plants).forEach((plant) => {
+    totals.set(
+      plant.strainId,
+      (totals.get(plant.strainId) || 0) + plant.count,
+    );
+  });
+
+  return totals;
+}
+
+// Removes plant counts from a batch plants list.
+function subtractPlantsFromBatchPlants(plants, requestedCuts) {
+  const updatedRooms = subtractPlantsFromRooms(
+    [{ roomId: null, plants: normalizePlantEntries(plants) }],
+    requestedCuts,
+  );
+
+  return updatedRooms[0]?.plants || [];
+}
+
 module.exports = {
   aggregatePlantTotalsMap,
+  aggregateBatchPlantsMap,
   mapTotalsToPlants,
+  normalizePlantEntries,
   normalizeRoomPlants,
   roomEntriesFromAssignments,
   aggregateAssignmentTotalsMap,
   subtractPlantsFromRooms,
+  subtractPlantsFromBatchPlants,
 };

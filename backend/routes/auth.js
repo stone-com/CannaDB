@@ -1,17 +1,16 @@
+/**
+ * Auth routes — login is public; /me requires a valid token.
+ */
+
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const { requireAuth, JWT_SECRET } = require("../middleware/auth");
+const { requireLogin, JWT_SECRET } = require("../middleware/requireLogin");
 
 const router = express.Router();
 
-/**
- * POST /api/auth/login
- * Body: { email, password }
- *
- * Returns a token the frontend stores and sends on every API request.
- */
+// POST /api/auth/login — check email/password and return a login token.
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -21,30 +20,21 @@ router.post("/login", async (req, res) => {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
-
-    // Look up the user by email (demo setup uses one tenant for now).
     const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Compare typed password with the hashed password in the database.
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatches) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Create a signed token that expires in 7 days.
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        tenantId: user.tenantId,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" },
-    );
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.json({
       token,
@@ -61,11 +51,8 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/**
- * GET /api/auth/me
- * Returns the currently logged-in user (requires login token).
- */
-router.get("/me", requireAuth, (req, res) => {
+// GET /api/auth/me — return the currently logged-in user (token required).
+router.get("/me", requireLogin, (req, res) => {
   res.json({
     id: req.user._id,
     email: req.user.email,

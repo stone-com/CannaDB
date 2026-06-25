@@ -11,7 +11,10 @@ import {
 import CompostIcon from '@mui/icons-material/Compost';
 import YardIcon from '@mui/icons-material/Yard';
 import { formatDate } from "../utils/formatDate";
+import { getBatchStrainTotals } from "../utils/batchHelpers";
 
+// This card highlights the next scheduled harvest on the dashboard.
+// It shows batch details, plant counts by strain, and a button to start harvesting.
 function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
   const upcomingBatch = useMemo(() => {
     if (!Array.isArray(batches)) return null;
@@ -26,21 +29,13 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
   }, [batches]);
 
   const plannedPlants = useMemo(() => {
-    if (!upcomingBatch?.rooms) return [];
-
-    const plantMap = new Map();
-
-    upcomingBatch.rooms.forEach((room) => {
-      (room.plants || []).forEach((plant) => {
-        const strainName = plant.strainId?.name || "Unknown strain";
-        const count = Number(plant.count) || 0;
-        const existing = plantMap.get(strainName) || { name: strainName, count: 0 };
-        existing.count += count;
-        plantMap.set(strainName, existing);
-      });
-    });
-
-    return Array.from(plantMap.values()).sort((a, b) => b.count - a.count);
+    if (!upcomingBatch) return [];
+    return getBatchStrainTotals(upcomingBatch)
+      .map((row) => ({
+        name: row.strainName,
+        count: row.count,
+      }))
+      .sort((a, b) => b.count - a.count);
   }, [upcomingBatch]);
 
   return (
@@ -59,6 +54,7 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
           spacing={2}
           alignItems={{ xs: "flex-start", md: "center" }}
         >
+          {/* Harvest details: date, batch number, and plant counts */}
           <Stack spacing={1} sx={{ flex: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <CompostIcon color="primary" />
@@ -88,7 +84,7 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
                     ))
                   ) : (
                     <Typography variant="body2" color="text.secondary">
-                      No plant assignments have been added for this batch yet.
+                      No plants added to this batch yet.
                     </Typography>
                   )}
                 </Stack>
@@ -100,6 +96,7 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
             )}
           </Stack>
 
+          {/* Start harvest action button */}
           <Stack spacing={1.5} sx={{ minWidth: { xs: "100%", md: 220 } }}>
             <Divider sx={{ display: { xs: "block", md: "none" } }} />
             <Button variant="contained" size="large" onClick={onStartHarvest}>

@@ -12,12 +12,14 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { apiGet, apiPost } from "../utils/api";
 
 const SELECT_MENU_PROPS = {
   disablePortal: true,
 };
 
-// Capture wet harvest tote weights for one batch/room at a time.
+// This form records wet harvest weights (totes) for each strain in a batch and room.
+// Users pick a batch, choose a room, enter tote weights, then submit the harvest.
 function HarvestForm({ onComplete }) {
   // Data used by dropdowns and lookups.
   const [batches, setBatches] = useState([]);
@@ -32,18 +34,14 @@ function HarvestForm({ onComplete }) {
   const [totes, setTotes] = useState({});
   const [weightInput, setWeightInput] = useState("");
 
-  // Load initial data once.
+  // Load batches and room assignments when the form first opens.
   useEffect(() => {
-    // Fetch batches and active assignments in parallel for faster initial render.
+    // Loads batch and assignment data from the server in parallel.
     const loadData = async () => {
       try {
-        const [batchRes, assignmentRes] = await Promise.all([
-          fetch("/api/batches"),
-          fetch("/api/room-assignments?active=true"),
-        ]);
         const [batchData, assignmentData] = await Promise.all([
-          batchRes.json(),
-          assignmentRes.json(),
+          apiGet("/api/batches"),
+          apiGet("/api/room-assignments?active=true"),
         ]);
         setBatches(Array.isArray(batchData) ? batchData : []);
         setRoomAssignments(Array.isArray(assignmentData) ? assignmentData : []);
@@ -142,7 +140,7 @@ function HarvestForm({ onComplete }) {
     [activeTotes],
   );
 
-  // Clear room/strain/tote state when batch changes.
+  // Clears room, strain, and tote selections when the user picks a different batch.
   const handleBatchChange = (e) => {
     setSelectedBatchId(e.target.value);
     setSelectedRoomId("");
@@ -151,14 +149,14 @@ function HarvestForm({ onComplete }) {
     setWeightInput("");
   };
 
+  // Switches to a strain so the user can enter tote weights for it.
   const handleStrainClick = (strainId) => {
-    // Set active strain so right-side tote editor knows which row to edit.
     setSelectedStrainId(strainId);
     setWeightInput("");
   };
 
+  // Adds one tote weight to the list for the currently selected strain.
   const handleAddTote = () => {
-    // Keep tote input numeric and positive before adding to state.
     const weight = parseFloat(weightInput);
     if (Number.isNaN(weight) || weight <= 0) return;
 
@@ -169,15 +167,15 @@ function HarvestForm({ onComplete }) {
     setWeightInput("");
   };
 
+  // Removes one tote entry from a strain's weight list.
   const handleRemoveTote = (strainId, index) => {
-    // Remove one tote entry by index from the chosen strain list.
     setTotes((prev) => ({
       ...prev,
       [strainId]: prev[strainId].filter((_, i) => i !== index),
     }));
   };
 
-  // Build the harvest payload from UI selections and submit it.
+  // Sends the harvest data to the server and resets the form on success.
   const handleSubmit = async () => {
     if (!selectedBatchId || !selectedRoomId) {
       window.alert("Please select a batch and a room.");
@@ -210,18 +208,7 @@ function HarvestForm({ onComplete }) {
         rooms: [{ roomId: selectedRoomId, strains: strainsPayload }],
       };
 
-      const res = await fetch("/api/harvests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to create harvest");
-      }
-
-      await res.json();
+      await apiPost("/api/harvests", payload);
 
       setSelectedBatchId("");
       setSelectedRoomId("");
@@ -243,11 +230,12 @@ function HarvestForm({ onComplete }) {
       spacing={2}
       sx={{ height: "100%" }}
     >
-      {/* Left column: selection controls and strain list for the selected batch/room. */}
+      {/* Left side: batch and room pickers, strain list, submit button */}
       <Stack spacing={2} sx={{ width: { xs: "100%", md: 360 } }}>
-        {/* Section title for this workflow panel. */}
+        {/* Page title */}
         <Typography variant="h6">Harvest Intake Form</Typography>
 
+        {/* Batch dropdown (HarvestReady batches only) */}
         <TextField
           select
           label="Batch (HarvestReady Only)"
@@ -289,6 +277,7 @@ function HarvestForm({ onComplete }) {
           Only batches in HarvestReady stage can be selected for intake.
         </Typography>
 
+        {/* Room dropdown for the selected batch */}
         <TextField
           select
           label="Harvest Room"
@@ -305,8 +294,8 @@ function HarvestForm({ onComplete }) {
           ))}
         </TextField>
 
+        {/* Strain list for the selected batch */}
         {selectedBatch && (
-          // Card becomes a selectable list of strains currently in chosen room.
           <Card variant="outlined">
             <CardContent>
               <Typography
@@ -353,17 +342,16 @@ function HarvestForm({ onComplete }) {
           </Card>
         )}
 
+        {/* Submit harvest button */}
         {selectedBatchId && selectedRoomId && (
-          // Final action only appears when required selections are made.
           <Button variant="contained" size="large" onClick={handleSubmit}>
             Submit Harvest
           </Button>
         )}
       </Stack>
 
-      {/* Right column: tote entry for the currently selected strain. */}
+      {/* Right side: tote weight editor for the selected strain */}
       <Box sx={{ flex: 1 }}>
-        {/* Card keeps the editor visually separated from left navigation controls. */}
         <Card variant="outlined" sx={{ height: "100%" }}>
           <CardContent>
             {selectedStrainPlant ? (

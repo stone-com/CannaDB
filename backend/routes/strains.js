@@ -1,3 +1,9 @@
+/**
+ * Strain API routes.
+ * Rule: every database query must include tenantId: req.tenantId.
+ * req.tenantId is set automatically by requireLogin before this code runs.
+ */
+
 const express = require("express");
 const router = express.Router();
 const Strain = require("../models/Strain");
@@ -6,6 +12,7 @@ const Harvest = require("../models/Harvest");
 const RoomAssignment = require("../models/RoomAssignment");
 const { recordAudit } = require("../utils/recordAudit");
 
+// POST /api/strains — create a new strain.
 router.post("/", async (req, res) => {
   try {
     const { name, type, status } = req.body;
@@ -122,27 +129,28 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ error: "Strain not found" });
     }
 
-    const [batchRef, assignmentRef, harvestRef] = await Promise.all([
-      Batch.exists({
-        tenantId: req.tenantId,
-        "rooms.plants.strainId": strainId,
-      }),
-      RoomAssignment.exists({
-        tenantId: req.tenantId,
-        "assignedPlants.strainId": strainId,
-      }),
-      Harvest.exists({
-        tenantId: req.tenantId,
-        "rooms.strains.strainId": strainId,
-      }),
-    ]);
+    const harvestRef = await Harvest.exists({
+      tenantId: req.tenantId,
+      "rooms.strains.strainId": strainId,
+    });
 
-    if (batchRef || assignmentRef || harvestRef) {
+    if (harvestRef) {
       return res.status(409).json({
         error:
-          "Cannot delete strain because it is referenced by one or more batches, room assignments, or harvests",
+          "Cannot delete strain because it is referenced by one or more harvests",
       });
     }
+
+    await Promise.all([
+      Batch.updateMany(
+        { tenantId: req.tenantId, "plants.strainId": strainId },
+        { $pull: { plants: { strainId } } },
+      ),
+      RoomAssignment.updateMany(
+        { tenantId: req.tenantId, "assignedPlants.strainId": strainId },
+        { $pull: { assignedPlants: { strainId } } },
+      ),
+    ]);
 
     await Strain.findOneAndDelete({
       tenantId: req.tenantId,

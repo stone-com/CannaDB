@@ -7,21 +7,21 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
+import { apiDelete, apiGet, apiPatch, apiPost } from "../../utils/api";
 
-// Add/edit/remove workflow for strain records.
+// This form lets admins add, edit, or remove cannabis strain records.
+// Users switch modes with a dropdown, fill in strain details, then submit the form.
 function StrainForm() {
-  // Mode drives both API method and visible fields.
   const [mode, setMode] = useState("add");
   const [strains, setStrains] = useState([]);
   const [selectedStrainId, setSelectedStrainId] = useState("");
   const [form, setForm] = useState({ name: "", type: "", status: "" });
   const [message, setMessage] = useState("");
 
+  // Loads all strains from the server and sorts them by name.
   const fetchStrains = async () => {
-    // Pull and alphabetize strain options for dropdowns.
     try {
-      const res = await fetch("/api/strains");
-      const data = await res.json();
+      const data = await apiGet("/api/strains");
       const list = Array.isArray(data) ? data : [];
       list.sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
       setStrains(list);
@@ -31,30 +31,29 @@ function StrainForm() {
   };
 
   useEffect(() => {
-    // Load initial strain list once when this form mounts.
     fetchStrains();
   }, []);
 
+  // Clears the form fields and selected strain.
   const resetForm = () => {
-    // Clear all controlled field values.
     setForm({ name: "", type: "", status: "" });
     setSelectedStrainId("");
   };
 
+  // Tells other parts of the app that strain data may have changed.
   const notifyStrainChange = () => {
-    // Broadcast for other screens that derive data from strain list.
     window.dispatchEvent(new CustomEvent("strain:created"));
   };
 
+  // Switches between add, edit, and remove modes and clears the form.
   const handleModeChange = (nextMode) => {
-    // Switching modes resets state so fields reflect the new workflow.
     setMode(nextMode);
     setMessage("");
     resetForm();
   };
 
+  // Loads the selected strain's data into the form fields for editing.
   const handleSelectStrain = (strainId) => {
-    // Load chosen strain details into edit/remove form state.
     setSelectedStrainId(strainId);
     const selected = strains.find(
       (strain) => String(strain._id) === String(strainId),
@@ -67,92 +66,38 @@ function StrainForm() {
     });
   };
 
-  // Route to POST/PATCH/DELETE depending on selected mode.
+  // Sends add, edit, or delete requests to the server based on the current mode.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
     try {
-      let res;
-
       if (mode === "add") {
-        // Add mode creates a brand-new strain.
-        res = await fetch("/api/strains", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: form.name.trim(),
-            type: form.type || null,
-            status: form.status || null,
-          }),
+        await apiPost("/api/strains", {
+          name: form.name.trim(),
+          type: form.type || null,
+          status: form.status || null,
         });
       }
 
       if (mode === "edit") {
-        // Edit mode updates an existing strain record.
         if (!selectedStrainId) {
           throw new Error("Please select a strain to edit");
         }
 
-        res = await fetch(`/api/strains/${selectedStrainId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: form.name.trim(),
-            type: form.type || null,
-            status: form.status || null,
-          }),
+        await apiPatch(`/api/strains/${selectedStrainId}`, {
+          name: form.name.trim(),
+          type: form.type || null,
+          status: form.status || null,
         });
       }
 
       if (mode === "remove") {
-        // Remove mode deletes the selected strain.
         if (!selectedStrainId) {
           throw new Error("Please select a strain to remove");
         }
 
-        res = await fetch(`/api/strains/${selectedStrainId}`, {
-          method: "DELETE",
-        });
-      }
-
-      if (!res) {
-        throw new Error("Invalid operation mode");
-      }
-
-      const getResponseError = async (response) => {
-        // Defensive parsing helps surface backend errors cleanly in UI.
-        const contentType = response.headers.get("content-type") || "";
-
-        if (contentType.includes("application/json")) {
-          try {
-            const errorData = await response.json();
-            return errorData?.error || "Failed to save strain changes";
-          } catch {
-            return "Request failed with invalid JSON response";
-          }
-        }
-
-        try {
-          const text = await response.text();
-          if (text.includes("<!DOCTYPE") || text.includes("<html")) {
-            return "API returned HTML instead of JSON. Ensure backend is running and restarted after route changes.";
-          }
-          return text || "Failed to save strain changes";
-        } catch {
-          return "Failed to save strain changes";
-        }
-      };
-
-      if (!res.ok) {
-        throw new Error(await getResponseError(res));
-      }
-
-      if (mode !== "remove") {
-        const contentType = res.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          await res.json();
-        }
+        await apiDelete(`/api/strains/${selectedStrainId}`);
       }
 
       notifyStrainChange();
@@ -165,7 +110,9 @@ function StrainForm() {
         setMessage("Strain updated successfully.");
       } else {
         resetForm();
-        setMessage("Strain removed successfully.");
+        setMessage(
+          "Strain removed from batches, room assignments, and the strain list.",
+        );
       }
 
       setTimeout(() => setMessage(""), 3000);
@@ -176,7 +123,7 @@ function StrainForm() {
 
   const formContent = (
     <>
-      {/* Top controls choose operation mode and (when needed) target strain. */}
+      {/* Mode picker and strain selector */}
       <Stack spacing={1.5} sx={{ mb: 2 }}>
         <TextField
           select
@@ -190,7 +137,6 @@ function StrainForm() {
         </TextField>
 
         {mode !== "add" && (
-          // In edit/remove mode, user picks which existing strain to target.
           <TextField
             select
             label="Strain"
@@ -200,7 +146,6 @@ function StrainForm() {
           >
             <MenuItem value="">Select Strain</MenuItem>
             {strains.map((strain) => (
-              // Dropdown rows are sourced from alphabetized strain list state.
               <MenuItem key={strain._id} value={strain._id}>
                 {strain.name}
               </MenuItem>
@@ -211,10 +156,11 @@ function StrainForm() {
 
       <Divider sx={{ mb: 2 }} />
 
-      {/* Main form body changes based on add/edit/remove mode. */}
+      {/* Strain details form */}
       <Stack component="form" spacing={2} onSubmit={handleSubmit}>
         {mode !== "remove" && (
           <>
+            {/* Strain name */}
             <TextField
               label="Name"
               value={form.name}
@@ -222,6 +168,7 @@ function StrainForm() {
               required
             />
 
+            {/* Strain type (indica, sativa, etc.) */}
             <TextField
               select
               label="Type"
@@ -235,6 +182,7 @@ function StrainForm() {
               <MenuItem value="CBD">CBD</MenuItem>
             </TextField>
 
+            {/* Strain status (production, bench, pheno) */}
             <TextField
               select
               label="Status"
@@ -249,14 +197,15 @@ function StrainForm() {
           </>
         )}
 
+        {/* Warning shown in remove mode */}
         {mode === "remove" && (
-          // Use Alert for destructive-action context before submit.
           <Alert severity="warning">
-            This will permanently remove the selected strain if it is not
-            referenced by existing records.
+            This removes the strain and clears it from all batches and room
+            assignments. Strains used in harvest records cannot be deleted.
           </Alert>
         )}
 
+        {/* Submit button (label changes with mode) */}
         <Button
           type="submit"
           variant="contained"
@@ -268,6 +217,7 @@ function StrainForm() {
         </Button>
       </Stack>
 
+      {/* Success or error message */}
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}

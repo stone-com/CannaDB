@@ -1,9 +1,15 @@
+/**
+ * Location API routes.
+ * Always include tenantId: req.tenantId in queries (set by requireLogin).
+ */
+
 const express = require("express");
 const router = express.Router();
 const Company = require("../models/Company");
 const Location = require("../models/Location");
 const { recordAudit } = require("../utils/recordAudit");
 
+// POST /api/locations — create a grow location.
 router.post("/", async (req, res) => {
   try {
     const { companyId, nickname, address } = req.body;
@@ -50,6 +56,7 @@ router.post("/", async (req, res) => {
   }
 });
 
+// GET /api/locations — list all locations.
 router.get("/", async (req, res) => {
   try {
     const locations = await Location.find({ tenantId: req.tenantId }).populate(
@@ -61,6 +68,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /api/locations/:id — get one location.
 router.get("/:id", async (req, res) => {
   try {
     const location = await Location.findOne({
@@ -78,6 +86,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// PUT /api/locations/:id — update a location.
 router.put("/:id", async (req, res) => {
   try {
     const { companyId, nickname, address } = req.body;

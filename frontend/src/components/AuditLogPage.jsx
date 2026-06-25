@@ -11,8 +11,9 @@ import {
 import { alpha } from "@mui/material/styles";
 import HistoryIcon from "@mui/icons-material/History";
 import { DataGrid } from "@mui/x-data-grid";
-import { fetchAuditLogs } from "../utils/api";
+import { apiGet } from "../utils/api";
 
+// Turns a date value into a readable date-and-time string for the table.
 function formatDateTime(value) {
   if (!value) return "N/A";
   const date = new Date(value);
@@ -20,6 +21,7 @@ function formatDateTime(value) {
   return date.toLocaleString();
 }
 
+// Picks a chip color based on whether the action was create, update, or delete.
 function actionColor(action) {
   if (action === "create") return "success";
   if (action === "update") return "info";
@@ -27,17 +29,20 @@ function actionColor(action) {
   return "default";
 }
 
+// This page shows a searchable table of recent user actions in the app.
+// It loads audit log records from the server and displays who did what and when.
 export default function AuditLogPage() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Fetches the latest audit log entries from the server.
   const loadLogs = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const data = await fetchAuditLogs(200);
+      const data = await apiGet("/api/audit-logs?limit=200");
       setLogs(Array.isArray(data) ? data : []);
     } catch (loadError) {
       setError(loadError.message || "Failed to load audit logs");
@@ -112,6 +117,7 @@ export default function AuditLogPage() {
 
   return (
     <Stack spacing={2.25} sx={{ p: { xs: 2, md: 3 }, height: "100%" }}>
+      {/* Page header with title and description */}
       <Paper
         elevation={0}
         sx={(theme) => ({
@@ -138,8 +144,10 @@ export default function AuditLogPage() {
         </Stack>
       </Paper>
 
+      {/* Error message if loading failed */}
       {error && <Alert severity="error">{error}</Alert>}
 
+      {/* Data table of audit log entries */}
       <Paper
         elevation={0}
         sx={{

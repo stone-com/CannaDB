@@ -1,23 +1,35 @@
-import { useMemo, useState } from "react";
+/**
+ * ThemeRoot — wraps the whole app with login check, theme, and light/dark mode.
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { amber, blueGrey, cyan, green, grey, teal } from "@mui/material/colors";
 import App from "./App.jsx";
 import LoginPage from "./components/LoginPage.jsx";
-import { isLoggedIn, logout } from "./utils/api";
+import { isLoggedIn, logout, fetchCurrentUser } from "./utils/api";
 
-// App-level wrapper that stores light/dark theme mode and provides MUI theme.
 export default function ThemeRoot() {
-  // Track whether the user has a saved login token.
   const [loggedIn, setLoggedIn] = useState(isLoggedIn());
-  // Track current visual mode for the whole application.
   const [darkMode, setDarkMode] = useState(false);
 
-  // Rebuild theme whenever mode changes so all MUI components update together.
+  // On page load, verify the saved token is still valid.
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+
+    fetchCurrentUser()
+      .then(() => setLoggedIn(true))
+      .catch(() => {
+        logout();
+        setLoggedIn(false);
+      });
+  }, []);
+
+  // Build the MUI theme object (colors, fonts, etc.) based on light/dark mode.
   const theme = useMemo(
     () =>
       createTheme({
-        // palette controls app-wide color tokens used by MUI components.
         palette: {
           mode: darkMode ? "dark" : "light",
           primary: { main: darkMode ? green[300] : teal[900] },
@@ -41,11 +53,9 @@ export default function ThemeRoot() {
                 paper: grey[50],
               },
         },
-        // shape sets default corner roundness for many controls/cards.
         shape: {
           borderRadius: 14,
         },
-        // typography sets default font family and heading/button behavior.
         typography: {
           fontFamily: '"Manrope", "Segoe UI", sans-serif',
           h4: { fontWeight: 800, letterSpacing: "-0.02em" },
@@ -53,7 +63,6 @@ export default function ThemeRoot() {
           h6: { fontWeight: 700 },
           button: { fontWeight: 700, textTransform: "none" },
         },
-        // components lets us override defaults for specific MUI components globally.
         components: {
           MuiPaper: {
             styleOverrides: {
@@ -77,19 +86,20 @@ export default function ThemeRoot() {
     [darkMode],
   );
 
+  // Clear the saved token and return to the login screen.
   const handleLogout = () => {
     logout();
     setLoggedIn(false);
   };
 
   return (
-    // ThemeProvider makes the custom MUI theme available to all children.
     <ThemeProvider theme={theme}>
-      {/* CssBaseline applies a consistent browser reset with sensible defaults. */}
       <CssBaseline />
       {!loggedIn ? (
+        /* Login screen when user is not logged in */
         <LoginPage onLoginSuccess={() => setLoggedIn(true)} />
       ) : (
+        /* Main app after successful login */
         <App
           darkMode={darkMode}
           onToggleDarkMode={() => setDarkMode((prev) => !prev)}

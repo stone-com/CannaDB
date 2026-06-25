@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Alert, Button, Stack, TextField } from "@mui/material";
+import { apiPost } from "../../utils/api";
 
-// Simple create form for company records.
+// This form lets admins add a new company by entering its name.
+// On success it clears the field and shows a confirmation message.
 function CompanyForm() {
   // Controlled field state.
   const [name, setName] = useState("");
@@ -14,18 +16,9 @@ function CompanyForm() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/companies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+      const savedCompany = await apiPost("/api/companies", {
+        name: name.trim(),
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to add company");
-      }
-
-      const savedCompany = await res.json();
 
       // Let other forms refresh company data.
       window.dispatchEvent(
@@ -42,8 +35,8 @@ function CompanyForm() {
   };
 
   const formContent = (
-    // MUI Stack with component="form" gives vertical spacing + native submit behavior.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      {/* Company name input */}
       <TextField
         label="Company Name"
         value={name}
@@ -51,10 +44,11 @@ function CompanyForm() {
         required
         fullWidth
       />
+      {/* Submit button */}
       <Button variant="contained" type="submit">
         Add Company
       </Button>
-      {/* Alert doubles as success/error feedback surface below the form. */}
+      {/* Success or error message */}
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}

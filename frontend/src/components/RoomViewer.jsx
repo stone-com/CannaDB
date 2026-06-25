@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+// RoomViewer — pick a location and room to see live plant counts, strain mix, and batch details.
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -21,6 +22,7 @@ import { DataGrid } from "@mui/x-data-grid";
 import { BarChart } from "@mui/x-charts";
 import { formatDate } from "../utils/formatDate";
 
+// Count how many days are between two dates (returns null if either date is invalid).
 function toDaysDelta(fromValue, toValue) {
   const from = new Date(fromValue);
   const to = new Date(toValue);
@@ -33,19 +35,27 @@ function toDaysDelta(fromValue, toValue) {
   return Math.ceil((to.getTime() - from.getTime()) / msPerDay);
 }
 
-// Room-level dashboard for active assignments and strain distribution.
-// Show active batch and plant data for one room.
-function RoomViewer({ rooms, roomAssignments }) {
-  // Selected location.
-  const [selectedLocationId, setSelectedLocationId] = useState("");
-  // Selected room.
-  const [selectedRoomId, setSelectedRoomId] = useState("");
+// Main component: filters rooms by location and displays stats for the selected room.
+// initialRoomId — skip dropdowns and open that room (used from RoomViewerPanel).
+function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
   const allRooms = useMemo(() => (Array.isArray(rooms) ? rooms : []), [rooms]);
-  // Defensive conversion: always work with arrays, even if props are missing.
   const assignments = useMemo(
     () => (Array.isArray(roomAssignments) ? roomAssignments : []),
     [roomAssignments],
   );
+
+  const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+
+  // Pre-select room when opened from the overview grid.
+  useEffect(() => {
+    if (!initialRoomId) return;
+    const room = allRooms.find((entry) => String(entry._id) === String(initialRoomId));
+    if (room) {
+      setSelectedLocationId(room.locationId?._id || "");
+      setSelectedRoomId(room._id);
+    }
+  }, [allRooms, initialRoomId]);
 
   const sortedLocations = useMemo(() => {
     // Build unique location list from rooms so location dropdown has no duplicates.
@@ -74,8 +84,8 @@ function RoomViewer({ rooms, roomAssignments }) {
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   }, [allRooms, selectedLocationId]);
 
+  // Update the selected location and clear the room pick so they stay in sync.
   const handleLocationChange = (e) => {
-    // Reset room when location changes so room dropdown cannot be out of sync.
     setSelectedLocationId(e.target.value);
     setSelectedRoomId("");
   };
@@ -90,10 +100,10 @@ function RoomViewer({ rooms, roomAssignments }) {
     [assignments, selectedRoomId],
   );
 
-  const selectedRoom =
-    // Find the selected room object from currently filtered room list.
-    filteredRooms.find((room) => String(room._id) === String(selectedRoomId)) ||
-    null;
+  const selectedRoom = useMemo(() => {
+    if (!selectedRoomId) return null;
+    return allRooms.find((room) => String(room._id) === String(selectedRoomId)) || null;
+  }, [allRooms, selectedRoomId]);
 
   const roomTotalPlants = useMemo(() => {
     // Sum all assigned plant counts across active assignments in the selected room.
@@ -189,73 +199,85 @@ function RoomViewer({ rooms, roomAssignments }) {
 
   return (
     <Stack spacing={2.25}>
-      {/* Filter header: pick location first, then room. */}
-      <Paper
-        elevation={0}
-        sx={(theme) => ({
-          p: { xs: 2, md: 2.5 },
-          borderRadius: 2.5,
-          border: "1px solid",
-          borderColor: "divider",
-          background:
-            theme.palette.mode === "dark"
-              ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
-              : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
-          backdropFilter: "blur(8px)",
-        })}
-      >
-        <Stack spacing={1.25}>
-          {/* Header text explains this panel's purpose. */}
-          <Stack spacing={0.5}>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Room Viewer
-            </Typography>
-            <Typography color="text.secondary" variant="body2">
-              Active room composition, strain mix, and batch-level assignments.
-            </Typography>
-          </Stack>
+      {/* Filter header — hidden when a room is pre-selected from the overview */}
+      {!initialRoomId && (
+        <Paper
+          elevation={0}
+          sx={(theme) => ({
+            p: { xs: 2, md: 2.5 },
+            borderRadius: 2.5,
+            border: "1px solid",
+            borderColor: "divider",
+            background:
+              theme.palette.mode === "dark"
+                ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
+                : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
+            backdropFilter: "blur(8px)",
+          })}
+        >
+          <Stack spacing={1.25}>
+            <Stack spacing={0.5}>
+              <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                Room Viewer
+              </Typography>
+              <Typography color="text.secondary" variant="body2">
+                Active room composition, strain mix, and batch-level assignments.
+              </Typography>
+            </Stack>
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
-            {/* First dropdown narrows available room options by location. */}
-            <TextField
-              select
-              label="Select Location"
-              value={selectedLocationId}
-              onChange={handleLocationChange}
-              fullWidth
-            >
-              <MenuItem value="">Choose a location</MenuItem>
-              {sortedLocations.map((location) => (
-                <MenuItem key={location._id} value={location._id}>
-                  {location.nickname || "Unnamed Location"}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+              <TextField
+                select
+                label="Select Location"
+                value={selectedLocationId}
+                onChange={handleLocationChange}
+                fullWidth
+              >
+                <MenuItem value="">Choose a location</MenuItem>
+                {sortedLocations.map((location) => (
+                  <MenuItem key={location._id} value={location._id}>
+                    {location.nickname || "Unnamed Location"}
+                  </MenuItem>
+                ))}
+              </TextField>
 
-            <TextField
-              select
-              label="Select Room"
-              value={selectedRoomId}
-              // Room select stays disabled until a location is chosen.
-              disabled={!selectedLocationId}
-              onChange={(e) => setSelectedRoomId(e.target.value)}
-              fullWidth
-            >
-              {/* Second dropdown is dependent on selected location. */}
-              <MenuItem value="">Choose a room</MenuItem>
-              {filteredRooms.map((room) => (
-                <MenuItem key={room._id} value={room._id}>
-                  {room.name}
-                  {room.type ? ` (${room.type})` : ""}
-                </MenuItem>
-              ))}
-            </TextField>
+              <TextField
+                select
+                label="Select Room"
+                value={selectedRoomId}
+                disabled={!selectedLocationId}
+                onChange={(e) => setSelectedRoomId(e.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">Choose a room</MenuItem>
+                {filteredRooms.map((room) => (
+                  <MenuItem key={room._id} value={room._id}>
+                    {room.name}
+                    {room.type ? ` (${room.type})` : ""}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
           </Stack>
+        </Paper>
+      )}
+
+      {initialRoomId && selectedRoom && (
+        // Compact title bar when opened from overview — replaces the filter dropdowns above.
+        <Stack spacing={0.5}>
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>
+            {selectedRoom.name}
+            {selectedRoom.type ? ` (${selectedRoom.type})` : ""}
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            {selectedRoom.locationId?.nickname || "Unknown location"} — batch
+            details and strain breakdown
+          </Typography>
         </Stack>
-      </Paper>
+      )}
 
+      {/* Empty-state alerts when no room is selected or the room has no batches. */}
       {!selectedRoom && (
-        // Lightweight status messaging with MUI Alert components.
         <Alert severity="info">
           Choose a room above to view its current contents.
         </Alert>
@@ -357,8 +379,8 @@ function RoomViewer({ rooms, roomAssignments }) {
             </CardContent>
           </Card>
 
+          {/* One card per active batch assignment in this room. */}
           {selectedRoomAssignments.map((assignment) => {
-            // One card per assignment to show batch details and per-strain breakdown.
             const batch = assignment.batchId;
             const assignedPlants = Array.isArray(assignment?.assignedPlants)
               ? assignment.assignedPlants
@@ -415,6 +437,7 @@ function RoomViewer({ rooms, roomAssignments }) {
             ];
 
             return (
+              // Batch detail card: header chips, date tiles, and strain table.
               <Card
                 key={assignment._id}
                 elevation={0}

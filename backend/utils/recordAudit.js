@@ -1,6 +1,10 @@
+/**
+ * Saves a row to the activity log after something is created, updated, or deleted.
+ */
+
 const AuditLog = require("../models/AuditLog");
 
-// Append one audit row after a successful mutation. Never blocks the API response.
+// Writes one audit log row. Skips quietly if data is missing or the write fails.
 async function recordAudit(req, entry) {
   if (!req?.tenantId || !req?.user?._id) return;
 

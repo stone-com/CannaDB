@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
+// RoomForm — admin form to add/edit/remove rooms, or assign batch plants to one or more rooms.
+import { useEffect, useMemo, useState } from "react";import {
   Alert,
   Box,
   Button,
@@ -17,6 +17,13 @@ import {
   Typography,
 } from "@mui/material";
 import { formatDate } from "../../utils/formatDate";
+import { getBatchStrainTotals, getRoomNamesForBatch } from "../../utils/batchHelpers";
+import {
+  apiDelete,
+  apiGet,
+  apiPatch,
+  apiPost,
+} from "../../utils/api";
 
 const ROOM_TYPES = [
   "Flower",
@@ -44,12 +51,12 @@ const NEXT_STAGE_BY_BATCH_TYPE = {
   },
 };
 
-// Combined room management form and plant assignment workflow.
-function RoomForm({ section }) {
-  // Source datasets used for both room management and assignment flows.
+// Main component: shows either the room CRUD form or the batch assignment form based on `section`.
+function RoomForm({ section }) {  // Source datasets used for both room management and assignment flows.
   const [locations, setLocations] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [roomAssignments, setRoomAssignments] = useState([]);
 
   const [formData, setFormData] = useState({
     locationId: "",
@@ -76,75 +83,82 @@ function RoomForm({ section }) {
   const [message, setMessage] = useState("");
   const [assignmentMessage, setAssignmentMessage] = useState("");
 
-  const resetRoomForm = () => {
-    // Clear editable room fields and selected room id.
-    setFormData({ locationId: "", name: "", type: "", sqFoot: "" });
+  // Clear all room form fields and the selected room id.
+  const resetRoomForm = () => {    setFormData({ locationId: "", name: "", type: "", sqFoot: "" });
     setSelectedManageRoomId("");
   };
 
-  // Notify listeners that room-related data changed.
-  const notifyRoomChange = (detail = null) => {
-    window.dispatchEvent(new CustomEvent("room:created", { detail }));
+  // Tell other parts of the app that room data changed so they can refresh.
+  const notifyRoomChange = (detail = null) => {    window.dispatchEvent(new CustomEvent("room:created", { detail }));
   };
 
-  const fetchLocations = async () => {
-    // Load available locations for room creation/editing dropdown.
-    try {
-      const res = await fetch("/api/locations");
-      const data = await res.json();
+  // Load location list from the API for the location dropdown.
+  const fetchLocations = async () => {    try {
+      const data = await apiGet("/api/locations");
       setLocations(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching locations:", error);
     }
   };
 
-  const fetchRooms = async () => {
-    // Load all rooms for edit/remove selection and assignment views.
-    try {
-      const res = await fetch("/api/rooms");
-      const data = await res.json();
+  // Load all rooms from the API for edit/remove and assignment dropdowns.
+  const fetchRooms = async () => {    try {
+      const data = await apiGet("/api/rooms");
       setRooms(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching rooms:", error);
     }
   };
 
-  const fetchBatches = async () => {
-    // Load batches for assignment workflow.
-    try {
-      const res = await fetch("/api/batches");
-      const data = await res.json();
+  // Load all batches from the API for the assignment workflow.
+  const fetchBatches = async () => {    try {
+      const data = await apiGet("/api/batches");
       setBatches(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching batches:", error);
     }
   };
 
-  useEffect(() => {
-    // Load base data and register listeners so this form stays synchronized.
-    fetchLocations();
-    fetchRooms();
-    fetchBatches();
+  const fetchRoomAssignments = async () => {
+    try {
+      const data = await apiGet("/api/room-assignments?active=true");
+      setRoomAssignments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching room assignments:", error);
+    }
+  };
 
-    const handleLocationCreated = () => {
-      fetchLocations();
+  useEffect(() => {
+    // Load data on mount and listen for create/update events from other forms.
+    fetchLocations();    fetchRooms();
+    fetchBatches();
+    fetchRoomAssignments();
+
+    // Refresh all data when a new location is created elsewhere in the app.
+    const handleLocationCreated = () => {      fetchLocations();
       fetchRooms();
       fetchBatches();
+      fetchRoomAssignments();
     };
 
-    const handleRoomOrBatchUpdated = () => {
-      fetchRooms();
+    // Refresh rooms and batches when a room or batch is created/updated elsewhere.
+    const handleRoomOrBatchUpdated = () => {      fetchRooms();
       fetchBatches();
+      fetchRoomAssignments();
     };
 
     window.addEventListener("location:created", handleLocationCreated);
     window.addEventListener("room:created", handleRoomOrBatchUpdated);
     window.addEventListener("batch:created", handleRoomOrBatchUpdated);
+    window.addEventListener("batch:updated", handleRoomOrBatchUpdated);
+    window.addEventListener("roomAssignment:created", handleRoomOrBatchUpdated);
 
     return () => {
       window.removeEventListener("location:created", handleLocationCreated);
       window.removeEventListener("room:created", handleRoomOrBatchUpdated);
       window.removeEventListener("batch:created", handleRoomOrBatchUpdated);
+      window.removeEventListener("batch:updated", handleRoomOrBatchUpdated);
+      window.removeEventListener("roomAssignment:created", handleRoomOrBatchUpdated);
     };
   }, []);
 
@@ -176,33 +190,15 @@ function RoomForm({ section }) {
     [selectableBatches, assignmentData.batchId],
   );
 
-  const batchPlantTotals = useMemo(() => {
-    // Convert nested room plant rows into one total per strain for validation.
-    if (!selectedBatch) return [];
+  const batchPlantTotals = useMemo(
+    () => getBatchStrainTotals(selectedBatch),
+    [selectedBatch],
+  );
 
-    const totals = new Map();
-
-    (selectedBatch.rooms || []).forEach((roomEntry) => {
-      (roomEntry?.plants || []).forEach((plantEntry) => {
-        const strainId = String(
-          plantEntry?.strainId?._id || plantEntry?.strainId,
-        );
-        if (!strainId || strainId === "undefined") return;
-
-        const strainName = plantEntry?.strainId?.name || "Unknown Strain";
-        const current = totals.get(strainId) || {
-          strainId,
-          strainName,
-          totalCount: 0,
-        };
-
-        current.totalCount += Number(plantEntry?.count) || 0;
-        totals.set(strainId, current);
-      });
-    });
-
-    return Array.from(totals.values());
-  }, [selectedBatch]);
+  const currentRoomNames = useMemo(
+    () => getRoomNamesForBatch(selectedBatch?._id, roomAssignments),
+    [selectedBatch, roomAssignments],
+  );
 
   const assignableRooms = useMemo(() => {
     // If batch has a location, only allow rooms from that same location.
@@ -235,13 +231,11 @@ function RoomForm({ section }) {
     return `${days} day${days === 1 ? "" : "s"}`;
   }, [selectedBatch]);
 
-  const createZeroCounts = () =>
-    // Build an object like {strainId: "0"} for initializing split forms.
-    Object.fromEntries(batchPlantTotals.map((plant) => [plant.strainId, "0"]));
+  // Build a starting object with "0" for every strain count (used in split mode).
+  const createZeroCounts = () =>    Object.fromEntries(batchPlantTotals.map((plant) => [plant.strainId, "0"]));
 
-  // Reset assignment controls when switching to a different batch.
-  const handleBatchSelection = (batchId) => {
-    setAssignmentData({ roomId: "", batchId });
+  // Reset all assignment fields when the user picks a different batch.
+  const handleBatchSelection = (batchId) => {    setAssignmentData({ roomId: "", batchId });
     setWholeRoomId("");
     setAssignmentMode("whole");
     setShouldAdvanceStage(false);
@@ -260,9 +254,8 @@ function RoomForm({ section }) {
   };
 
   useEffect(() => {
-    // When selected batch changes, prefill whole-move counts with full availability.
-    if (!selectedBatch) {
-      setWholeMoveCounts({});
+    // When the selected batch changes, pre-fill whole-move counts with full availability.
+    if (!selectedBatch) {      setWholeMoveCounts({});
       return;
     }
 
@@ -270,15 +263,14 @@ function RoomForm({ section }) {
       Object.fromEntries(
         batchPlantTotals.map((plant) => [
           plant.strainId,
-          String(plant.totalCount),
+          String(plant.count),
         ]),
       ),
     );
   }, [selectedBatch, batchPlantTotals]);
 
-  const handleWholeMoveCountChange = (strainId, value) => {
-    // Sanitize whole-move strain count input to non-negative values.
-    const normalizedValue =
+  // Update the plant count for one strain in whole-batch move mode.
+  const handleWholeMoveCountChange = (strainId, value) => {    const normalizedValue =
       value === "" ? "" : String(Math.max(0, Number(value) || 0));
 
     setWholeMoveCounts((prev) => ({
@@ -287,9 +279,8 @@ function RoomForm({ section }) {
     }));
   };
 
-  const handleAddSplitDestination = () => {
-    // Add one more destination room card in split mode.
-    setSplitDestinations((prev) => [
+  // Add another destination room card in split assignment mode.
+  const handleAddSplitDestination = () => {    setSplitDestinations((prev) => [
       ...prev,
       {
         roomId: "",
@@ -298,23 +289,20 @@ function RoomForm({ section }) {
     ]);
   };
 
-  const handleRemoveSplitDestination = (index) => {
-    // Remove a destination card by index in split mode.
-    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
+  // Remove a destination room card from split assignment mode by its index.
+  const handleRemoveSplitDestination = (index) => {    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSplitRoomChange = (index, roomId) => {
-    // Update which room this split card is targeting.
-    setSplitDestinations((prev) =>
+  // Change which room a split destination card points to.
+  const handleSplitRoomChange = (index, roomId) => {    setSplitDestinations((prev) =>
       prev.map((destination, i) =>
         i === index ? { ...destination, roomId } : destination,
       ),
     );
   };
 
-  const handleSplitCountChange = (index, strainId, value) => {
-    // Update one strain count inside one split destination card.
-    const normalizedValue =
+  // Change the plant count for one strain inside one split destination card.
+  const handleSplitCountChange = (index, strainId, value) => {    const normalizedValue =
       value === "" ? "" : String(Math.max(0, Number(value) || 0));
 
     setSplitDestinations((prev) =>
@@ -332,24 +320,21 @@ function RoomForm({ section }) {
     );
   };
 
-  const getAllocatedCount = (strainId) =>
-    // Sum allocated plants for this strain across all split destination cards.
-    splitDestinations.reduce(
+  // Add up how many plants of one strain are allocated across all split cards.
+  const getAllocatedCount = (strainId) =>    splitDestinations.reduce(
       (sum, destination) =>
         sum + (Number(destination.strainCounts?.[strainId]) || 0),
       0,
     );
 
-  const handleRoomModeChange = (nextMode) => {
-    // Switch add/edit/remove mode and reset stale form state.
-    setRoomMode(nextMode);
+  // Switch between add, edit, and remove room modes and reset the form.
+  const handleRoomModeChange = (nextMode) => {    setRoomMode(nextMode);
     setMessage("");
     resetRoomForm();
   };
 
-  const handleManageRoomSelection = (roomId) => {
-    // Load selected room values into controlled form fields for editing.
-    setSelectedManageRoomId(roomId);
+  // Fill the form fields with the selected room's current values for editing.
+  const handleManageRoomSelection = (roomId) => {    setSelectedManageRoomId(roomId);
 
     const selectedRoom = rooms.find(
       (room) => String(room._id) === String(roomId),
@@ -366,29 +351,17 @@ function RoomForm({ section }) {
     });
   };
 
+  // Create a new room and save it to the API.
   const handleSubmit = async (e) => {
-    // Add a brand-new room.
-    e.preventDefault();
-    setMessage("");
+    e.preventDefault();    setMessage("");
 
     try {
-      const res = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locationId: formData.locationId,
-          name: formData.name,
-          type: formData.type,
-          sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
-        }),
+      const savedRoom = await apiPost("/api/rooms", {
+        locationId: formData.locationId,
+        name: formData.name,
+        type: formData.type,
+        sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to add room");
-      }
-
-      const savedRoom = await res.json();
 
       window.dispatchEvent(
         new CustomEvent("room:created", {
@@ -404,10 +377,9 @@ function RoomForm({ section }) {
     }
   };
 
+  // Handle add, edit, or remove based on the current room mode.
   const handleManageRoomSubmit = async (e) => {
-    // Branch to add/edit/remove behavior based on roomMode.
-    e.preventDefault();
-    setMessage("");
+    e.preventDefault();    setMessage("");
 
     try {
       if (roomMode === "add") {
@@ -420,23 +392,12 @@ function RoomForm({ section }) {
 
       if (roomMode === "edit") {
         // Edit mode updates an existing room by id.
-        const res = await fetch(`/api/rooms/${selectedManageRoomId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            locationId: formData.locationId,
-            name: formData.name,
-            type: formData.type,
-            sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
-          }),
+        const updatedRoom = await apiPatch(`/api/rooms/${selectedManageRoomId}`, {
+          locationId: formData.locationId,
+          name: formData.name,
+          type: formData.type,
+          sqFoot: formData.sqFoot ? Number(formData.sqFoot) : null,
         });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "Failed to update room");
-        }
-
-        const updatedRoom = await res.json();
         notifyRoomChange(updatedRoom);
         await fetchRooms();
         setMessage("Room updated successfully.");
@@ -445,14 +406,7 @@ function RoomForm({ section }) {
 
       if (roomMode === "remove") {
         // Remove mode deletes the selected room by id.
-        const res = await fetch(`/api/rooms/${selectedManageRoomId}`, {
-          method: "DELETE",
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "Failed to remove room");
-        }
+        await apiDelete(`/api/rooms/${selectedManageRoomId}`);
 
         notifyRoomChange({ _id: selectedManageRoomId });
         resetRoomForm();
@@ -464,10 +418,9 @@ function RoomForm({ section }) {
     }
   };
 
+  // Save the batch room plan (whole move or split) to the API.
   const handleAssignmentSubmit = async (e) => {
-    // Save whole/split room allocation plan for selected batch.
-    e.preventDefault();
-    setAssignmentMessage("");
+    e.preventDefault();    setAssignmentMessage("");
 
     try {
       if (!assignmentData.batchId) {
@@ -496,7 +449,7 @@ function RoomForm({ section }) {
               return {
                 strainId: plant.strainId,
                 count: planned,
-                max: plant.totalCount,
+                max: plant.count,
               };
             })
             .filter((plant) => plant.count > 0);
@@ -504,7 +457,7 @@ function RoomForm({ section }) {
           const hasExceeded = batchPlantTotals.some(
             (plant) =>
               (Number(wholeMoveCounts?.[plant.strainId]) || 0) >
-              plant.totalCount,
+              plant.count,
           );
 
           if (hasExceeded) {
@@ -555,8 +508,8 @@ function RoomForm({ section }) {
 
         const hasMismatch = batchPlantTotals.some((plant) =>
           destroyUnallocatedPlants
-            ? totalsByStrain[plant.strainId] > plant.totalCount
-            : totalsByStrain[plant.strainId] !== plant.totalCount,
+            ? totalsByStrain[plant.strainId] > plant.count
+            : totalsByStrain[plant.strainId] !== plant.count,
         );
 
         if (hasMismatch) {
@@ -570,21 +523,10 @@ function RoomForm({ section }) {
         payload.assignments = normalizedAssignments;
       }
 
-      const res = await fetch(
+      const result = await apiPost(
         `/api/batches/${assignmentData.batchId}/assign-rooms`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
+        payload,
       );
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to assign batch to room");
-      }
-
-      const result = await res.json();
 
       // Notify app shell and other panels to refresh related data.
       window.dispatchEvent(
@@ -609,11 +551,10 @@ function RoomForm({ section }) {
     }
   };
 
-  const addRoomForm = (
-    // Room CRUD form (add/edit/remove) rendered from one mode-driven UI.
-    <Stack component="form" spacing={2} onSubmit={handleManageRoomSubmit}>
-      <TextField
-        select
+  // --- Room CRUD form: add, edit, or remove a room ---
+  const addRoomForm = (    <Stack component="form" spacing={2} onSubmit={handleManageRoomSubmit}>
+      {/* Mode picker: add a new room, edit one, or remove one. */}
+      <TextField        select
         label="Mode"
         value={roomMode}
         onChange={(e) => handleRoomModeChange(e.target.value)}
@@ -726,11 +667,10 @@ function RoomForm({ section }) {
     </Stack>
   );
 
-  const assignRoomForm = (
-    // Batch-to-room assignment form (whole move or split allocation).
-    <Stack component="form" spacing={2} onSubmit={handleAssignmentSubmit}>
-      <TextField
-        select
+  // --- Batch assignment form: move plants to one or more rooms ---
+  const assignRoomForm = (    <Stack component="form" spacing={2} onSubmit={handleAssignmentSubmit}>
+      {/* Batch picker — choosing a batch loads its stage info and assignment options. */}
+      <TextField        select
         label="Batch"
         value={assignmentData.batchId}
         onChange={(e) => handleBatchSelection(e.target.value)}
@@ -762,8 +702,8 @@ function RoomForm({ section }) {
         ))}
       </TextField>
 
+      {/* Batch context card: current stage, time in stage, and existing room plan. */}
       {selectedBatch && (
-        // Context card shows current stage timing and existing plan.
         <Card variant="outlined">
           <CardContent>
             <Stack spacing={0.5}>
@@ -777,19 +717,11 @@ function RoomForm({ section }) {
                 Next Stage: <strong>{nextStage || "N/A"}</strong>
               </Typography>
               <Typography variant="body2">
-                Current Room Plan:{" "}
+                Current Rooms:{" "}
                 <strong>
-                  {(selectedBatch.rooms || []).length > 0
-                    ? selectedBatch.rooms
-                        .map((entry) => {
-                          const room = rooms.find(
-                            (candidate) =>
-                              String(candidate._id) === String(entry.roomId),
-                          );
-                          return room?.name || "Unknown Room";
-                        })
-                        .join(", ")
-                    : "No room plan set"}
+                  {currentRoomNames.length > 0
+                    ? currentRoomNames.join(", ")
+                    : "No room assignments yet"}
                 </strong>
               </Typography>
             </Stack>
@@ -797,11 +729,11 @@ function RoomForm({ section }) {
         </Card>
       )}
 
+      {/* Assignment options: whole vs split mode and optional stage/destroy toggles. */}
       {selectedBatch && (
         <Card variant="outlined">
           <CardContent>
             <Stack spacing={1.25}>
-              {/* RadioGroup is a simple mode switch for assignment strategy. */}
               <RadioGroup
                 value={assignmentMode}
                 onChange={(e) => setAssignmentMode(e.target.value)}
@@ -880,7 +812,7 @@ function RoomForm({ section }) {
                       label={`${plant.strainName} To Move`}
                       value={
                         wholeMoveCounts?.[plant.strainId] ??
-                        String(plant.totalCount)
+                        String(plant.count)
                       }
                       onChange={(e) =>
                         handleWholeMoveCountChange(
@@ -888,7 +820,7 @@ function RoomForm({ section }) {
                           e.target.value,
                         )
                       }
-                      helperText={`Available: ${plant.totalCount}`}
+                      helperText={`Available: ${plant.count}`}
                     />
                   ))}
                 </>
@@ -915,7 +847,7 @@ function RoomForm({ section }) {
                 // Live running total for each strain across all split destination cards.
                 <Typography key={`totals-${plant.strainId}`} variant="body2">
                   {plant.strainName}: {getAllocatedCount(plant.strainId)} /{" "}
-                  {plant.totalCount}
+                  {plant.count}
                 </Typography>
               ))}
 
@@ -997,8 +929,8 @@ function RoomForm({ section }) {
     </Stack>
   );
 
+  // Show the assignment form or the room CRUD form depending on the section prop.
   if (section === "assign") return assignRoomForm;
-
   return addRoomForm;
 }
 

@@ -1,54 +1,96 @@
 /**
- * Simple API helpers for login + authenticated requests.
+ * Frontend API helpers.
  *
- * After login we save a token in localStorage.
- * installAuthFetch() adds that token to every /api request automatically.
+ * login() saves a token. apiGet/apiPost/etc. send that token on every request.
+ * The backend decides which company the user belongs to — we never send tenantId.
  */
 
-const TOKEN_KEY = "cannadb_auth_token";
+const AUTH_KEY = "cannadb_auth";
 
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+// Reads the saved login token from localStorage, or null if not logged in.
+function getToken() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw)?.token ?? null;
+  } catch {
+    return null;
+  }
 }
 
-export function setToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
+// Saves the login token to localStorage after a successful login.
+function setToken(token) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify({ token }));
 }
 
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
+// Returns true when the user has a saved token (may still be expired).
 export function isLoggedIn() {
   return Boolean(getToken());
 }
 
-// Call once when the app starts.
-export function installAuthFetch() {
-  const originalFetch = window.fetch.bind(window);
-
-  window.fetch = async (input, init = {}) => {
-    const url = typeof input === "string" ? input : input.url;
-
-    // Public routes do not need a token.
-    const isPublicRoute =
-      url.startsWith("/api/auth/login") || url.startsWith("/api/health");
-
-    if (url.startsWith("/api/") && !isPublicRoute) {
-      const token = getToken();
-      const headers = new Headers(init.headers || {});
-
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-
-      init = { ...init, headers };
-    }
-
-    return originalFetch(input, init);
-  };
+// Builds request headers with the login token attached.
+function authHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
+// Parses JSON and throws a readable error if the server returned an error status.
+async function handleResponse(response) {
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
+  return data;
+}
+
+// Shared fetch wrapper used by apiGet, apiPost, etc.
+async function apiRequest(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: { ...authHeaders(), ...options.headers },
+  });
+  return handleResponse(response);
+}
+
+// GET request — used to load lists and single records.
+export function apiGet(url) {
+  return apiRequest(url);
+}
+
+// POST request — used to create new records.
+export function apiPost(url, body) {
+  return apiRequest(url, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+// PATCH request — used to update part of an existing record.
+export function apiPatch(url, body) {
+  return apiRequest(url, {
+    method: "PATCH",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+// PUT request — used to replace/update a full record.
+export function apiPut(url, body) {
+  return apiRequest(url, {
+    method: "PUT",
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+// DELETE request — used to remove a record.
+export function apiDelete(url) {
+  return apiRequest(url, { method: "DELETE" });
+}
+
+// Calls the login endpoint and saves the token on success.
 export async function login(email, password) {
   const response = await fetch("/api/auth/login", {
     method: "POST",
@@ -57,7 +99,6 @@ export async function login(email, password) {
   });
 
   const data = await response.json();
-
   if (!response.ok) {
     throw new Error(data.error || "Login failed");
   }
@@ -66,28 +107,12 @@ export async function login(email, password) {
   return data;
 }
 
-export async function logout() {
-  clearToken();
+// Removes the saved token so the user is logged out.
+export function logout() {
+  localStorage.removeItem(AUTH_KEY);
 }
 
-export async function fetchAuditLogs(limit = 200) {
-  const response = await fetch(`/api/audit-logs?limit=${limit}`);
-  const contentType = response.headers.get("content-type") || "";
-
-  if (!contentType.includes("application/json")) {
-    const snippet = (await response.text()).slice(0, 80);
-    throw new Error(
-      response.status === 404
-        ? "Activity log API not found — restart the backend server and try again."
-        : `Unexpected response from server (${response.status}): ${snippet}`,
-    );
-  }
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to load audit logs");
-  }
-
-  return data;
+// Checks that the saved token is still valid (called when the app first loads).
+export function fetchCurrentUser() {
+  return apiGet("/api/auth/me");
 }

@@ -15,8 +15,11 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { apiGet, apiPost } from "../../utils/api";
+import { getBatchStrainTotals } from "../../utils/batchHelpers";
 
-// Controlled destruction workflow that reduces strain counts inside a batch.
+// This form lets admins permanently remove plants from a batch by strain.
+// It requires a confirmation dialog before the destructive action is sent to the server.
 function DestroyPlantsForm() {
   // Controlled form fields and dialog state.
   const [batches, setBatches] = useState([]);
@@ -29,11 +32,10 @@ function DestroyPlantsForm() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
+  // Loads all batches from the server and sorts them for the dropdown.
   const fetchBatches = async () => {
-    // Load batches and keep them sorted for predictable dropdown order.
     try {
-      const res = await fetch("/api/batches");
-      const data = await res.json();
+      const data = await apiGet("/api/batches");
       const list = Array.isArray(data) ? data : [];
       list.sort((a, b) =>
         (a?.batchNumber || "").localeCompare(b?.batchNumber || ""),
@@ -66,34 +68,10 @@ function DestroyPlantsForm() {
     [batches, selectedBatchId],
   );
 
-  const strainTotals = useMemo(() => {
-    // Build per-strain available counts from the selected batch's room plant data.
-    if (!selectedBatch) return [];
-
-    const totals = new Map();
-    (selectedBatch.rooms || []).forEach((roomEntry) => {
-      (roomEntry?.plants || []).forEach((plantEntry) => {
-        const strainId = String(
-          plantEntry?.strainId?._id || plantEntry?.strainId || "",
-        );
-        if (!strainId) return;
-
-        const strainName = plantEntry?.strainId?.name || "Unknown Strain";
-        const current = totals.get(strainId) || {
-          strainId,
-          strainName,
-          count: 0,
-        };
-
-        current.count += Number(plantEntry?.count) || 0;
-        totals.set(strainId, current);
-      });
-    });
-
-    return Array.from(totals.values()).sort((a, b) =>
-      a.strainName.localeCompare(b.strainName),
-    );
-  }, [selectedBatch]);
+  const strainTotals = useMemo(
+    () => getBatchStrainTotals(selectedBatch),
+    [selectedBatch],
+  );
 
   const selectedStrain = useMemo(
     // Resolve strain id into selected strain totals row.
@@ -111,8 +89,8 @@ function DestroyPlantsForm() {
     Number(destroyCount) > 0 &&
     Number(destroyCount) <= Number(selectedStrain?.count || 0);
 
+  // Clears strain and count fields when the user picks a different batch.
   const handleBatchChange = (batchId) => {
-    // Reset dependent form fields when source batch changes.
     setSelectedBatchId(batchId);
     setSelectedStrainId("");
     setDestroyCount("");
@@ -120,7 +98,7 @@ function DestroyPlantsForm() {
     setMessage("");
   };
 
-  // Execute the destructive API operation after validation/confirmation.
+  // Sends the destroy request to the server after the user confirms.
   const executeDestroy = async () => {
     const amount = Number(destroyCount);
     if (!canSubmit) {
@@ -133,29 +111,14 @@ function DestroyPlantsForm() {
     try {
       setIsSubmitting(true);
 
-      const response = await fetch(
+      const result = await apiPost(
         `/api/batches/${selectedBatchId}/destroy-plants`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            strainId: selectedStrainId,
-            count: amount,
-            notes: notes.trim() || null,
-          }),
+          strainId: selectedStrainId,
+          count: amount,
+          notes: notes.trim() || null,
         },
       );
-
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const errorData = await response.json();
-          throw new Error(errorData?.error || "Failed to destroy plants");
-        }
-        throw new Error("Failed to destroy plants");
-      }
-
-      const result = await response.json();
       window.dispatchEvent(
         new CustomEvent("batch:updated", { detail: result.batch }),
       );
@@ -174,7 +137,7 @@ function DestroyPlantsForm() {
     }
   };
 
-  // Open a confirmation dialog before making destructive changes.
+  // Validates the form and opens the confirmation dialog.
   const handleSubmit = (event) => {
     event.preventDefault();
     setMessage("");
@@ -193,6 +156,7 @@ function DestroyPlantsForm() {
   const content = (
     // Form + confirmation dialog pattern for destructive actions.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      {/* Batch picker */}
       <TextField
         select
         label="Batch"
@@ -223,8 +187,8 @@ function DestroyPlantsForm() {
         ))}
       </TextField>
 
+      {/* Selected batch summary card */}
       {selectedBatch && (
-        // Context card helps confirm the operator is editing the right batch.
         <Card variant="outlined">
           <CardContent>
             <Stack spacing={0.5}>
@@ -239,6 +203,7 @@ function DestroyPlantsForm() {
         </Card>
       )}
 
+      {/* Strain picker */}
       <TextField
         select
         label="Strain"
@@ -261,6 +226,7 @@ function DestroyPlantsForm() {
         ))}
       </TextField>
 
+      {/* Number of plants to destroy */}
       <TextField
         type="number"
         label="Plants To Destroy"
@@ -277,6 +243,7 @@ function DestroyPlantsForm() {
         </Typography>
       )}
 
+      {/* Optional notes field */}
       <TextField
         label="Notes (optional)"
         value={notes}
@@ -287,6 +254,7 @@ function DestroyPlantsForm() {
 
       <Divider />
 
+      {/* Submit button (opens confirmation dialog) */}
       <Button
         type="submit"
         variant="contained"
@@ -302,6 +270,7 @@ function DestroyPlantsForm() {
         </Alert>
       )}
 
+      {/* Confirmation dialog before destroying plants */}
       <Dialog
         open={confirmOpen}
         onClose={() => {

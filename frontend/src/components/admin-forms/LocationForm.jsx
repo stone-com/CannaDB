@@ -6,8 +6,10 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
+import { apiGet, apiPost } from "../../utils/api";
 
-// Create location records tied to a company.
+// This form lets admins create a new location tied to a company.
+// Users pick a company, enter a nickname and address, then save the location.
 function LocationForm() {
   // Dropdown source data.
   const [companies, setCompanies] = useState([]);
@@ -20,12 +22,10 @@ function LocationForm() {
   });
   const [message, setMessage] = useState("");
 
-  // Load company options.
+  // Loads the company list from the server for the dropdown.
   const fetchCompanies = async () => {
-    // Company list powers the location->company relationship dropdown.
     try {
-      const res = await fetch("/api/companies");
-      const data = await res.json();
+      const data = await apiGet("/api/companies");
       setCompanies(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -50,23 +50,11 @@ function LocationForm() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: formData.companyId,
-          nickname: formData.nickname,
-          // Send null for optional empty address.
-          address: formData.address || null,
-        }),
+      const savedLocation = await apiPost("/api/locations", {
+        companyId: formData.companyId,
+        nickname: formData.nickname,
+        address: formData.address || null,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to add location");
-      }
-
-      const savedLocation = await res.json();
 
       // Let other forms refresh location data.
       window.dispatchEvent(
@@ -83,8 +71,8 @@ function LocationForm() {
   };
 
   const formContent = (
-    // Form body for the location create workflow.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      {/* Company picker */}
       <TextField
         select
         label="Company"
@@ -102,6 +90,7 @@ function LocationForm() {
         ))}
       </TextField>
 
+      {/* Location nickname */}
       <TextField
         label="Nickname"
         value={formData.nickname}
@@ -109,17 +98,19 @@ function LocationForm() {
         required
       />
 
+      {/* Optional street address */}
       <TextField
         label="Address"
         value={formData.address}
         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
       />
 
+      {/* Submit button */}
       <Button variant="contained" type="submit">
         Add Location
       </Button>
 
-      {/* Inline status feedback keeps users in the same workflow context. */}
+      {/* Success or error message */}
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}

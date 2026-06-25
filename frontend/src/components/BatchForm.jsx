@@ -10,8 +10,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { apiGet, apiPost } from "../utils/api";
 
-// Create a batch and collect initial plant counts by strain.
+// This form lets users create a new plant batch with dates, location, and strain counts.
+// It saves the batch to the server and shows success or error messages.
 function BatchForm() {
   // Controlled input states mirror each visible form field.
   const [selectedStrain, setSelectedStrain] = useState("");
@@ -25,13 +27,12 @@ function BatchForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("");
   const [locations, setLocations] = useState([]); 
-  // Load strain options used in the strain dropdown.
+  // Load strain and location dropdown options when the form first appears.
   useEffect(() => {
-    // Local helper keeps fetching logic close to where it is used.
+    // Fetches all strains from the server for the strain dropdown.
     async function fetchStrains() {
       try {
-        const response = await fetch("/api/strains");
-        const data = await response.json();
+        const data = await apiGet("/api/strains");
         const sorted = Array.isArray(data)
           ? [...data].sort((a, b) =>
               (a?.name || "").localeCompare(b?.name || ""),
@@ -42,11 +43,11 @@ function BatchForm() {
         console.error("Error fetching strains:", error);
       }
     }
+    // Fetches all locations from the server for the location dropdown.
     async function fetchLocations() {
       try {
-        const response = await fetch("/api/locations");
-        const data = await response.json();
-        setLocations(data);
+        const data = await apiGet("/api/locations");
+        setLocations(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Error fetching locations:", error);
       }
@@ -62,7 +63,8 @@ function BatchForm() {
   );
 
   // Simple form readiness check for required fields.
-  const canSubmit = batchNumber.trim() && cloneDate && plants.length > 0;
+  const canSubmit =
+    batchNumber.trim() && cloneDate && selectedLocation && plants.length > 0;
 
   // Add a strain/count row, merging duplicates into a single running total.
   function addPlant() {
@@ -118,24 +120,7 @@ function BatchForm() {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch("/api/batches", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const errorData = await response.json();
-          throw new Error(errorData?.error || "Batch submit failed");
-        }
-        throw new Error("Batch submit failed");
-      }
-
-      const savedBatch = await response.json();
+      const savedBatch = await apiPost("/api/batches", payload);
       // Event allows other screens to refresh without tight component coupling.
       window.dispatchEvent(
         new CustomEvent("batch:created", { detail: savedBatch }),
@@ -149,6 +134,7 @@ function BatchForm() {
       setSelectedStrain("");
       setCount("");
       setPlants([]);
+      setSelectedLocation("");
     } catch (error) {
       console.error("Error submitting batch form:", error);
       setMessage(`Error: ${error.message || "Error submitting batch form."}`);
@@ -158,11 +144,10 @@ function BatchForm() {
   }
 
   return (
-    // Stack with component="form" is a common MUI pattern for vertically spaced form fields.
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      {/* Page title */}
       <Typography variant="h6">Create New Batch</Typography>
-      {/* Card groups core batch metadata fields. */}
-      {console.log(locations)}
+      {/* Batch details: number, dates, and location */}
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2}>
@@ -197,9 +182,11 @@ function BatchForm() {
               }}
             />
             <TextField
-            select label="location"
+            select
+            label="Location"
             value={selectedLocation}
             onChange={(e) => setSelectedLocation(e.target.value)}
+            required
             >
             <MenuItem value="">Select a location</MenuItem>
             {locations.map((location) => (
@@ -208,15 +195,14 @@ function BatchForm() {
               </MenuItem>
             ))}
             </TextField>
-            {console.log(selectedLocation)}  
           </Stack>
         </CardContent>
       </Card>
 
+      {/* Add plants by strain and review the running list */}
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2}>
-            {/* Second card manages strain rows and plant totals for the batch. */}
             <Typography variant="subtitle1">Add Plants</Typography>
 
             <TextField
@@ -297,10 +283,10 @@ function BatchForm() {
         </CardContent>
       </Card>
 
+      {/* Submit button and success/error feedback */}
       <Button
         type="submit"
         variant="contained"
-        // Button disable ties directly to simple client-side validation.
         disabled={!canSubmit || isSubmitting}
       >
         {isSubmitting ? "Saving..." : "Submit Batch"}

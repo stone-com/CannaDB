@@ -6,8 +6,10 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
+import { apiGet, apiPut } from "../../utils/api";
 
-// Edit existing locations including company assignment and address metadata.
+// This form lets admins edit an existing location's company, nickname, and address.
+// Users pick a location from a dropdown, change the fields, then save the updates.
 export default function EditLocationForm() {
   const [companies, setCompanies] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -31,20 +33,20 @@ export default function EditLocationForm() {
     [locations],
   );
 
+  // Loads the company list from the server for the dropdown.
   const fetchCompanies = async () => {
     try {
-      const res = await fetch("/api/companies");
-      const data = await res.json();
+      const data = await apiGet("/api/companies");
       setCompanies(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching companies:", error);
     }
   };
 
+  // Loads all locations from the server for the location picker.
   const fetchLocations = async () => {
     try {
-      const res = await fetch("/api/locations");
-      const data = await res.json();
+      const data = await apiGet("/api/locations");
       setLocations(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching locations:", error);
@@ -67,6 +69,7 @@ export default function EditLocationForm() {
     };
   }, []);
 
+  // Fills the form fields when the user selects a location to edit.
   const handleLocationChange = (locationId) => {
     setSelectedLocationId(locationId);
     setMessage("");
@@ -86,6 +89,7 @@ export default function EditLocationForm() {
     });
   };
 
+  // Sends the updated location data to the server.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -96,22 +100,14 @@ export default function EditLocationForm() {
     }
 
     try {
-      const res = await fetch(`/api/locations/${selectedLocationId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const updatedLocation = await apiPut(
+        `/api/locations/${selectedLocationId}`,
+        {
           companyId: formData.companyId,
           nickname: formData.nickname,
           address: formData.address || null,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to update location");
-      }
-
-      const updatedLocation = await res.json();
+        },
+      );
 
       window.dispatchEvent(
         new CustomEvent("location:updated", {
@@ -128,6 +124,7 @@ export default function EditLocationForm() {
 
   const formContent = (
     <Stack component="form" spacing={2} onSubmit={handleSubmit}>
+      {/* Location picker */}
       <TextField
         select
         label="Location to Edit"
@@ -143,6 +140,7 @@ export default function EditLocationForm() {
         ))}
       </TextField>
 
+      {/* Company assignment */}
       <TextField
         select
         label="Company"
@@ -161,6 +159,7 @@ export default function EditLocationForm() {
         ))}
       </TextField>
 
+      {/* Location nickname */}
       <TextField
         label="Nickname"
         value={formData.nickname}
@@ -171,6 +170,7 @@ export default function EditLocationForm() {
         disabled={!selectedLocationId}
       />
 
+      {/* Street address */}
       <TextField
         label="Address"
         value={formData.address}
@@ -180,10 +180,12 @@ export default function EditLocationForm() {
         disabled={!selectedLocationId}
       />
 
+      {/* Save button */}
       <Button variant="contained" type="submit" disabled={!selectedLocationId}>
         Save Location Changes
       </Button>
 
+      {/* Success or error message */}
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}

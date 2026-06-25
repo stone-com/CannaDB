@@ -35,12 +35,14 @@ const ORG_ACTIONS = [
   },
 ];
 
-// Consolidated organization setup workspace with action-based navigation.
+// This screen combines company and location admin tasks in one place.
+// Users pick an action card, then the matching form appears below.
 export default function CompanyLocationSetupForm() {
   const [activeAction, setActiveAction] = useState(ORG_ACTIONS[0].key);
 
   const content = (
     <Stack spacing={2.25}>
+      {/* Page title and instructions */}
       <Stack spacing={0.5}>
         <Typography variant="h6">Organization Setup</Typography>
         <Typography variant="body2" color="text.secondary">
@@ -48,6 +50,7 @@ export default function CompanyLocationSetupForm() {
         </Typography>
       </Stack>
 
+      {/* Action cards: add company, add location, or edit location */}
       <Box
         sx={{
           display: "grid",
@@ -93,6 +96,7 @@ export default function CompanyLocationSetupForm() {
         })}
       </Box>
 
+      {/* Active form based on the selected action card */}
       <Box>
         {activeAction === "addCompany" && <CompanyForm />}
         {activeAction === "addLocation" && <LocationForm />}

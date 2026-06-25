@@ -6,10 +6,6 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "migrate:tenant": "node scripts/migrate-tenant-backfill.js",
-    "seed:demo-user": "node scripts/seed-demo-user.js",
-    "seed:default-batches": "node scripts/seed-default-batches.js",
-    "seed:green-valley": "node scripts/seed-green-valley-tenant.js",
-    "seed:reseed-all": "node scripts/reseed-all-tenants.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -1,3 +1,7 @@
+/**
+ * LoginPage — email/password form shown before the main app loads.
+ */
+
 import { useState } from "react";
 import {
   Alert,
@@ -26,19 +30,20 @@ const DEMO_ACCOUNTS = [
   },
 ];
 
-// Simple login screen shown before the main app loads.
 export default function LoginPage({ onLoginSuccess }) {
   const [email, setEmail] = useState(DEMO_ACCOUNTS[0].email);
   const [password, setPassword] = useState(DEMO_ACCOUNTS[0].password);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Fills the form when user clicks a demo account card.
   const applyDemoAccount = (account) => {
     setEmail(account.email);
     setPassword(account.password);
     setError("");
   };
 
+  // Sends login request and tells the parent to show the main app.
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -66,6 +71,7 @@ export default function LoginPage({ onLoginSuccess }) {
       <Card sx={{ width: "100%", maxWidth: 420 }}>
         <CardContent>
           <Stack spacing={2.5} component="form" onSubmit={handleSubmit}>
+            {/* Title and short description */}
             <Stack spacing={0.5}>
               <Typography variant="h5">CannaDB Login</Typography>
               <Typography variant="body2" color="text.secondary">
@@ -73,6 +79,7 @@ export default function LoginPage({ onLoginSuccess }) {
               </Typography>
             </Stack>
 
+            {/* Email and password inputs */}
             <TextField
               label="Email"
               type="email"
@@ -99,6 +106,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
             <Divider />
 
+            {/* Demo account shortcuts — click to fill the form */}
             <Stack spacing={1}>
               <Typography variant="caption" color="text.secondary">
                 Demo accounts — click to fill the form
