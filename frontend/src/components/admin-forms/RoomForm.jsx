@@ -41,6 +41,9 @@ const ROOM_TYPES = [
 
 const MS_PER_DAY = 86400000;
 
+const TRANSPLANT_DESTINATION_ROOM_TYPES = new Set(["Veg", "Clone", "Flower"]);
+const TRANSPLANT_SELECTABLE_STAGES = new Set(["Clone", "Veg"]);
+
 const NEXT_STAGE_BY_BATCH_TYPE = {
   production: {
     Clone: "Veg",
@@ -164,13 +167,16 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
     };
   }, []);
 
-  // Only show batches that are still active/upcoming by harvest date.
   const selectableBatches = useMemo(() => {
-    // This keeps assignment dropdown focused on batches that still need action.
     const now = new Date();
 
     return [...batches]
       .filter((batch) => {
+        if (batch?.batchType === "mom") return false;
+        if (!TRANSPLANT_SELECTABLE_STAGES.has(batch?.lifecycleStage)) {
+          return false;
+        }
+
         if (!batch?.harvestDate) return true;
         const harvestDate = new Date(batch.harvestDate);
         if (Number.isNaN(harvestDate.getTime())) return true;
@@ -203,10 +209,13 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   );
 
   const assignableRooms = useMemo(() => {
-    // If batch has a location, only allow rooms from that same location.
-    if (!selectedBatch?.location) return rooms;
+    const transplantRooms = rooms.filter((room) =>
+      TRANSPLANT_DESTINATION_ROOM_TYPES.has(room.type),
+    );
 
-    return rooms.filter(
+    if (!selectedBatch?.location) return transplantRooms;
+
+    return transplantRooms.filter(
       (room) =>
         String(room?.locationId?._id) === String(selectedBatch.location),
     );

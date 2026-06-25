@@ -60,12 +60,21 @@ function DestroyPlantsForm() {
     };
   }, []);
 
+  const selectableBatches = useMemo(
+    () =>
+      batches.filter(
+        (batch) => String(batch?.lifecycleStage || "") !== "Completed",
+      ),
+    [batches],
+  );
+
   const selectedBatch = useMemo(
     // Resolve dropdown id into full batch object used by the UI.
     () =>
-      batches.find((batch) => String(batch._id) === String(selectedBatchId)) ||
-      null,
-    [batches, selectedBatchId],
+      selectableBatches.find(
+        (batch) => String(batch._id) === String(selectedBatchId),
+      ) || null,
+    [selectableBatches, selectedBatchId],
   );
 
   const strainTotals = useMemo(
@@ -165,7 +174,7 @@ function DestroyPlantsForm() {
         required
       >
         <MenuItem value="">Select Batch</MenuItem>
-        {batches.map((batch) => (
+        {selectableBatches.map((batch) => (
           // Show batch number and stage so operators pick the correct source batch.
           <MenuItem key={batch._id} value={batch._id}>
             <Stack
