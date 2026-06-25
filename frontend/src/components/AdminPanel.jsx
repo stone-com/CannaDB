@@ -1,11 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Avatar,
   Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
   List,
   ListItemButton,
   ListItemIcon,
@@ -16,6 +12,7 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { alpha } from "@mui/material/styles";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import SpaIcon from "@mui/icons-material/Spa";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
@@ -30,8 +27,6 @@ import CreateMomsForm from "./admin-forms/CreateMomsForm";
 import BatchForm from "./BatchForm";
 import DestroyPlantsForm from "./admin-forms/DestroyPlantsForm";
 
-// Available admin workflows grouped into category-based navigation.
-// This configuration drives both left navigation and right-side panel details.
 const ADMIN_WORKFLOWS = [
   {
     key: "strain",
@@ -90,176 +85,236 @@ const ADMIN_WORKFLOWS = [
   },
 ];
 
-// Admin workspace that switches between operational forms.
+function AdminWorkflowNav({ activeWorkflowKey, onSelect, workflowsByCategory }) {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        borderRadius: 2.5,
+        overflow: "hidden",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "none",
+      }}
+    >
+      <Box sx={{ px: 1.75, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+          Workflows
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Select a task to open its form
+        </Typography>
+      </Box>
+
+      <Box sx={{ flex: 1, overflow: "auto", py: 1, px: 1 }}>
+        {Object.entries(workflowsByCategory).map(
+          ([categoryName, categoryWorkflows], categoryIndex) => (
+            <Box key={categoryName} sx={{ mb: categoryIndex === 0 ? 0.5 : 1.5 }}>
+              <Typography
+                variant="overline"
+                sx={{
+                  display: "block",
+                  px: 1,
+                  py: 0.75,
+                  color: "text.secondary",
+                  letterSpacing: 0.75,
+                  fontSize: "0.68rem",
+                }}
+              >
+                {categoryName}
+              </Typography>
+
+              <List dense disablePadding>
+                {categoryWorkflows.map((workflow) => {
+                  const Icon = workflow.icon;
+                  const selected = activeWorkflowKey === workflow.key;
+
+                  return (
+                    <ListItemButton
+                      key={workflow.key}
+                      selected={selected}
+                      onClick={() => onSelect(workflow.key)}
+                      sx={(theme) => ({
+                        borderRadius: 1.5,
+                        mb: 0.35,
+                        py: 0.85,
+                        pl: 1.25,
+                        border: "1px solid",
+                        borderColor: selected
+                          ? alpha(theme.palette.primary.main, 0.35)
+                          : "transparent",
+                        bgcolor: selected
+                          ? alpha(theme.palette.primary.main, 0.1)
+                          : "transparent",
+                        "&:hover": {
+                          bgcolor: selected
+                            ? alpha(theme.palette.primary.main, 0.14)
+                            : alpha(theme.palette.action.hover, 0.45),
+                        },
+                        "&.Mui-selected": {
+                          bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        },
+                        "&.Mui-selected:hover": {
+                          bgcolor: alpha(theme.palette.primary.main, 0.14),
+                        },
+                      })}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 32,
+                          color: selected ? "primary.main" : "text.secondary",
+                        }}
+                      >
+                        <Icon fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={workflow.title}
+                        primaryTypographyProps={{
+                          variant: "body2",
+                          sx: { fontWeight: selected ? 700 : 500, lineHeight: 1.35 },
+                        }}
+                      />
+                    </ListItemButton>
+                  );
+                })}
+              </List>
+            </Box>
+          ),
+        )}
+      </Box>
+    </Paper>
+  );
+}
+
 export default function AdminPanel() {
-  // Tracks which workflow button is selected in the left navigation list.
-  const [activeWorkflowKey, setActiveWorkflowKey] = useState(
-    ADMIN_WORKFLOWS[0].key,
+  const [activeWorkflowKey, setActiveWorkflowKey] = useState(ADMIN_WORKFLOWS[0].key);
+
+  const workflowsByCategory = useMemo(
+    () =>
+      ADMIN_WORKFLOWS.reduce((acc, workflow) => {
+        const group = acc[workflow.category] || [];
+        group.push(workflow);
+        acc[workflow.category] = group;
+        return acc;
+      }, {}),
+    [],
   );
 
-  // Build a category -> workflows map for grouped rendering.
-  const workflowsByCategory = ADMIN_WORKFLOWS.reduce((acc, workflow) => {
-    const group = acc[workflow.category] || [];
-    group.push(workflow);
-    acc[workflow.category] = group;
-    return acc;
-  }, {});
-
-  // Read currently selected workflow object for icon/title/description rendering.
   const activeWorkflow =
     ADMIN_WORKFLOWS.find((workflow) => workflow.key === activeWorkflowKey) ||
     ADMIN_WORKFLOWS[0];
 
-  // Render the form that belongs to the currently selected workflow.
+  const ActiveIcon = activeWorkflow.icon;
+
   function renderActiveForm() {
-    // Each condition picks one React component to render in the right panel.
     if (activeWorkflow.key === "strain") return <StrainForm />;
-    if (activeWorkflow.key === "orgSetup") {
-      return <CompanyLocationSetupForm />;
-    }
+    if (activeWorkflow.key === "orgSetup") return <CompanyLocationSetupForm />;
     if (activeWorkflow.key === "room") return <RoomForm section="add" />;
     if (activeWorkflow.key === "batch") return <BatchForm />;
-    if (activeWorkflow.key === "assign") {
-      return <RoomForm section="assign" />;
-    }
-    if (activeWorkflow.key === "destroyPlants") {
-      return <DestroyPlantsForm />;
-    }
-    if (activeWorkflow.key === "createMoms") {
-      return <CreateMomsForm />;
-    }
+    if (activeWorkflow.key === "assign") return <RoomForm section="assign" />;
+    if (activeWorkflow.key === "destroyPlants") return <DestroyPlantsForm />;
+    if (activeWorkflow.key === "createMoms") return <CreateMomsForm />;
     return null;
   }
 
   return (
-    <Box sx={{ maxWidth: 1500, mx: "auto" }}>
-      <Stack spacing={2.5}>
-        {/* Intro banner uses Paper as a low-emphasis container with custom background. */}
+    <Box sx={{ maxWidth: 1320, mx: "auto", width: "100%" }}>
+      <Stack spacing={2}>
         <Paper
-          elevation={0}
+          variant="outlined"
           sx={(theme) => ({
-            p: { xs: 2, md: 2.75 },
+            px: { xs: 2, md: 2.5 },
+            py: { xs: 1.75, md: 2 },
             borderRadius: 2.5,
-            border: "1px solid",
-            borderColor: "divider",
-            background: `linear-gradient(105deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.secondary.main, 0.06)}, ${alpha(theme.palette.background.paper, 0.96)})`,
+            boxShadow: "none",
+            background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.08)}, ${alpha(theme.palette.background.paper, 0.98)})`,
           })}
         >
-          <Stack spacing={0.5}>
-            <Typography variant="h4">Admin Operations Center</Typography>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <Avatar
+              sx={(theme) => ({
+                width: 44,
+                height: 44,
+                bgcolor: alpha(theme.palette.primary.main, 0.14),
+                color: "primary.main",
+              })}
+            >
+              <AdminPanelSettingsIcon fontSize="small" />
+            </Avatar>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                Admin Center
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Manage core records, batches, and plant operations.
+              </Typography>
+            </Box>
           </Stack>
         </Paper>
 
-        <Grid container spacing={2}>
-          {/* Grid gives a responsive 2-column layout: nav left, content right. */}
-          <Grid size={{ xs: 12, md: 4, lg: 3 }}>
-            {/* Left column: workflow list grouped by category. */}
-            <Card
-              sx={{
-                height: "100%",
-                borderRadius: 2,
-                border: "1px solid",
-                borderColor: "divider",
-              }}
-            >
-              <CardContent sx={{ p: 1.5 }}>
-                <Stack spacing={1}>
-                  {/* Render each category heading with its workflow buttons underneath. */}
-                  {Object.entries(workflowsByCategory).map(
-                    ([categoryName, categoryWorkflows]) => (
-                      <Box key={categoryName}>
-                        <Typography
-                          variant="overline"
-                          sx={{
-                            px: 1,
-                            color: "text.secondary",
-                            letterSpacing: 0.7,
-                          }}
-                        >
-                          {categoryName}
-                        </Typography>
-                        <List dense disablePadding>
-                          {categoryWorkflows.map((workflow) => {
-                            const Icon = workflow.icon;
-                            return (
-                              <ListItemButton
-                                key={workflow.key}
-                                selected={activeWorkflowKey === workflow.key}
-                                // Update selection so right panel swaps to matching form.
-                                onClick={() =>
-                                  setActiveWorkflowKey(workflow.key)
-                                }
-                                sx={{ borderRadius: 1.25, mb: 0.25 }}
-                              >
-                                <ListItemIcon sx={{ minWidth: 34 }}>
-                                  <Icon fontSize="small" />
-                                </ListItemIcon>
-                                <ListItemText
-                                  primary={workflow.title}
-                                  primaryTypographyProps={{ variant: "body2" }}
-                                />
-                              </ListItemButton>
-                            );
-                          })}
-                        </List>
-                      </Box>
-                    ),
-                  )}
-                </Stack>
-              </CardContent>
-            </Card>
+        <Grid container spacing={2} alignItems="stretch">
+          <Grid
+            size={{ xs: 12, md: 4, lg: 3.5 }}
+            sx={{
+              position: { md: "sticky" },
+              top: { md: 12 },
+              alignSelf: { md: "flex-start" },
+              maxHeight: { md: "calc(100vh - 200px)" },
+            }}
+          >
+            <AdminWorkflowNav
+              activeWorkflowKey={activeWorkflowKey}
+              onSelect={setActiveWorkflowKey}
+              workflowsByCategory={workflowsByCategory}
+            />
           </Grid>
 
-          <Grid size={{ xs: 12, md: 8, lg: 9 }}>
-            {/* Right column: details header + active form content. */}
-            <Card
-              sx={{
-                borderRadius: 2,
-                border: "1px solid",
-                borderColor: "divider",
-              }}
+          <Grid size={{ xs: 12, md: 8, lg: 8.5 }}>
+            <Paper
+              variant="outlined"
+              sx={(theme) => ({
+                borderRadius: 2.5,
+                overflow: "hidden",
+                boxShadow: "none",
+                borderColor: alpha(theme.palette.divider, 0.9),
+              })}
             >
-              <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-                <Stack spacing={2}>
-                  {/* Header row shows the selected workflow icon + title/description. */}
-                  <Stack direction="row" spacing={1.25} alignItems="center">
-                    <Avatar
-                      sx={{
-                        bgcolor: "primary.main",
-                        width: 36,
-                        height: 36,
-                      }}
-                    >
-                      <activeWorkflow.icon fontSize="small" />
-                    </Avatar>
-                    <Box>
-                      <Typography variant="h5">
-                        {activeWorkflow.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {activeWorkflow.description}
-                      </Typography>
-                    </Box>
-                  </Stack>
-
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip
-                      size="small"
-                      color="primary"
-                      label={activeWorkflow.category}
-                      variant="outlined"
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Complete fields in order, then submit to apply changes.
+              <Box
+                sx={(theme) => ({
+                  px: { xs: 2, md: 2.5 },
+                  py: 2,
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.06)}, ${alpha(theme.palette.background.paper, 0.98)})`,
+                })}
+              >
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Avatar
+                    sx={(theme) => ({
+                      width: 40,
+                      height: 40,
+                      bgcolor: alpha(theme.palette.primary.main, 0.14),
+                      color: "primary.main",
+                    })}
+                  >
+                    <ActiveIcon fontSize="small" />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.25 }}>
+                      {activeWorkflow.title}
                     </Typography>
-                  </Stack>
-
-                  <Divider />
-
-                  <Box sx={{ pt: 0.5 }}>{renderActiveForm()}</Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                      {activeWorkflow.description}
+                    </Typography>
+                  </Box>
                 </Stack>
-              </CardContent>
-            </Card>
+              </Box>
+
+              <Box sx={{ px: { xs: 2, md: 2.5 }, py: { xs: 2, md: 2.5 } }}>
+                {renderActiveForm()}
+              </Box>
+            </Paper>
           </Grid>
         </Grid>
       </Stack>

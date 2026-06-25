@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   Alert,
-  Button,
   Divider,
   MenuItem,
   Stack,
   TextField,
 } from "@mui/material";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../../utils/api";
+import FormSubmitBar from "../ui/FormSubmitBar";
 
 // This form lets admins add, edit, or remove cannabis strain records.
 // Users switch modes with a dropdown, fill in strain details, then submit the form.
@@ -205,16 +205,12 @@ function StrainForm() {
           </Alert>
         )}
 
-        {/* Submit button (label changes with mode) */}
-        <Button
-          type="submit"
-          variant="contained"
-          color={mode === "remove" ? "error" : "primary"}
-        >
+        {/* Submit button label changes with the selected mode */}
+        <FormSubmitBar color={mode === "remove" ? "error" : "primary"}>
           {mode === "add" && "Add Strain"}
           {mode === "edit" && "Save Strain Changes"}
           {mode === "remove" && "Remove Strain"}
-        </Button>
+        </FormSubmitBar>
       </Stack>
 
       {/* Success or error message */}

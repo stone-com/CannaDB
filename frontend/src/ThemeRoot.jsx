@@ -74,6 +74,59 @@ export default function ThemeRoot() {
               },
             },
           },
+          MuiCard: {
+            styleOverrides: {
+              root: {
+                borderRadius: 14,
+              },
+            },
+          },
+          MuiButton: {
+            styleOverrides: {
+              root: {
+                borderRadius: 10,
+                paddingInline: 18,
+              },
+              contained: {
+                boxShadow: "none",
+                "&:hover": {
+                  boxShadow: darkMode
+                    ? `0 8px 20px ${alpha(grey[900], 0.35)}`
+                    : `0 8px 20px ${alpha(teal[900], 0.12)}`,
+                },
+              },
+              outlined: {
+                borderWidth: 1.5,
+              },
+            },
+          },
+          MuiIconButton: {
+            styleOverrides: {
+              root: {
+                borderRadius: 10,
+              },
+            },
+          },
+          MuiTextField: {
+            defaultProps: {
+              size: "small",
+              fullWidth: true,
+            },
+          },
+          MuiAlert: {
+            styleOverrides: {
+              root: {
+                borderRadius: 12,
+              },
+            },
+          },
+          MuiChip: {
+            styleOverrides: {
+              root: {
+                fontWeight: 600,
+              },
+            },
+          },
           MuiDataGrid: {
             styleOverrides: {
               root: {

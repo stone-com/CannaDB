@@ -12,6 +12,18 @@ export function stageColor(stage) {
   return "success";
 }
 
+// Chip color hint for room type labels on overview cards.
+export function roomTypeColor(roomType) {
+  const type = String(roomType || "").toLowerCase();
+
+  if (type === "flower") return "warning";
+  if (type === "drying") return "info";
+  if (type === "mom") return "secondary";
+  if (type === "veg") return "success";
+  if (type === "clone") return "primary";
+  return "default";
+}
+
 // Totals plant counts by strain name for one room's assignments.
 function countPlantsByStrain(assignments) {
   const countByStrainName = {};
@@ -70,6 +82,22 @@ function buildRoomCard(room, assignmentsForThisRoom) {
     batchChipLabel = `${batchCount} batches`;
   }
 
+  let harvestDate = null;
+  for (const batch of batches) {
+    if (!batch?.harvestDate) continue;
+    const candidate = new Date(batch.harvestDate);
+    if (Number.isNaN(candidate.getTime())) continue;
+    if (!harvestDate || candidate < new Date(harvestDate)) {
+      harvestDate = batch.harvestDate;
+    }
+  }
+
+  const assignmentStartedAt =
+    assignmentsForThisRoom
+      .map((assignment) => assignment?.startedAt)
+      .filter(Boolean)
+      .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+
   return {
     room,
     strainLines,
@@ -77,7 +105,9 @@ function buildRoomCard(room, assignmentsForThisRoom) {
     batchChipLabel,
     batchCount,
     lifecycleStage: firstBatch?.lifecycleStage || null,
-    headerDate: firstBatch?.harvestDate || assignmentsForThisRoom[0]?.startedAt || null,
+    harvestDate,
+    assignmentStartedAt,
+    headerDate: harvestDate || assignmentStartedAt || null,
   };
 }
 

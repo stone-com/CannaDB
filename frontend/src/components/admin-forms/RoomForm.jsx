@@ -1,5 +1,6 @@
 // RoomForm — admin form to add/edit/remove rooms, or assign batch plants to one or more rooms.
-import { useEffect, useMemo, useState } from "react";import {
+import { useEffect, useMemo, useState } from "react";
+import {
   Alert,
   Box,
   Button,
@@ -18,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";import {
 } from "@mui/material";
 import { formatDate } from "../../utils/formatDate";
 import { getBatchStrainTotals, getRoomNamesForBatch } from "../../utils/batchHelpers";
+import FormSubmitBar from "../ui/FormSubmitBar";
 import {
   apiDelete,
   apiGet,
@@ -280,7 +282,8 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   };
 
   // Add another destination room card in split assignment mode.
-  const handleAddSplitDestination = () => {    setSplitDestinations((prev) => [
+  const handleAddSplitDestination = () => {
+    setSplitDestinations((prev) => [
       ...prev,
       {
         roomId: "",
@@ -289,12 +292,14 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
     ]);
   };
 
-  // Remove a destination room card from split assignment mode by its index.
-  const handleRemoveSplitDestination = (index) => {    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
+  // Remove a split destination card by index.
+  const handleRemoveSplitDestination = (index) => {
+    setSplitDestinations((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Change which room a split destination card points to.
-  const handleSplitRoomChange = (index, roomId) => {    setSplitDestinations((prev) =>
+  const handleSplitRoomChange = (index, roomId) => {
+    setSplitDestinations((prev) =>
       prev.map((destination, i) =>
         i === index ? { ...destination, roomId } : destination,
       ),
@@ -302,7 +307,8 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   };
 
   // Change the plant count for one strain inside one split destination card.
-  const handleSplitCountChange = (index, strainId, value) => {    const normalizedValue =
+  const handleSplitCountChange = (index, strainId, value) => {
+    const normalizedValue =
       value === "" ? "" : String(Math.max(0, Number(value) || 0));
 
     setSplitDestinations((prev) =>
@@ -552,9 +558,11 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   };
 
   // --- Room CRUD form: add, edit, or remove a room ---
-  const addRoomForm = (    <Stack component="form" spacing={2} onSubmit={handleManageRoomSubmit}>
+  const addRoomForm = (
+    <Stack component="form" spacing={2} onSubmit={handleManageRoomSubmit}>
       {/* Mode picker: add a new room, edit one, or remove one. */}
-      <TextField        select
+      <TextField
+        select
         label="Mode"
         value={roomMode}
         onChange={(e) => handleRoomModeChange(e.target.value)}
@@ -649,15 +657,11 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
         </Alert>
       )}
 
-      <Button
-        variant="contained"
-        color={roomMode === "remove" ? "error" : "primary"}
-        type="submit"
-      >
+      <FormSubmitBar color={roomMode === "remove" ? "error" : "primary"}>
         {roomMode === "add" && "Add Room"}
         {roomMode === "edit" && "Save Room Changes"}
         {roomMode === "remove" && "Remove Room"}
-      </Button>
+      </FormSubmitBar>
 
       {message && (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
@@ -668,9 +672,11 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   );
 
   // --- Batch assignment form: move plants to one or more rooms ---
-  const assignRoomForm = (    <Stack component="form" spacing={2} onSubmit={handleAssignmentSubmit}>
+  const assignRoomForm = (
+    <Stack component="form" spacing={2} onSubmit={handleAssignmentSubmit}>
       {/* Batch picker — choosing a batch loads its stage info and assignment options. */}
-      <TextField        select
+      <TextField
+        select
         label="Batch"
         value={assignmentData.batchId}
         onChange={(e) => handleBatchSelection(e.target.value)}
@@ -891,15 +897,17 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
                         />
                       ))}
 
-                      {splitDestinations.length > 1 && (
+                      {splitDestinations.length > 1 ? (
                         <Button
                           variant="outlined"
                           color="error"
+                          size="small"
                           onClick={() => handleRemoveSplitDestination(index)}
+                          sx={{ alignSelf: "flex-end", minWidth: 148 }}
                         >
-                          Remove Room
+                          Remove destination
                         </Button>
-                      )}
+                      ) : null}
                     </Stack>
                   </CardContent>
                 </Card>
@@ -913,9 +921,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
         </Card>
       )}
 
-      <Button variant="contained" type="submit">
-        Save Batch Room Plan
-      </Button>
+      <FormSubmitBar>Save Batch Room Plan</FormSubmitBar>
 
       {assignmentMessage && (
         <Alert

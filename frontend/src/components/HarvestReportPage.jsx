@@ -1,594 +1,497 @@
-// HarvestReportPage — pick a harvest to view totals, room breakdowns, and per-strain weight metrics.
-import { Fragment, useMemo, useState } from "react";
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Alert,
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
-import Grid from "@mui/material/Grid";
-import { alpha } from "@mui/material/styles";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import GrassIcon from "@mui/icons-material/Grass";
-import ScaleIcon from "@mui/icons-material/Scale";
-import WarehouseIcon from "@mui/icons-material/Warehouse";
-import { DataGrid } from "@mui/x-data-grid";
-import { formatDate } from "../utils/formatDate";
-
-// Round a number to one decimal place (returns null if the value is not a valid number).
-const roundToTenth = (value) => {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  return Math.round(num * 10) / 10;
-};
-
-// Format a weight number for display with one decimal place, or "N/A" when missing.
-const formatHarvestMetric = (value) => {
-  if (value === null || value === undefined || value === "N/A") return "N/A";
-  if (typeof value === "string" && value.trim() === "") return "N/A";
-
-  const rounded = roundToTenth(value);
-  if (rounded === null) return value;
-
-  return rounded.toLocaleString(undefined, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
-};
-
-// Format a percentage value for display, adding a "%" suffix when valid.
-const formatHarvestPercent = (value) => {
-  const formatted = formatHarvestMetric(value);
-  return formatted === "N/A" ? formatted : `${formatted}%`;
-};
-
-// Join all tote wet weights into a comma-separated string for display.
-const formatToteWeights = (totes) => {
-  if (!Array.isArray(totes) || totes.length === 0) return "None";
-  return totes
-    .map((tote) => formatHarvestMetric(tote?.wetWeight ?? 0))
-    .join(", ");
-};
-
-// Build the text label shown for each harvest in the dropdown selector.
-const buildHarvestOptionLabel = (harvest) => {
-  if (!harvest) return "N/A";
-
-  const dateText = formatDate(harvest.harvestDate);
-  const harvestNumberText = harvest.harvestNumber || "No Number";
-  const locationText = harvest.locationId?.nickname || "No Location";
-
-  const rooms = Array.isArray(harvest.rooms) ? harvest.rooms : [];
-  const roomNames = rooms
-    .map((roomEntry) => roomEntry?.roomId?.name)
-    .filter(Boolean)
-    .join(", ");
-
-  return `${dateText} — ${harvestNumberText} — ${locationText} — ${roomNames || "No Rooms"}`;
-};
-
-// Main component: shows harvest summary cards, metadata, and room-by-room strain tables.
-function HarvestReportPage({ harvests }) {
-  // Dropdown selection + row expansion state for the report view.
-  const [selectedHarvestId, setSelectedHarvestId] = useState("");
-  const [expandedRowKey, setExpandedRowKey] = useState(null);
-
-  // Show newest harvests first.
-  const sortedHarvests = useMemo(() => {
-    if (!Array.isArray(harvests)) return [];
-    return [...harvests].sort(
-      (a, b) => new Date(b.harvestDate) - new Date(a.harvestDate),
-    );
-  }, [harvests]);
-
-  // Keep current selection, otherwise default to newest harvest.
-  const effectiveSelectedHarvestId = useMemo(() => {
-    if (sortedHarvests.length === 0) return "";
-    const stillExists = sortedHarvests.some((h) => h._id === selectedHarvestId);
-    if (selectedHarvestId && stillExists) return selectedHarvestId;
-    return sortedHarvests[0]._id;
-  }, [selectedHarvestId, sortedHarvests]);
-
-  const selectedHarvest = useMemo(
-    // Resolve effective selected id into the full harvest object for this page.
-    () =>
-      sortedHarvests.find(
-        (harvest) => harvest._id === effectiveSelectedHarvestId,
-      ),
-    [effectiveSelectedHarvestId, sortedHarvests],
-  );
-
-  // Build room sections and strain rows for display.
-  const roomSections = useMemo(() => {
-    // Transform nested harvest data into room sections and table-ready strain rows.
-    if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) return [];
-
-    const sections = [];
-
-    selectedHarvest.rooms.forEach((roomEntry, roomIndex) => {
-      const roomId = roomEntry?.roomId;
-      const roomName = roomId?.name || "N/A";
-      const roomType = roomId?.type || "N/A";
-      const roomSqFoot =
-        roomId?.sqFoot == null ? "N/A" : roundToTenth(roomId.sqFoot);
-      const roomSectionKey = `${selectedHarvest._id}-room-${roomIndex}`;
-
-      const strains = Array.isArray(roomEntry?.strains)
-        ? roomEntry.strains
-        : [];
-
-      const strainRows = strains.map((strainEntry, strainIndex) => {
-        const strainId = strainEntry?.strainId;
-        const strainName = strainId?.name || "N/A";
-
-        return {
-          key: `${selectedHarvest._id}-${roomIndex}-${strainIndex}`,
-          strainName,
-          plantCount: strainEntry?.plantCount ?? 0,
-          totalWetWeightGrams: strainEntry?.totalWetWeightGrams ?? 0,
-          totalDryWeightGrams: strainEntry?.totalDryWeightGrams ?? 0,
-          wetPlantAvgWeightGrams: strainEntry?.wetPlantAvgWeightGrams ?? "N/A",
-          dryPlantAvgWeightGrams: strainEntry?.dryPlantAvgWeightGrams ?? "N/A",
-          percentChangeWetToDry: strainEntry?.percentChangeWetToDry ?? "N/A",
-          yieldGramsPerSquareFoot:
-            strainEntry?.yieldGramsPerSquareFoot ?? "N/A",
-          totes: Array.isArray(strainEntry?.totes) ? strainEntry.totes : [],
-        };
-      });
-
-      sections.push({
-        roomSectionKey,
-        roomName,
-        roomType,
-        roomSqFoot,
-        strainRows,
-      });
-    });
-
-    return sections;
-  }, [selectedHarvest]);
-
-  const roomNamesSummary = useMemo(
-    // Build comma-separated room names for summary metadata section.
-    () => roomSections.map((s) => s.roomName).join(", ") || "N/A",
-    [roomSections],
-  );
-
-  const locationName = selectedHarvest?.locationId?.nickname || "N/A";
-
-  const formatMetric = formatHarvestMetric;
-
-  const gridValueFormatter = (value) => formatHarvestMetric(value);
-
-  const summaryCards = useMemo(
-    // Metadata array used to render summary cards with one map() pass.
-    () => [
-      {
-        label: "Total Plants",
-        value: selectedHarvest?.totalPlantCount ?? 0,
-        icon: <GrassIcon fontSize="small" />,
-        tone: "primary",
-      },
-      {
-        label: "Total Wet (g)",
-        value: selectedHarvest?.totalWetWeightGrams ?? 0,
-        icon: <ScaleIcon fontSize="small" />,
-        tone: "info",
-      },
-      {
-        label: "Total Dry (g)",
-        value: selectedHarvest?.totalDryWeightGrams ?? 0,
-        icon: <ScaleIcon fontSize="small" />,
-        tone: "warning",
-      },
-      {
-        label: "Yield (g / sq ft)",
-        value: selectedHarvest?.totalYieldGramsPerSquareFoot ?? "N/A",
-        icon: <WarehouseIcon fontSize="small" />,
-        tone: "secondary",
-      },
-    ],
-    [selectedHarvest],
-  );
-
-  // Expand/collapse one strain detail row at a time.
-  const toggleExpandedRow = (rowKey) => {
-    setExpandedRowKey((prev) => (prev === rowKey ? null : rowKey));
-  };
-
-  // Render harvest header, summary metrics, room accordions, and strain details.
-  return (
-    <Stack spacing={2.25}>
-      {/* Header card: report title, selected date chip, and harvest selector. */}
-      <Paper
-        elevation={0}
-        sx={(theme) => ({
-          p: { xs: 2, md: 2.5 },
-          borderRadius: 2.5,
-          border: "1px solid",
-          borderColor: "divider",
-          background:
-            theme.palette.mode === "dark"
-              ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
-              : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
-          backdropFilter: "blur(8px)",
-        })}
-      >
-        <Stack spacing={1.25}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", md: "center" }}
-            spacing={1}
-          >
-            <Stack spacing={0.5}>
-              <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                Harvest Report
-              </Typography>
-              <Typography color="text.secondary" variant="body2">
-                Complete room and strain breakdown for each harvest run.
-              </Typography>
-            </Stack>
-            {selectedHarvest && (
-              <Chip
-                label={`Date: ${formatDate(selectedHarvest.harvestDate)}`}
-                color="success"
-                variant="outlined"
-              />
-            )}
-          </Stack>
-
-          <TextField
-            select
-            fullWidth
-            label="Select Harvest"
-            value={effectiveSelectedHarvestId}
-            // Changing harvest resets expanded detail row selection.
-            onChange={(e) => {
-              setSelectedHarvestId(e.target.value);
-              setExpandedRowKey(null);
-            }}
-          >
-            {sortedHarvests.length === 0 && (
-              <MenuItem value="">No harvests</MenuItem>
-            )}
-            {sortedHarvests.map((harvest) => (
-              <MenuItem key={harvest._id} value={harvest._id}>
-                {buildHarvestOptionLabel(harvest)}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Stack>
-      </Paper>
-
-      {!selectedHarvest ? (
-        // Alert is used for empty states to keep messaging visible and consistent.
-        <Alert severity="info">No harvest selected.</Alert>
-      ) : (
-        <>
-          {/* Summary metrics rendered as responsive cards. */}
-          <Grid container spacing={1.5}>
-            {summaryCards.map((card) => (
-              // Each summary card is rendered from the metadata array above.
-              <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
-                <Card
-                  elevation={0}
-                  sx={(theme) => ({
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    background:
-                      card.tone === "primary"
-                        ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.primary.main, 0.04)})`
-                        : card.tone === "info"
-                          ? `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.16)}, ${alpha(theme.palette.info.main, 0.04)})`
-                          : card.tone === "warning"
-                            ? `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.18)}, ${alpha(theme.palette.warning.main, 0.04)})`
-                            : `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.16)}, ${alpha(theme.palette.secondary.main, 0.04)})`,
-                    minHeight: 108,
-                  })}
-                >
-                  <CardContent>
-                    <Stack spacing={0.5}>
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box
-                          sx={{
-                            color: "text.secondary",
-                            display: "inline-flex",
-                          }}
-                        >
-                          {card.icon}
-                        </Box>
-                        <Typography color="text.secondary" variant="body2">
-                          {card.label}
-                        </Typography>
-                      </Stack>
-                      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                        {formatMetric(card.value)}
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-
-          <Paper
-            elevation={0}
-            sx={(theme) => ({
-              p: { xs: 1.5, md: 2 },
-              borderRadius: 2.25,
-              border: "1px solid",
-              borderColor: "divider",
-              background:
-                theme.palette.mode === "dark"
-                  ? alpha(theme.palette.background.paper, 0.9)
-                  : alpha(theme.palette.background.paper, 0.9),
-            })}
-          >
-            {/* Key/value metadata block for quick harvest context. */}
-            <Grid container spacing={1.25}>
-              {[
-                ["Harvest Number", selectedHarvest.harvestNumber || "N/A"],
-                ["Location", locationName],
-                ["Rooms", roomNamesSummary],
-                [
-                  "Total Strains",
-                  roomSections.reduce(
-                    (total, section) => total + section.strainRows.length,
-                    0,
-                  ),
-                ],
-              ].map(([label, value]) => (
-                // Render one key/value row for each harvest metadata field.
-                <Grid key={label} size={{ xs: 12, md: 6 }}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    sx={{
-                      px: 1.25,
-                      py: 1,
-                      borderRadius: 1.5,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      backgroundColor: "background.paper",
-                    }}
-                  >
-                    <Typography variant="body2" color="text.secondary">
-                      {label}
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                      {formatMetric(value)}
-                    </Typography>
-                  </Stack>
-                </Grid>
-              ))}
-            </Grid>
-          </Paper>
-
-          {/* Room accordions — each room lists its strains in a sortable table. */}
-          {roomSections.length === 0 ? (
-            <Alert severity="info">
-              No room/strain rows found for this harvest.
-            </Alert>
-          ) : (
-            roomSections.map((section) => (
-              // Render one accordion per room to group its strain rows together.
-              <Accordion
-                key={section.roomSectionKey}
-                defaultExpanded
-                elevation={0}
-                sx={(theme) => ({
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: "12px !important",
-                  overflow: "hidden",
-                  backgroundColor: alpha(theme.palette.background.paper, 0.95),
-                  "&::before": { display: "none" },
-                })}
-              >
-                {/* Each accordion represents one room with a strain table inside. */}
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon />}
-                  sx={(theme) => ({
-                    background: `linear-gradient(90deg, ${alpha(theme.palette.success.main, 0.08)}, ${alpha(theme.palette.success.main, 0.02)})`,
-                    borderBottom: "1px solid",
-                    borderColor: "divider",
-                  })}
-                >
-                  <Stack>
-                    <Typography sx={{ fontWeight: 800 }}>
-                      Room: {section.roomName} ({section.roomType})
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Sq Ft: {formatMetric(section.roomSqFoot)} • Strains:{" "}
-                      {section.strainRows.length}
-                    </Typography>
-                  </Stack>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 2 }}>
-                  {section.strainRows.length === 0 ? (
-                    <Alert severity="info">
-                      No strains found for this room.
-                    </Alert>
-                  ) : (
-                    <>
-                      <Box sx={{ height: 340, mb: 2 }}>
-                        <DataGrid
-                          // DataGrid handles sorting/paging and column sizing for strain metrics.
-                          rows={section.strainRows.map((row) => ({
-                            ...row,
-                            id: row.key,
-                          }))}
-                          columns={[
-                            {
-                              field: "strainName",
-                              headerName: "Strain",
-                              flex: 1,
-                              minWidth: 140,
-                            },
-                            {
-                              field: "plantCount",
-                              headerName: "Plant Count",
-                              type: "number",
-                              flex: 0.8,
-                              minWidth: 120,
-                              valueFormatter: gridValueFormatter,
-                            },
-                            {
-                              field: "totalWetWeightGrams",
-                              headerName: "Wet Weight (g)",
-                              type: "number",
-                              flex: 0.9,
-                              minWidth: 130,
-                              valueFormatter: gridValueFormatter,
-                            },
-                            {
-                              field: "totalDryWeightGrams",
-                              headerName: "Dry Weight (g)",
-                              type: "number",
-                              flex: 0.9,
-                              minWidth: 130,
-                              valueFormatter: gridValueFormatter,
-                            },
-                            {
-                              field: "yieldGramsPerSquareFoot",
-                              headerName: "Yield (g/sq ft)",
-                              flex: 0.9,
-                              minWidth: 130,
-                              valueFormatter: gridValueFormatter,
-                            },
-                            {
-                              field: "dryPlantAvgWeightGrams",
-                              headerName: "Dry Avg (g/plant)",
-                              flex: 1,
-                              minWidth: 140,
-                              valueFormatter: gridValueFormatter,
-                            },
-                          ]}
-                          pageSizeOptions={[5, 10]}
-                          initialState={{
-                            pagination: {
-                              paginationModel: { pageSize: 5, page: 0 },
-                            },
-                          }}
-                          disableRowSelectionOnClick
-                          onRowClick={(params) => toggleExpandedRow(params.id)}
-                          sx={(theme) => ({
-                            borderRadius: 1.5,
-                            borderColor: "divider",
-                            backgroundColor: alpha(
-                              theme.palette.background.paper,
-                              0.86,
-                            ),
-                            "& .MuiDataGrid-columnHeaders": {
-                              backgroundColor: alpha(
-                                theme.palette.primary.main,
-                                0.14,
-                              ),
-                              fontWeight: 700,
-                            },
-                          })}
-                        />
-                      </Box>
-
-                      {/* Expanded strain detail card — shows averages and tote weights. */}
-                      {section.strainRows.map((row) => (
-                        <Fragment key={`${row.key}-detail`}>
-                          {expandedRowKey === row.key && (
-                            // Expanded card shows secondary metrics and tote-level data.
-                            <Card
-                              variant="outlined"
-                              sx={{
-                                mb: 1.5,
-                                borderRadius: 2,
-                                borderColor: "divider",
-                              }}
-                            >
-                              <CardContent>
-                                <Stack spacing={1.25}>
-                                  <Typography
-                                    variant="subtitle1"
-                                    sx={{ fontWeight: 800 }}
-                                  >
-                                    {row.strainName} Details
-                                  </Typography>
-                                  <Divider />
-                                  <Grid container spacing={1.25}>
-                                    {[
-                                      [
-                                        "Wet Avg / Plant (g)",
-                                        formatHarvestMetric(row.wetPlantAvgWeightGrams),
-                                      ],
-                                      [
-                                        "% Change Wet→Dry",
-                                        formatHarvestPercent(row.percentChangeWetToDry),
-                                      ],
-                                      [
-                                        "Tote Wet Weights",
-                                        formatToteWeights(row.totes),
-                                      ],
-                                    ].map(([label, value]) => (
-                                      <Grid
-                                        key={`${row.key}-${label}`}
-                                        size={{ xs: 12, md: 4 }}
-                                      >
-                                        <Stack
-                                          spacing={0.25}
-                                          sx={(theme) => ({
-                                            p: 1,
-                                            borderRadius: 1.25,
-                                            border: "1px solid",
-                                            borderColor: "divider",
-                                            backgroundColor: alpha(
-                                              theme.palette.background.paper,
-                                              0.95,
-                                            ),
-                                          })}
-                                        >
-                                          <Typography
-                                            variant="caption"
-                                            color="text.secondary"
-                                          >
-                                            {label}
-                                          </Typography>
-                                          <Typography
-                                            variant="body2"
-                                            sx={{ fontWeight: 700 }}
-                                          >
-                                            {value}
-                                          </Typography>
-                                        </Stack>
-                                      </Grid>
-                                    ))}
-                                  </Grid>
-                                </Stack>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </Fragment>
-                      ))}
-                    </>
-                  )}
-                </AccordionDetails>
-              </Accordion>
-            ))
-          )}
-        </>
-      )}
-    </Stack>
-  );
-}
-
-export default HarvestReportPage;
+/**
+ * HarvestReportPage — browse harvest runs and drill into room/strain weights.
+ * Layout: scrollable harvest list on the left, full breakdown on the right.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Box,
+  Chip,
+  Divider,
+  Grid,
+  InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
+  Paper,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import SearchIcon from "@mui/icons-material/Search";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import GrassIcon from "@mui/icons-material/Grass";
+import ScaleIcon from "@mui/icons-material/Scale";
+import WarehouseIcon from "@mui/icons-material/Warehouse";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
+import StatCard from "./ui/StatCard";
+import MasterDetailShell from "./ui/MasterDetailShell";
+import AnalyticsDataGrid from "./ui/AnalyticsDataGrid";
+import { formatDate } from "../utils/formatDate";
+import {
+  buildHarvestListLabel,
+  filterHarvests,
+  formatHarvestMetric,
+  formatHarvestPercent,
+  formatToteWeights,
+  roundToTenth,
+  sortHarvests,
+} from "../utils/harvestReportHelpers";
+
+function HarvestReportPage({ harvests }) {
+  const [selectedHarvestId, setSelectedHarvestId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRoomTab, setSelectedRoomTab] = useState(0);
+  const [selectedStrainKey, setSelectedStrainKey] = useState(null);
+
+  const sortedHarvests = useMemo(() => {
+    if (!Array.isArray(harvests)) return [];
+    return sortHarvests(harvests, "date-desc");
+  }, [harvests]);
+
+  const visibleHarvests = useMemo(
+    () => filterHarvests(sortedHarvests, searchQuery, formatDate),
+    [searchQuery, sortedHarvests],
+  );
+
+  useEffect(() => {
+    if (selectedHarvestId) return;
+    if (visibleHarvests[0]) {
+      setSelectedHarvestId(visibleHarvests[0]._id);
+    }
+  }, [visibleHarvests, selectedHarvestId]);
+
+  useEffect(() => {
+    if (!selectedHarvestId) return;
+    const stillVisible = visibleHarvests.some(
+      (harvest) => harvest._id === selectedHarvestId,
+    );
+    if (!stillVisible && visibleHarvests[0]) {
+      setSelectedHarvestId(visibleHarvests[0]._id);
+    }
+  }, [selectedHarvestId, visibleHarvests]);
+
+  const selectedHarvest = useMemo(
+    () => sortedHarvests.find((harvest) => harvest._id === selectedHarvestId) || null,
+    [selectedHarvestId, sortedHarvests],
+  );
+
+  const roomSections = useMemo(() => {
+    if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) return [];
+
+    return selectedHarvest.rooms.map((roomEntry, roomIndex) => {
+      const roomId = roomEntry?.roomId;
+      const strains = Array.isArray(roomEntry?.strains) ? roomEntry.strains : [];
+
+      const strainRows = strains.map((strainEntry, strainIndex) => ({
+        key: `${selectedHarvest._id}-${roomIndex}-${strainIndex}`,
+        strainName: strainEntry?.strainId?.name || "—",
+        plantCount: strainEntry?.plantCount ?? 0,
+        totalWetWeightGrams: strainEntry?.totalWetWeightGrams ?? 0,
+        totalDryWeightGrams: strainEntry?.totalDryWeightGrams ?? 0,
+        wetPlantAvgWeightGrams: strainEntry?.wetPlantAvgWeightGrams ?? null,
+        dryPlantAvgWeightGrams: strainEntry?.dryPlantAvgWeightGrams ?? null,
+        percentChangeWetToDry: strainEntry?.percentChangeWetToDry ?? null,
+        yieldGramsPerSquareFoot: strainEntry?.yieldGramsPerSquareFoot ?? null,
+        totes: Array.isArray(strainEntry?.totes) ? strainEntry.totes : [],
+      }));
+
+      return {
+        roomSectionKey: `${selectedHarvest._id}-room-${roomIndex}`,
+        roomName: roomId?.name || "—",
+        roomType: roomId?.type || "—",
+        roomSqFoot: roomId?.sqFoot == null ? null : roundToTenth(roomId.sqFoot),
+        strainRows,
+        roomDryTotal: strainRows.reduce(
+          (sum, row) => sum + (Number(row.totalDryWeightGrams) || 0),
+          0,
+        ),
+      };
+    });
+  }, [selectedHarvest]);
+
+  useEffect(() => {
+    setSelectedRoomTab(0);
+    setSelectedStrainKey(null);
+  }, [selectedHarvestId]);
+
+  const activeRoomSection = roomSections[selectedRoomTab] || null;
+
+  const selectedStrainRow = useMemo(() => {
+    if (!activeRoomSection || !selectedStrainKey) return null;
+    return (
+      activeRoomSection.strainRows.find((row) => row.key === selectedStrainKey) ||
+      null
+    );
+  }, [activeRoomSection, selectedStrainKey]);
+
+  const metricColumn = (field, headerName, flex = 1) => ({
+    field,
+    headerName,
+    flex,
+    minWidth: 120,
+    type: "number",
+    valueFormatter: (value) => formatHarvestMetric(value),
+  });
+
+  const strainGridColumns = [
+    { field: "strainName", headerName: "Strain", flex: 1.2, minWidth: 140 },
+    metricColumn("plantCount", "Plants", 0.7),
+    metricColumn("totalWetWeightGrams", "Wet (g)", 0.9),
+    metricColumn("totalDryWeightGrams", "Dry (g)", 0.9),
+    metricColumn("dryPlantAvgWeightGrams", "Dry avg/plant", 1),
+    metricColumn("yieldGramsPerSquareFoot", "Yield g/sq ft", 1),
+  ];
+
+  if (sortedHarvests.length === 0) {
+    return <Alert severity="info">No harvest records yet.</Alert>;
+  }
+
+  const sidebarHeader = (
+    <Box sx={{ p: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+      <TextField
+        size="small"
+        fullWidth
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        placeholder="Search harvests…"
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          ),
+        }}
+      />
+      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+        {visibleHarvests.length} of {sortedHarvests.length} harvests
+      </Typography>
+    </Box>
+  );
+
+  const sidebar = (
+    <List dense disablePadding>
+      {visibleHarvests.length === 0 ? (
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            No harvests match your search.
+          </Typography>
+        </Box>
+      ) : (
+        visibleHarvests.map((harvest) => {
+          const isSelected = selectedHarvest?._id === harvest._id;
+
+          return (
+            <ListItemButton
+              key={harvest._id}
+              selected={isSelected}
+              onClick={() => setSelectedHarvestId(harvest._id)}
+              sx={{ alignItems: "flex-start", py: 1.25 }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                    {buildHarvestListLabel(harvest, formatDate)}
+                  </Typography>
+                }
+                secondary={
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`${formatHarvestMetric(harvest.totalDryWeightGrams)} g dry`}
+                    />
+                    <Chip size="small" label={`${harvest.totalPlantCount ?? 0} plants`} />
+                  </Stack>
+                }
+              />
+            </ListItemButton>
+          );
+        })
+      )}
+    </List>
+  );
+
+  const detail = selectedHarvest ? (
+    <Paper
+      variant="outlined"
+      sx={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 2,
+        overflow: "hidden",
+        minHeight: { xs: 420, md: 0 },
+      }}
+    >
+      <Box
+        sx={(theme) => ({
+          p: 2,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.background.paper, 0.95)})`,
+        })}
+      >
+        <Stack direction="row" spacing={1.25} alignItems="center">
+          <Box
+            sx={(theme) => ({
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: alpha(theme.palette.primary.main, 0.14),
+              color: "primary.main",
+              flexShrink: 0,
+            })}
+          >
+            <AssessmentIcon fontSize="small" />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800 }} noWrap>
+              {selectedHarvest.harvestNumber || "Harvest"}
+            </Typography>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+              <Chip
+                size="small"
+                icon={<CalendarTodayIcon />}
+                label={formatDate(selectedHarvest.harvestDate)}
+                variant="outlined"
+              />
+              <Chip size="small" label={selectedHarvest.locationId?.nickname || "—"} />
+            </Stack>
+          </Box>
+        </Stack>
+      </Box>
+
+      <Box sx={{ p: 2, overflow: "auto", flex: 1, minHeight: 0 }}>
+        <Grid container spacing={1.5} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <StatCard
+              label="Total plants"
+              value={formatHarvestMetric(selectedHarvest.totalPlantCount)}
+              icon={<GrassIcon fontSize="small" />}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <StatCard
+              label="Total wet"
+              value={`${formatHarvestMetric(selectedHarvest.totalWetWeightGrams)} g`}
+              icon={<ScaleIcon fontSize="small" />}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <StatCard
+              label="Total dry"
+              value={`${formatHarvestMetric(selectedHarvest.totalDryWeightGrams)} g`}
+              icon={<ScaleIcon fontSize="small" />}
+            />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3 }}>
+            <StatCard
+              label="Yield / sq ft"
+              value={formatHarvestMetric(selectedHarvest.totalYieldGramsPerSquareFoot)}
+              icon={<WarehouseIcon fontSize="small" />}
+            />
+          </Grid>
+        </Grid>
+
+        <Divider sx={{ mb: 2 }} />
+
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+          Room breakdown
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+          Pick a room tab, then click a strain row for tote and average details.
+        </Typography>
+
+        {roomSections.length === 0 ? (
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            No room breakdown recorded for this harvest.
+          </Alert>
+        ) : (
+          <Stack spacing={1.5}>
+            {roomSections.length > 1 ? (
+              <Tabs
+                value={selectedRoomTab}
+                onChange={(_, value) => {
+                  setSelectedRoomTab(value);
+                  setSelectedStrainKey(null);
+                }}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ borderBottom: 1, borderColor: "divider" }}
+              >
+                {roomSections.map((section, index) => (
+                  <Tab
+                    key={section.roomSectionKey}
+                    value={index}
+                    label={`${section.roomName} (${formatHarvestMetric(section.roomDryTotal)} g)`}
+                  />
+                ))}
+              </Tabs>
+            ) : null}
+
+            {activeRoomSection ? (
+              <>
+                <Paper
+                  variant="outlined"
+                  sx={(theme) => ({
+                    px: 1.5,
+                    py: 1.25,
+                    borderRadius: 2,
+                    bgcolor: alpha(theme.palette.background.default, 0.45),
+                  })}
+                >
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    spacing={1}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <MeetingRoomIcon fontSize="small" color="action" />
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {activeRoomSection.roomName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {activeRoomSection.roomType}
+                          {activeRoomSection.roomSqFoot !== null
+                            ? ` · ${formatHarvestMetric(activeRoomSection.roomSqFoot)} sq ft`
+                            : ""}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                    <Chip
+                      size="small"
+                      color="secondary"
+                      label={`${formatHarvestMetric(activeRoomSection.roomDryTotal)} g dry · ${activeRoomSection.strainRows.length} strains`}
+                    />
+                  </Stack>
+                </Paper>
+
+                <AnalyticsDataGrid
+                  height={Math.min(
+                    360,
+                    Math.max(220, activeRoomSection.strainRows.length * 52 + 56),
+                  )}
+                  hideFooter={activeRoomSection.strainRows.length <= 8}
+                  rows={activeRoomSection.strainRows.map((row) => ({
+                    ...row,
+                    id: row.key,
+                  }))}
+                  columns={strainGridColumns}
+                  onRowClick={(params) => setSelectedStrainKey(String(params.id))}
+                  getRowClassName={(params) =>
+                    params.id === selectedStrainKey ? "analytics-row-selected" : ""
+                  }
+                  gridSx={{
+                    "& .analytics-row-selected": {
+                      bgcolor: "action.selected",
+                    },
+                  }}
+                />
+
+                {selectedStrainRow ? (
+                  <Paper
+                    variant="outlined"
+                    sx={(theme) => ({
+                      p: 2,
+                      borderRadius: 2,
+                      borderColor: alpha(theme.palette.primary.main, 0.35),
+                      bgcolor: alpha(theme.palette.primary.main, 0.04),
+                    })}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.25 }}>
+                      {selectedStrainRow.strainName}
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Plants harvested
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {formatHarvestMetric(selectedStrainRow.plantCount)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Wet avg / plant
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {formatHarvestMetric(selectedStrainRow.wetPlantAvgWeightGrams)} g
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Dry avg / plant
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {formatHarvestMetric(selectedStrainRow.dryPlantAvgWeightGrams)} g
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Wet → dry change
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {formatHarvestPercent(selectedStrainRow.percentChangeWetToDry)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <Divider sx={{ my: 0.5 }} />
+                        <Typography variant="caption" color="text.secondary">
+                          Tote wet weights (g)
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {formatToteWeights(selectedStrainRow.totes)}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    Select a strain row above to view averages and tote breakdown.
+                  </Typography>
+                )}
+              </>
+            ) : null}
+          </Stack>
+        )}
+      </Box>
+    </Paper>
+  ) : (
+    <Alert severity="info" sx={{ borderRadius: 2 }}>
+      Select a harvest from the list to view its report.
+    </Alert>
+  );
+
+  return (
+    <Stack spacing={2} sx={{ height: "100%", minHeight: 480 }}>
+      <Stack spacing={0.5}>
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          Harvest Report
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Browse harvest runs on the left, then review weights by room and strain.
+        </Typography>
+      </Stack>
+
+      <MasterDetailShell
+        height={540}
+        mobileSidebarHeight={300}
+        sidebarHeader={sidebarHeader}
+        sidebar={sidebar}
+        detail={detail}
+      />
+    </Stack>
+  );
+}
+
+export default HarvestReportPage;

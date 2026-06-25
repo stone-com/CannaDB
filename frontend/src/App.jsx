@@ -46,12 +46,17 @@ import DryWeightForm from "./components/DryWeightForm";
 import HarvestReportPage from "./components/HarvestReportPage";
 import StrainDataViewer from "./components/StrainDataViewer";
 import RoomViewerPanel from "./components/RoomViewerPanel";
-import DraggableWindow from "./components/DraggableWindow";
-import PanelView from "./components/PanelView";
+import WorkspacePanel from "./components/WorkspacePanel";
 import Taskbar from "./components/Taskbar";
 import UpcomingHarvestCard from "./components/UpcomingHarvestCard";
 import RoomReportCard from "./components/RoomReportCard";
 import { apiGet } from "./utils/api";
+import {
+  PANEL_KEYS,
+  createInitialWindowLayouts,
+  getPanelTitle,
+  persistWindowLayouts,
+} from "./utils/workspacePanels";
 
 // Layout sizing constants for the app shell.
 const APP_BAR_HEIGHT = 64;
@@ -68,14 +73,6 @@ const DATA_VIEWER_OPTIONS = [
 const HARVEST_OPTIONS = [
   { key: "harvestForm", label: "Add Harvest", icon: AgricultureIcon },
   { key: "dryWeightForm", label: "Add Dry Weights", icon: ScaleIcon },
-];
-
-const PANEL_KEYS = [
-  "strains",
-  "harvestReport",
-  "roomViewer",
-  "harvestForm",
-  "dryWeightForm",
 ];
 
 const DATA_REFRESH_EVENTS = [
@@ -130,6 +127,9 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
 
   // Which full-screen panel is currently visible (when several are maximized).
   const [activeFullscreenKey, setActiveFullscreenKey] = useState(null);
+
+  // Saved size/position for each floating panel (persists across mode switches).
+  const [windowLayouts, setWindowLayouts] = useState(createInitialWindowLayouts);
 
   const [toast, setToast] = useState({
     open: false,
@@ -254,6 +254,15 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
 
     toggleMinimize(key);
   };
+
+  // Update one panel's floating geometry and save it for the session.
+  const updateWindowLayout = useCallback((key, nextLayout) => {
+    setWindowLayouts((prev) => {
+      const updated = { ...prev, [key]: nextLayout };
+      persistWindowLayouts(updated);
+      return updated;
+    });
+  }, []);
 
   // Expand a panel to full screen, or restore it to floating mode.
   const toggleFullscreen = (key) => {
@@ -395,15 +404,6 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
     return !isPanelView;
   };
 
-  const getPanelTitle = (key) => {
-    if (key === "strains") return `Strains (${strains.length})`;
-    if (key === "harvestReport") return "Harvest Report";
-    if (key === "roomViewer") return "Room Viewer";
-    if (key === "harvestForm") return "Add Harvest";
-    if (key === "dryWeightForm") return "Add Dry Weights";
-    return "Panel";
-  };
-
   const renderWorkspacePanel = (key) => {
     if (key === "strains") {
       return (
@@ -480,6 +480,21 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
         ? SIDEBAR_EXPANDED_WIDTH
         : SIDEBAR_COLLAPSED_WIDTH
       : 0;
+
+  // Decide whether a panel is floating, full screen, or hidden (but still mounted).
+  const getPanelDisplayMode = (key) => {
+    if (!selectedViews[key]) return "closed";
+    if (minimizedWindows[key]) return "hidden";
+    if (
+      fullscreenWindows[key] &&
+      activeFullscreenKey === key &&
+      activePage === "dashboard"
+    ) {
+      return "fullscreen";
+    }
+    if (fullscreenWindows[key]) return "hidden";
+    return "floating";
+  };
 
   return (
     <Box sx={{ minHeight: "100vh", pb: 10 }}>
@@ -735,16 +750,6 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
           {/* LinearProgress gives users immediate feedback during API refreshes. */}
           {loadingData && <LinearProgress />}
 
-          {isPanelView && !loadingData && (
-            <PanelView
-              title={getPanelTitle(activeFullscreenKey)}
-              onExitFullscreen={() => toggleFullscreen(activeFullscreenKey)}
-              onClose={() => toggleView(activeFullscreenKey)}
-            >
-              {renderWorkspacePanel(activeFullscreenKey)}
-            </PanelView>
-          )}
-
           {activePage === "dashboard" && !isPanelView && (
             // Dashboard page body: upcoming harvest, KPIs, and workspace intro.
             <Stack spacing={2}>
@@ -816,8 +821,8 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
                     sx={{ maxWidth: 780, opacity: 0.95 }}
                   >
                     Open any panel from the left rail to run analytics, room
-                    analysis, and harvest workflows in parallel draggable
-                    windows.
+                    analysis, and harvest workflows. Drag, resize, or expand
+                    panels to full screen — your layout is remembered.
                   </Typography>
                 </CardContent>
               </Card>
@@ -842,123 +847,29 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
         </Box>
       </Box>
 
-      {!loadingData && activePage === "dashboard" && !isPanelView && (
-        <>
-          {selectedViews.strains && !fullscreenWindows.strains && (
-            // Floating analytics window for strain-level live and historical metrics.
-            <DraggableWindow
-              title={`Strains (${strains.length})`}
-              onClose={() => toggleView("strains")}
-              isMinimized={minimizedWindows.strains}
-              onMinimize={() => toggleMinimize("strains")}
-              onToggleFullscreen={() => toggleFullscreen("strains")}
+      {!loadingData &&
+        activePage === "dashboard" &&
+        PANEL_KEYS.map((key) => {
+          const displayMode = getPanelDisplayMode(key);
+          if (displayMode === "closed") return null;
+
+          return (
+            <WorkspacePanel
+              key={key}
+              title={getPanelTitle(key, { strains: strains.length })}
+              displayMode={displayMode}
+              layout={windowLayouts[key]}
+              onLayoutChange={(nextLayout) => updateWindowLayout(key, nextLayout)}
               leftBound={dashboardSidebarWidth}
-              defaultX={480}
-              defaultY={80}
-              defaultW={1000}
-              defaultH={520}
+              isFullscreen={fullscreenWindows[key]}
+              onClose={() => toggleView(key)}
+              onMinimize={() => toggleMinimize(key)}
+              onToggleFullscreen={() => toggleFullscreen(key)}
             >
-              <StrainDataViewer
-                strains={strains}
-                roomAssignments={roomAssignments}
-                harvests={harvests}
-              />
-            </DraggableWindow>
-          )}
-          {selectedViews.harvestReport && !fullscreenWindows.harvestReport && (
-            // Floating report window for room/strain harvest breakdowns.
-            <DraggableWindow
-              title="Harvest Report"
-              onClose={() => toggleView("harvestReport")}
-              isMinimized={minimizedWindows.harvestReport}
-              onMinimize={() => toggleMinimize("harvestReport")}
-              onToggleFullscreen={() => toggleFullscreen("harvestReport")}
-              leftBound={dashboardSidebarWidth}
-              defaultX={630}
-              defaultY={230}
-              defaultW={800}
-              defaultH={520}
-            >
-              <HarvestReportPage harvests={harvests} />
-            </DraggableWindow>
-          )}
-          {selectedViews.roomViewer && !fullscreenWindows.roomViewer && (
-            // Floating room-focused window for assignments and composition charts.
-            <DraggableWindow
-              title="Room Viewer"
-              onClose={() => toggleView("roomViewer")}
-              isMinimized={minimizedWindows.roomViewer}
-              onMinimize={() => toggleMinimize("roomViewer")}
-              onToggleFullscreen={() => toggleFullscreen("roomViewer")}
-              leftBound={dashboardSidebarWidth}
-              defaultX={480}
-              defaultY={200}
-              defaultW={980}
-              defaultH={620}
-            >
-              <RoomViewerPanel
-                rooms={rooms}
-                roomAssignments={roomAssignments}
-              />
-            </DraggableWindow>
-          )}
-          {selectedViews.harvestForm && !fullscreenWindows.harvestForm && (
-            // Floating workflow window for entering wet harvest tote data.
-            <DraggableWindow
-              title="Add Harvest"
-              onClose={() => toggleView("harvestForm")}
-              isMinimized={minimizedWindows.harvestForm}
-              onMinimize={() => toggleMinimize("harvestForm")}
-              onToggleFullscreen={() => toggleFullscreen("harvestForm")}
-              leftBound={dashboardSidebarWidth}
-              defaultX={240}
-              defaultY={100}
-              defaultW={760}
-              defaultH={500}
-            >
-              <HarvestForm
-                onComplete={async () => {
-                  await fetchAllData();
-                  toggleView("harvestForm");
-                  setToast({
-                    open: true,
-                    message: "Harvest created successfully.",
-                    severity: "success",
-                  });
-                }}
-              />
-            </DraggableWindow>
-          )}
-          {selectedViews.dryWeightForm && !fullscreenWindows.dryWeightForm && (
-            // Floating workflow window for entering/finalizing dry weights.
-            <DraggableWindow
-              title="Add Dry Weights"
-              onClose={() => toggleView("dryWeightForm")}
-              isMinimized={minimizedWindows.dryWeightForm}
-              onMinimize={() => toggleMinimize("dryWeightForm")}
-              onToggleFullscreen={() => toggleFullscreen("dryWeightForm")}
-              leftBound={dashboardSidebarWidth}
-              defaultX={240}
-              defaultY={140}
-              defaultW={860}
-              defaultH={520}
-            >
-              <DryWeightForm
-                harvests={harvests}
-                onComplete={async () => {
-                  await fetchAllData();
-                  toggleView("dryWeightForm");
-                  setToast({
-                    open: true,
-                    message: "Dry weights saved successfully.",
-                    severity: "success",
-                  });
-                }}
-              />
-            </DraggableWindow>
-          )}
-        </>
-      )}
+              {renderWorkspacePanel(key)}
+            </WorkspacePanel>
+          );
+        })}
 
       <Taskbar
         activePage={activePage}

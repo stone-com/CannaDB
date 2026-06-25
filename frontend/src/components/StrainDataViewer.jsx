@@ -1,43 +1,56 @@
-// StrainDataViewer — searchable table of all strains with plant counts, harvest dates, and yield history.
-import { Fragment, useMemo, useState } from "react";
+/**
+ * StrainDataViewer — browse strains, placements, harvest dates, and expected yield.
+ * Layout: searchable list on the left, detail panel on the right.
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Box,
   Chip,
+  Divider,
+  Grid,
   InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SearchIcon from "@mui/icons-material/Search";
-import { DataGrid } from "@mui/x-data-grid";
+import SpaIcon from "@mui/icons-material/Spa";
+import StatCard from "./ui/StatCard";
+import MasterDetailShell from "./ui/MasterDetailShell";
+import AnalyticsDataGrid from "./ui/AnalyticsDataGrid";
 import { formatDate } from "../utils/formatDate";
+import {
+  formatAvgGrams,
+  formatGrams,
+  getExpectedYieldGrams,
+  getNextHarvestExpectedYieldGrams,
+  resolveAvgDryPerPlant,
+} from "../utils/strainViewerHelpers";
 
-// Main component: builds strain summary rows from assignments and harvest records.
 function StrainDataViewer({ strains, roomAssignments, harvests }) {
-  // Only one strain details panel can be open at a time.
-  const [expandedStrainId, setExpandedStrainId] = useState(null);
+  const [selectedStrainId, setSelectedStrainId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Build one summary row per strain.
-  const strainRows = useMemo(() => {
+  const strainSummaries = useMemo(() => {
     if (!Array.isArray(strains)) return [];
 
-    // Map by strain ID so we can accumulate assignment + harvest metrics efficiently.
+    const strainById = new Map(strains.map((strain) => [String(strain._id), strain]));
     const rowMap = new Map();
 
     strains.forEach((strain) => {
-      rowMap.set(strain._id, {
-        strainId: strain._id,
-        name: strain.name || "N/A",
-        type: strain.type || "N/A",
-        status: strain.status || "N/A",
+      rowMap.set(String(strain._id), {
+        strainId: String(strain._id),
+        strain: strainById.get(String(strain._id)),
+        name: strain.name || "Unknown",
+        type: strain.type || "—",
+        status: strain.status || "—",
         totalPlants: 0,
         totalWetWeightGrams: 0,
         totalDryWeightGrams: 0,
@@ -48,12 +61,11 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
     });
 
     if (Array.isArray(roomAssignments)) {
-      // Aggregate current room assignment plant counts into each strain row.
       roomAssignments.forEach((assignment) => {
+        if (assignment?.active === false) return;
+
         const room = assignment?.roomId;
         const batch = assignment?.batchId;
-        const roomName = room?.name || "N/A";
-        const locationName = room?.locationId?.nickname || "N/A";
         const assignedPlants = Array.isArray(assignment?.assignedPlants)
           ? assignment.assignedPlants
           : [];
@@ -68,27 +80,29 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
 
           const row = rowMap.get(strainId);
           const plantCount = Number(plantEntry?.count) || 0;
+          const batchType = batch?.batchType || "production";
 
           row.totalPlants += plantCount;
           row.plantsByRoom.push({
-            roomName,
-            locationName,
+            roomName: room?.name || "—",
+            locationName: room?.locationId?.nickname || "—",
             plantCount,
-            batchNumber: batch?.batchNumber || "N/A",
-            batchType: batch?.batchType || "production",
+            batchNumber: batch?.batchNumber || "—",
+            batchType,
             batchHarvestDate: batch?.harvestDate || null,
+            lifecycleStage: batch?.lifecycleStage || "—",
           });
 
           const harvestDateValue = batch?.harvestDate
             ? new Date(batch.harvestDate)
             : null;
+
           if (harvestDateValue && !Number.isNaN(harvestDateValue.getTime())) {
             const now = new Date();
             if (harvestDateValue >= now) {
               const currentNext = row.nextHarvestDate
                 ? new Date(row.nextHarvestDate)
                 : null;
-
               if (!currentNext || harvestDateValue < currentNext) {
                 row.nextHarvestDate = harvestDateValue.toISOString();
               }
@@ -99,7 +113,6 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
     }
 
     if (Array.isArray(harvests)) {
-      // Aggregate historical wet/dry metrics from completed harvest data.
       harvests.forEach((harvest) => {
         const rooms = Array.isArray(harvest?.rooms) ? harvest.rooms : [];
 
@@ -125,44 +138,55 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
       });
     }
 
-    // Add calculated display fields and sort.
     return Array.from(rowMap.values())
-      .map((row) => ({
-        ...row,
-        avgDryWeightPerPlant:
-          row.totalHarvestPlantCount > 0
-            ? (row.totalDryWeightGrams / row.totalHarvestPlantCount).toFixed(2)
-            : "N/A",
-        wetToDryPercentChange:
-          row.totalWetWeightGrams > 0
-            ? (
-                ((row.totalWetWeightGrams - row.totalDryWeightGrams) /
-                  row.totalWetWeightGrams) *
-                100
-              ).toFixed(2)
-            : "N/A",
-        nextHarvest: row.nextHarvestDate
-          ? formatDate(row.nextHarvestDate)
-          : "N/A",
-      }))
+      .map((row) => {
+        const avgDryPerPlant = resolveAvgDryPerPlant(row.strain, {
+          totalDryWeightGrams: row.totalDryWeightGrams,
+          totalHarvestPlantCount: row.totalHarvestPlantCount,
+        });
+
+        const placements = row.plantsByRoom
+          .map((placement) => ({
+            ...placement,
+            expectedYieldGrams: getExpectedYieldGrams({
+              plantCount: placement.plantCount,
+              avgDryPerPlant,
+              batchType: placement.batchType,
+            }),
+          }))
+          .sort(
+            (a, b) =>
+              (a.locationName || "").localeCompare(b.locationName || "") ||
+              (a.roomName || "").localeCompare(b.roomName || ""),
+          );
+
+        const expectedYieldTotal = getNextHarvestExpectedYieldGrams(
+          placements,
+          row.nextHarvestDate,
+        );
+
+        return {
+          ...row,
+          avgDryPerPlant,
+          expectedYieldTotal,
+          plantsByRoom: placements,
+          nextHarvestLabel: row.nextHarvestDate
+            ? formatDate(row.nextHarvestDate)
+            : "—",
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [strains, roomAssignments, harvests]);
 
-  // Open or close the detail accordion when a table row is clicked.
-  const toggleExpandedRow = (strainId) => {
-    setExpandedStrainId((prev) => (prev === strainId ? null : strainId));
-  };
-
-  // Filter by high-signal fields plus room/batch text.
-  const filteredRows = useMemo(() => {
-    // Return all rows when search box is empty.
+  const filteredSummaries = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return strainRows;
+    if (!query) return strainSummaries;
 
-    return strainRows.filter((row) => {
-      const roomSearchText = row.plantsByRoom
+    return strainSummaries.filter((row) => {
+      const placementText = row.plantsByRoom
         .map(
-          (item) => `${item.roomName} ${item.locationName} ${item.batchNumber}`,
+          (item) =>
+            `${item.roomName} ${item.locationName} ${item.batchNumber} ${item.lifecycleStage}`,
         )
         .join(" ")
         .toLowerCase();
@@ -171,257 +195,292 @@ function StrainDataViewer({ strains, roomAssignments, harvests }) {
         row.name.toLowerCase().includes(query) ||
         row.type.toLowerCase().includes(query) ||
         row.status.toLowerCase().includes(query) ||
-        row.nextHarvest.toLowerCase().includes(query) ||
-        roomSearchText.includes(query)
+        row.nextHarvestLabel.toLowerCase().includes(query) ||
+        placementText.includes(query)
       );
     });
-  }, [strainRows, searchQuery]);
+  }, [strainSummaries, searchQuery]);
 
-  if (strainRows.length === 0) {
-    // Early return keeps JSX simple when no source data exists.
+  // Default to the first strain so the detail panel is never empty on open.
+  useEffect(() => {
+    if (selectedStrainId) return;
+    if (filteredSummaries[0]) {
+      setSelectedStrainId(filteredSummaries[0].strainId);
+    }
+  }, [filteredSummaries, selectedStrainId]);
+
+  useEffect(() => {
+    if (!selectedStrainId) return;
+    const stillVisible = filteredSummaries.some(
+      (row) => row.strainId === selectedStrainId,
+    );
+    if (!stillVisible && filteredSummaries[0]) {
+      setSelectedStrainId(filteredSummaries[0].strainId);
+    }
+  }, [filteredSummaries, selectedStrainId]);
+
+  const selectedStrain = useMemo(() => {
+    if (!selectedStrainId) return filteredSummaries[0] || null;
+    return (
+      filteredSummaries.find((row) => row.strainId === selectedStrainId) ||
+      strainSummaries.find((row) => row.strainId === selectedStrainId) ||
+      null
+    );
+  }, [filteredSummaries, selectedStrainId, strainSummaries]);
+
+  if (strainSummaries.length === 0) {
     return <Alert severity="info">No strains yet.</Alert>;
   }
 
-  const columns = [
-    // Column config for MUI DataGrid table.
-    {
-      field: "name",
-      headerName: "Strain",
-      flex: 1.1,
-      minWidth: 160,
-    },
-    {
-      field: "type",
-      headerName: "Type",
-      flex: 0.8,
-      minWidth: 120,
-      renderCell: ({ value }) => (
-        // Show strain type as a small outlined chip in the table cell.
-        <Chip size="small" label={value} variant="outlined" />
-      ),
-    },
-    {
-      field: "status",
-      headerName: "Status",
-      flex: 0.9,
-      minWidth: 130,
-    },
-    {
-      field: "totalPlants",
-      headerName: "Plants",
-      type: "number",
-      minWidth: 100,
-      flex: 0.7,
-    },
-    {
-      field: "nextHarvest",
-      headerName: "Next Harvest",
-      minWidth: 140,
-      flex: 1,
-    },
-  ];
+  const sidebarHeader = (
+    <Box sx={{ p: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+      <TextField
+        size="small"
+        fullWidth
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        placeholder="Search strains, rooms, batches…"
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          ),
+        }}
+      />
 
-  return (
-    <Stack spacing={2.25} sx={{ width: "100%" }}>
-      {/* Top control card: title + search + result count. */}
-      <Paper
-        elevation={0}
-        sx={(theme) => ({
-          p: { xs: 2, md: 2.5 },
-          borderRadius: 2.5,
-          border: "1px solid",
-          borderColor: "divider",
-          background:
-            theme.palette.mode === "dark"
-              ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
-              : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
-          backdropFilter: "blur(8px)",
-        })}
-      >
-        <Stack spacing={1.25}>
-          <Stack spacing={0.5}>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Strain Viewer
-            </Typography>
-            <Typography color="text.secondary" variant="body2">
-              Live plants, upcoming harvest visibility, and historical yield
-              context.
-            </Typography>
-          </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+        {filteredSummaries.length} of {strainSummaries.length} strains
+      </Typography>
+    </Box>
+  );
 
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1}
-            justifyContent="space-between"
-            alignItems={{ xs: "stretch", sm: "center" }}
-          >
-            <TextField
-              size="small"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search strains, type, status, room, location, or batch"
-              sx={{ minWidth: { xs: "100%", sm: 360 } }}
-              InputProps={{
-                // Search icon rendered inside the input for context.
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
+  const sidebar = (
+    <List dense disablePadding>
+      {filteredSummaries.length === 0 ? (
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            No strains match your search.
+          </Typography>
+        </Box>
+      ) : (
+        filteredSummaries.map((row) => {
+          const isSelected = selectedStrain?.strainId === row.strainId;
 
-            <Typography variant="body2" color="text.secondary">
-              {/* Live count updates as searchQuery filters the rows. */}
-              Showing {filteredRows.length} of {strainRows.length}
-            </Typography>
-          </Stack>
-        </Stack>
-      </Paper>
-
-      {/* Strain summary table — click a row to expand details below. */}
-      <Box sx={{ height: 380, width: "100%" }}>
-        <DataGrid
-          // DataGrid gives sorting/pagination behavior without custom table plumbing.
-          rows={filteredRows.map((row) => ({ ...row, id: row.strainId }))}
-          columns={columns}
-          disableRowSelectionOnClick
-          pageSizeOptions={[5, 10, 25]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
-          }}
-          onRowClick={(params) => toggleExpandedRow(params.id)}
-          sx={(theme) => ({
-            borderRadius: 1.75,
-            borderColor: "divider",
-            backgroundColor: alpha(theme.palette.background.paper, 0.9),
-            "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: alpha(theme.palette.primary.main, 0.14),
-              fontWeight: 700,
-            },
-          })}
-        />
-      </Box>
-
-      {/* Expanded detail accordions — one appears below the table for the clicked strain. */}
-      {filteredRows.map((row) => (
-        <Fragment key={row.strainId}>
-          {expandedStrainId === row.strainId && (
-            <Accordion
-              defaultExpanded
-              elevation={0}
-              sx={(theme) => ({
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: "12px !important",
-                overflow: "hidden",
-                backgroundColor: alpha(theme.palette.background.paper, 0.95),
-                "&::before": { display: "none" },
-              })}
+          return (
+            <ListItemButton
+              key={row.strainId}
+              selected={isSelected}
+              onClick={() => setSelectedStrainId(row.strainId)}
+              sx={{ alignItems: "flex-start", py: 1.25 }}
             >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
+              <ListItemText
+                primary={
+                  <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                    {row.name}
+                  </Typography>
+                }
+                secondary={
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                    <Chip size="small" label={`${row.totalPlants} plants`} />
+                    {row.nextHarvestLabel !== "—" ? (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Harvest ${row.nextHarvestLabel}`}
+                      />
+                    ) : null}
+                  </Stack>
+                }
+              />
+            </ListItemButton>
+          );
+        })
+      )}
+    </List>
+  );
+
+  const detail = selectedStrain ? (
+    <Paper
+      variant="outlined"
+      sx={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 2,
+        overflow: "hidden",
+        minHeight: { xs: 420, md: 0 },
+      }}
+    >
+              <Box
                 sx={(theme) => ({
-                  background: `linear-gradient(90deg, ${alpha(theme.palette.success.main, 0.08)}, ${alpha(theme.palette.success.main, 0.02)})`,
+                  p: 2,
                   borderBottom: "1px solid",
                   borderColor: "divider",
+                  background: `linear-gradient(120deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.background.paper, 0.95)})`,
                 })}
               >
-                <Typography sx={{ fontWeight: 700 }}>
-                  {row.name} Details
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Stack spacing={1} sx={{ mb: 2 }}>
-                  <Typography variant="body2">
-                    Historical average dry weight per plant:{" "}
-                    <strong>{row.avgDryWeightPerPlant}</strong>
-                    {row.avgDryWeightPerPlant !== "N/A" ? " g" : ""}
-                  </Typography>
-                  <Typography variant="body2">
-                    Historical wet-to-dry change:{" "}
-                    <strong>
-                      {row.wetToDryPercentChange === "N/A"
-                        ? "N/A"
-                        : `${row.wetToDryPercentChange}%`}
-                    </strong>
-                  </Typography>
-                </Stack>
-
-                {row.plantsByRoom.length === 0 ? (
-                  <Typography color="text.secondary">
-                    No plant/room data available yet.
-                  </Typography>
-                ) : (
-                  <>
-                    {/* Room/batch breakdown table for this strain. */}
-                    <Box sx={{ height: 300 }}>
-                    <DataGrid
-                      rows={row.plantsByRoom.map((item, index) => ({
-                        // Row IDs combine strain + index so DataGrid keys stay stable.
-                        ...item,
-                        id: `${row.strainId}-${index}`,
-                        batchHarvestDate: formatDate(item.batchHarvestDate),
-                      }))}
-                      columns={[
-                        {
-                          field: "roomName",
-                          headerName: "Room",
-                          flex: 1,
-                          minWidth: 120,
-                        },
-                        {
-                          field: "locationName",
-                          headerName: "Location",
-                          flex: 1,
-                          minWidth: 120,
-                        },
-                        {
-                          field: "batchNumber",
-                          headerName: "Batch",
-                          flex: 1,
-                          minWidth: 120,
-                        },
-                        {
-                          field: "plantCount",
-                          headerName: "Plant Count",
-                          type: "number",
-                          flex: 1,
-                          minWidth: 120,
-                        },
-                        {
-                          field: "batchHarvestDate",
-                          headerName: "Batch Harvest Date",
-                          flex: 1.2,
-                          minWidth: 160,
-                        },
-                      ]}
-                      hideFooter
-                      disableRowSelectionOnClick
-                      sx={(theme) => ({
-                        borderRadius: 1.5,
-                        borderColor: "divider",
-                        backgroundColor: alpha(
-                          theme.palette.background.paper,
-                          0.86,
-                        ),
-                        "& .MuiDataGrid-columnHeaders": {
-                          backgroundColor: alpha(
-                            theme.palette.primary.main,
-                            0.14,
-                          ),
-                          fontWeight: 700,
-                        },
-                      })}
-                    />
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Box
+                    sx={(theme) => ({
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: alpha(theme.palette.primary.main, 0.14),
+                      color: "primary.main",
+                    })}
+                  >
+                    <SpaIcon fontSize="small" />
                   </Box>
-                  </>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                      {selectedStrain.name}
+                    </Typography>
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                      <Chip size="small" label={selectedStrain.type} variant="outlined" />
+                      <Chip size="small" label={selectedStrain.status} variant="outlined" />
+                    </Stack>
+                  </Box>
+                </Stack>
+              </Box>
+
+              <Box sx={{ p: 2, overflow: "auto", flex: 1, minHeight: 0 }}>
+                <Grid container spacing={1.5} sx={{ mb: 2 }}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <StatCard label="Live plants" value={selectedStrain.totalPlants} />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <StatCard
+                      label="Next harvest"
+                      value={selectedStrain.nextHarvestLabel}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <StatCard
+                      label="Avg dry / plant"
+                      value={formatAvgGrams(selectedStrain.avgDryPerPlant)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <StatCard
+                      label="Next harvest yield"
+                      value={formatGrams(selectedStrain.expectedYieldTotal)}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Divider sx={{ mb: 2 }} />
+
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                  Current room placements
+                </Typography>
+
+                {selectedStrain.plantsByRoom.length === 0 ? (
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    This strain is not assigned to any active room yet.
+                  </Alert>
+                ) : (
+                  <AnalyticsDataGrid
+                    height={Math.min(
+                      420,
+                      Math.max(240, selectedStrain.plantsByRoom.length * 52 + 56),
+                    )}
+                    hideFooter={selectedStrain.plantsByRoom.length <= 8}
+                    initialPageSize={10}
+                    rows={selectedStrain.plantsByRoom.map((placement, index) => ({
+                      id: `${selectedStrain.strainId}-${index}`,
+                      locationName: placement.locationName,
+                      roomName: placement.roomName,
+                      batchNumber: placement.batchNumber,
+                      lifecycleStage: placement.lifecycleStage,
+                      plantCount: placement.plantCount,
+                      harvestDate: formatDate(placement.batchHarvestDate) || "—",
+                      expectedYield:
+                        placement.batchType === "mom"
+                          ? "—"
+                          : formatGrams(placement.expectedYieldGrams),
+                    }))}
+                    columns={[
+                      {
+                        field: "locationName",
+                        headerName: "Location",
+                        flex: 1,
+                        minWidth: 120,
+                      },
+                      { field: "roomName", headerName: "Room", flex: 0.9, minWidth: 100 },
+                      {
+                        field: "batchNumber",
+                        headerName: "Batch",
+                        flex: 0.8,
+                        minWidth: 90,
+                      },
+                      {
+                        field: "lifecycleStage",
+                        headerName: "Stage",
+                        flex: 0.8,
+                        minWidth: 100,
+                      },
+                      {
+                        field: "plantCount",
+                        headerName: "Plants",
+                        type: "number",
+                        flex: 0.7,
+                        minWidth: 80,
+                      },
+                      {
+                        field: "harvestDate",
+                        headerName: "Harvest",
+                        flex: 0.9,
+                        minWidth: 100,
+                      },
+                      {
+                        field: "expectedYield",
+                        headerName: "Est. dry yield",
+                        flex: 1,
+                        minWidth: 120,
+                      },
+                    ]}
+                  />
                 )}
-              </AccordionDetails>
-            </Accordion>
-          )}
-        </Fragment>
-      ))}
+
+                {selectedStrain.totalHarvestPlantCount > 0 ? (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Historical harvests:{" "}
+                      {formatGrams(selectedStrain.totalDryWeightGrams)} dry from{" "}
+                      {selectedStrain.totalHarvestPlantCount.toLocaleString()} plants
+                    </Typography>
+                  </>
+                ) : null}
+              </Box>
+    </Paper>
+  ) : (
+    <Alert severity="info" sx={{ borderRadius: 2 }}>
+      Select a strain from the list to view details.
+    </Alert>
+  );
+
+  return (
+    <Stack spacing={2} sx={{ height: "100%", minHeight: 480 }}>
+      <Stack spacing={0.5}>
+        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          Strain Inventory
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Browse strains on the left, then review placements and projected yield on the right.
+        </Typography>
+      </Stack>
+
+      <MasterDetailShell
+        height={540}
+        mobileSidebarHeight={300}
+        sidebarHeader={sidebarHeader}
+        sidebar={sidebar}
+        detail={detail}
+      />
     </Stack>
   );
 }

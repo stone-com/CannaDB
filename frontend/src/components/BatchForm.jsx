@@ -1,9 +1,11 @@
+/**
+ * BatchForm — create a new batch with dates, location, and strain plant counts.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
-  Card,
-  CardContent,
   Divider,
   MenuItem,
   Stack,
@@ -11,11 +13,13 @@ import {
   Typography,
 } from "@mui/material";
 import { apiGet, apiPost } from "../utils/api";
+import FormSection from "./ui/FormSection";
+import FormSubmitBar from "./ui/FormSubmitBar";
+import ListRow from "./ui/ListRow";
+import RemoveButton from "./ui/RemoveButton";
 
-// This form lets users create a new plant batch with dates, location, and strain counts.
-// It saves the batch to the server and shows success or error messages.
 function BatchForm() {
-  // Controlled input states mirror each visible form field.
+  // --- Form field state (each input is controlled by React) ---
   const [selectedStrain, setSelectedStrain] = useState("");
   const [batchNumber, setBatchNumber] = useState("");
   const [harvestDate, setHarvestDate] = useState("");
@@ -26,10 +30,10 @@ function BatchForm() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("");
-  const [locations, setLocations] = useState([]); 
-  // Load strain and location dropdown options when the form first appears.
+  const [locations, setLocations] = useState([]);
+
+  // Load dropdown options when the form first mounts.
   useEffect(() => {
-    // Fetches all strains from the server for the strain dropdown.
     async function fetchStrains() {
       try {
         const data = await apiGet("/api/strains");
@@ -43,7 +47,7 @@ function BatchForm() {
         console.error("Error fetching strains:", error);
       }
     }
-    // Fetches all locations from the server for the location dropdown.
+
     async function fetchLocations() {
       try {
         const data = await apiGet("/api/locations");
@@ -52,21 +56,20 @@ function BatchForm() {
         console.error("Error fetching locations:", error);
       }
     }
+
     fetchStrains();
     fetchLocations();
   }, []);
 
   const totalPlants = useMemo(
-    // Keep a live total so users can verify plant counts before submit.
     () => plants.reduce((sum, plant) => sum + plant.count, 0),
     [plants],
   );
 
-  // Simple form readiness check for required fields.
   const canSubmit =
     batchNumber.trim() && cloneDate && selectedLocation && plants.length > 0;
 
-  // Add a strain/count row, merging duplicates into a single running total.
+  // Add one strain row; duplicate strains merge into one total count.
   function addPlant() {
     const numericCount = Number(count);
     if (!selectedStrain || Number.isNaN(numericCount) || numericCount <= 0) {
@@ -97,7 +100,6 @@ function BatchForm() {
     setCount("");
   }
 
-  // Persist the batch and reset the form on success.
   async function handleSubmit(e) {
     e.preventDefault();
     if (!canSubmit) {
@@ -115,19 +117,17 @@ function BatchForm() {
       harvestDate: harvestDate || null,
       cloneDate,
       plants,
-      location: selectedLocation
+      location: selectedLocation,
     };
 
     try {
       setIsSubmitting(true);
       const savedBatch = await apiPost("/api/batches", payload);
-      // Event allows other screens to refresh without tight component coupling.
       window.dispatchEvent(
         new CustomEvent("batch:created", { detail: savedBatch }),
       );
 
       setMessage("Batch submitted successfully!");
-
       setBatchNumber("");
       setHarvestDate("");
       setCloneDate("");
@@ -144,159 +144,139 @@ function BatchForm() {
   }
 
   return (
-    <Stack component="form" spacing={2} onSubmit={handleSubmit}>
-      {/* Page title */}
+    <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
       <Typography variant="h6">Create New Batch</Typography>
-      {/* Batch details: number, dates, and location */}
-      <Card variant="outlined">
-        <CardContent>
-          <Stack spacing={2}>
-            <TextField
-              label="Batch Number"
-              value={batchNumber}
-              onChange={(e) => setBatchNumber(e.target.value)}
-              required
-            />
 
-            <TextField
-              type="date"
-              label="Clone Date"
-              value={cloneDate}
-              onChange={(e) => setCloneDate(e.target.value)}
-              slotProps={{
-                // Date inputs need shrink so the label does not overlap selected values.
-                inputLabel: { shrink: true },
-                htmlInput: { placeholder: "" },
-              }}
-              required
-            />
-
-            <TextField
-              type="date"
-              label="Harvest Date"
-              value={harvestDate}
-              onChange={(e) => setHarvestDate(e.target.value)}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { placeholder: "" },
-              }}
-            />
-            <TextField
-            select
-            label="Location"
-            value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
-            required
-            >
-            <MenuItem value="">Select a location</MenuItem>
-            {locations.map((location) => (
-              <MenuItem key={location._id} value={location._id}>
-                {location.nickname}
-              </MenuItem>
-            ))}
-            </TextField>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Add plants by strain and review the running list */}
-      <Card variant="outlined">
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography variant="subtitle1">Add Plants</Typography>
-
-            <TextField
-              select
-              label="Strain"
-              value={selectedStrain}
-              onChange={(e) => setSelectedStrain(e.target.value)}
-            >
-              <MenuItem value="">Select a strain</MenuItem>
-              {strains.map((strain) => (
-                <MenuItem key={strain._id} value={strain._id}>
-                  {strain.name}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              type="number"
-              label="Plant Count"
-              value={count}
-              onChange={(e) => setCount(e.target.value)}
-              inputProps={{ min: 1 }}
-            />
-
-            <Button type="button" variant="outlined" onClick={addPlant}>
-              Add to Batch
-            </Button>
-
-            <Divider />
-
-            <Typography variant="subtitle2">Plants in Batch</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Total plants: {totalPlants}
-            </Typography>
-
-            {plants.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No strains added yet.
-              </Typography>
-            ) : (
-              plants.map((plant, index) => {
-                // Render one summary row for each strain currently added to the batch.
-                const strain = strains.find((s) => s._id === plant.strainId);
-                return (
-                  <Stack
-                    key={`${plant.strainId}-${index}`}
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    sx={{
-                      border: "1px solid",
-                      borderColor: "divider",
-                      p: 1.25,
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {strain ? strain.name : "Unknown Strain"}: {plant.count}
-                    </Typography>
-                    <Button
-                      type="button"
-                      color="error"
-                      size="small"
-                      // Remove this one row from the local plants list.
-                      onClick={() => {
-                        setPlants((prev) =>
-                          prev.filter((_, plantIndex) => plantIndex !== index),
-                        );
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </Stack>
-                );
-              })
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Submit button and success/error feedback */}
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={!canSubmit || isSubmitting}
+      {/* Section 1: batch identity and schedule */}
+      <FormSection
+        title="Batch Details"
+        subtitle="New batches start in the Clone room at the selected location."
       >
-        {isSubmitting ? "Saving..." : "Submit Batch"}
-      </Button>
+        <TextField
+          label="Batch Number"
+          value={batchNumber}
+          onChange={(e) => setBatchNumber(e.target.value)}
+          required
+        />
 
-      {message && (
+        <TextField
+          type="date"
+          label="Clone Date"
+          value={cloneDate}
+          onChange={(e) => setCloneDate(e.target.value)}
+          slotProps={{
+            inputLabel: { shrink: true },
+            htmlInput: { placeholder: "" },
+          }}
+          required
+        />
+
+        <TextField
+          type="date"
+          label="Harvest Date"
+          value={harvestDate}
+          onChange={(e) => setHarvestDate(e.target.value)}
+          slotProps={{
+            inputLabel: { shrink: true },
+            htmlInput: { placeholder: "" },
+          }}
+        />
+
+        <TextField
+          select
+          label="Location"
+          value={selectedLocation}
+          onChange={(e) => setSelectedLocation(e.target.value)}
+          required
+        >
+          <MenuItem value="">Select a location</MenuItem>
+          {locations.map((location) => (
+            <MenuItem key={location._id} value={location._id}>
+              {location.nickname}
+            </MenuItem>
+          ))}
+        </TextField>
+      </FormSection>
+
+      {/* Section 2: build the plant list strain by strain */}
+      <FormSection
+        title="Plants in Batch"
+        subtitle="Add each strain and count before submitting."
+      >
+        <TextField
+          select
+          label="Strain"
+          value={selectedStrain}
+          onChange={(e) => setSelectedStrain(e.target.value)}
+        >
+          <MenuItem value="">Select a strain</MenuItem>
+          {strains.map((strain) => (
+            <MenuItem key={strain._id} value={strain._id}>
+              {strain.name}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <TextField
+          type="number"
+          label="Plant Count"
+          value={count}
+          onChange={(e) => setCount(e.target.value)}
+          inputProps={{ min: 1 }}
+        />
+
+        <Button type="button" variant="outlined" onClick={addPlant}>
+          Add to Batch
+        </Button>
+
+        <Divider />
+
+        <Typography variant="body2" color="text.secondary">
+          Total plants: <strong>{totalPlants}</strong>
+        </Typography>
+
+        {plants.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No strains added yet.
+          </Typography>
+        ) : (
+          <Stack spacing={1}>
+            {plants.map((plant, index) => {
+              const strain = strains.find((s) => s._id === plant.strainId);
+              return (
+                <ListRow
+                  key={`${plant.strainId}-${index}`}
+                  label={
+                    <Typography variant="body2">
+                      {strain ? strain.name : "Unknown Strain"} —{" "}
+                      <strong>{plant.count}</strong> plants
+                    </Typography>
+                  }
+                >
+                  <RemoveButton
+                    label="Remove strain from batch"
+                    onClick={() => {
+                      setPlants((prev) =>
+                        prev.filter((_, plantIndex) => plantIndex !== index),
+                      );
+                    }}
+                  />
+                </ListRow>
+              );
+            })}
+          </Stack>
+        )}
+      </FormSection>
+
+      <FormSubmitBar disabled={!canSubmit || isSubmitting}>
+        {isSubmitting ? "Saving..." : "Submit Batch"}
+      </FormSubmitBar>
+
+      {message ? (
         <Alert severity={message.startsWith("Error:") ? "error" : "success"}>
           {message}
         </Alert>
-      )}
+      ) : null}
     </Stack>
   );
 }
