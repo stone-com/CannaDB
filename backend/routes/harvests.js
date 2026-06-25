@@ -82,7 +82,7 @@ router.post("/", async (req, res) => {
           const roomQuery = Room.find({
             tenantId: req.tenantId,
             _id: { $in: uniqueRoomIds },
-          }).select("_id locationId");
+          }).select("_id locationId type");
 
           if (session) roomQuery.session(session);
           const roomDocs = await roomQuery;
@@ -91,6 +91,20 @@ router.post("/", async (req, res) => {
             return {
               status: 400,
               body: { error: "One or more selected rooms are invalid" },
+            };
+          }
+
+          const nonDryingRoom = roomDocs.find(
+            (roomDoc) => roomDoc.type !== "Drying",
+          );
+
+          if (nonDryingRoom) {
+            return {
+              status: 400,
+              body: {
+                error:
+                  "Harvest intake must assign strains to Drying rooms only",
+              },
             };
           }
 
@@ -125,6 +139,14 @@ router.post("/", async (req, res) => {
               };
             }
           }
+        } else {
+          return {
+            status: 400,
+            body: {
+              error:
+                "At least one dry room assignment is required for harvest intake",
+            },
+          };
         }
 
         const harvest = new Harvest({
@@ -179,6 +201,35 @@ router.post("/", async (req, res) => {
           { $set: { active: false, endedAt: new Date() } },
           session ? { session } : undefined,
         );
+
+        const assignmentNow = new Date();
+        const dryAssignments = normalizedRooms
+          .filter((entry) => entry?.roomId)
+          .map((entry) => ({
+            tenantId: req.tenantId,
+            batchId,
+            roomId: entry.roomId,
+            assignedPlants: (Array.isArray(entry.strains) ? entry.strains : [])
+              .filter((strain) => strain?.strainId)
+              .map((strain) => ({
+                strainId: strain.strainId,
+                count: Number(strain.plantCount) || 0,
+              }))
+              .filter((plant) => plant.count > 0),
+            active: true,
+            source: "manual",
+            startedAt: assignmentNow,
+            endedAt: null,
+            notes: "Assigned on harvest intake",
+          }))
+          .filter((entry) => entry.assignedPlants.length > 0);
+
+        if (dryAssignments.length > 0) {
+          await RoomAssignment.insertMany(
+            dryAssignments,
+            session ? { session } : undefined,
+          );
+        }
 
         return { status: 201, harvestId: savedHarvest._id };
       },
@@ -329,6 +380,12 @@ router.patch("/:id", async (req, res) => {
               lifecycleStage: "Completed",
               stageStartedAt: new Date(),
             },
+            session ? { session } : undefined,
+          );
+
+          await RoomAssignment.updateMany(
+            { tenantId: req.tenantId, batchId: harvest.batchId, active: true },
+            { $set: { active: false, endedAt: new Date() } },
             session ? { session } : undefined,
           );
         }

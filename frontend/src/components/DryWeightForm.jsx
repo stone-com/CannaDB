@@ -1,34 +1,69 @@
-import { useMemo, useState } from "react";
+/**
+ * DryWeightForm — enter final dry weights for harvests in the drying stage.
+ * UI mirrors HarvestForm: default batch, accordion picker, dry room radios, confirm dialog.
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
-  MenuItem,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
+  InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
+  Paper,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import SearchIcon from "@mui/icons-material/Search";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import DryCleaningIcon from "@mui/icons-material/DryCleaning";
+import ScaleIcon from "@mui/icons-material/Scale";
+import SpaIcon from "@mui/icons-material/Spa";
 import { apiPatch } from "../utils/api";
+import { formatDate } from "../utils/formatDate";
+import {
+  buildHarvestListLabel,
+  buildHarvestSearchText,
+} from "../utils/harvestReportHelpers";
+import {
+  getDefaultByClosestDate,
+  isDateToday,
+} from "../utils/harvestWorkflowHelpers";
+import FormSection from "./ui/FormSection";
+import FormSubmitBar from "./ui/FormSubmitBar";
+import MasterDetailShell from "./ui/MasterDetailShell";
+import StatCard from "./ui/StatCard";
 
-const SELECT_MENU_PROPS = {
-  disablePortal: true,
-};
-
-// This form lets users enter final dry weights for strains after harvest.
-// Users pick a drying batch, set weights per strain, then save them to the server.
 function DryWeightForm({ harvests, onComplete }) {
-  // Current selected batch/strain row.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [batchPickerExpanded, setBatchPickerExpanded] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [selectedDryRoomId, setSelectedDryRoomId] = useState("");
   const [selectedStrainKey, setSelectedStrainKey] = useState(null);
-  // Input value and saved dry weights.
   const [dryWeightInput, setDryWeightInput] = useState("");
   const [dryWeightsByKey, setDryWeightsByKey] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const sortedHarvests = useMemo(
-    // Sorting newest first makes most recent dry-weight tasks easier to reach.
     () =>
       Array.isArray(harvests)
         ? [...harvests].sort(
@@ -38,9 +73,7 @@ function DryWeightForm({ harvests, onComplete }) {
     [harvests],
   );
 
-  // Only include harvests whose batch is in the drying stage.
   const batchesForSelection = useMemo(
-    // Build select-friendly rows so dropdown has batch id + display context.
     () =>
       sortedHarvests
         .filter(
@@ -56,35 +89,91 @@ function DryWeightForm({ harvests, onComplete }) {
     [sortedHarvests],
   );
 
-  const selectedHarvest = useMemo(
-    // Resolve selected dropdown value into the full harvest object.
+  const visibleBatches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return batchesForSelection;
+
+    return batchesForSelection.filter(({ harvest }) => {
+      const searchText = buildHarvestSearchText(harvest, formatDate).toLowerCase();
+      const batchNumber = String(harvest?.batchId?.batchNumber || "").toLowerCase();
+      return searchText.includes(query) || batchNumber.includes(query);
+    });
+  }, [batchesForSelection, searchQuery]);
+
+  useEffect(() => {
+    if (batchesForSelection.length === 0 || selectedBatchId) return;
+
+    const defaultEntry = getDefaultByClosestDate(
+      batchesForSelection,
+      (entry) => entry.harvest?.harvestDate || entry.harvest?.batchId?.harvestDate,
+    );
+
+    if (!defaultEntry?.batchId) return;
+
+    setSelectedBatchId(defaultEntry.batchId);
+    setSelectedDryRoomId("");
+    setSelectedStrainKey(null);
+    setDryWeightInput("");
+    setDryWeightsByKey({});
+  }, [batchesForSelection, selectedBatchId]);
+
+  const selectedEntry = useMemo(
     () =>
       batchesForSelection.find(
         (entry) => String(entry.batchId) === String(selectedBatchId),
-      )?.harvest || null,
+      ) || null,
     [batchesForSelection, selectedBatchId],
   );
 
+  const selectedHarvest = selectedEntry?.harvest || null;
+
+  const dryRoomsInHarvest = useMemo(() => {
+    if (!selectedHarvest?.rooms) return [];
+
+    const roomMap = new Map();
+    selectedHarvest.rooms.forEach((roomEntry) => {
+      const room = roomEntry?.roomId;
+      if (room?._id) {
+        roomMap.set(String(room._id), room);
+      }
+    });
+
+    return Array.from(roomMap.values());
+  }, [selectedHarvest]);
+
+  useEffect(() => {
+    if (!selectedHarvest || dryRoomsInHarvest.length === 0) return;
+
+    const roomStillValid = dryRoomsInHarvest.some(
+      (room) => String(room._id) === String(selectedDryRoomId),
+    );
+
+    if (selectedDryRoomId && roomStillValid) return;
+
+    setSelectedDryRoomId(dryRoomsInHarvest[0]._id);
+    setSelectedStrainKey(null);
+    setDryWeightInput("");
+  }, [dryRoomsInHarvest, selectedDryRoomId, selectedHarvest]);
+
   const harvestStrains = useMemo(() => {
-    // Flatten room->strain nested data into simple rows for button list rendering.
-    if (!selectedHarvest || !Array.isArray(selectedHarvest.rooms)) {
-      return [];
-    }
+    if (!selectedHarvest?.rooms) return [];
 
     const rows = [];
 
     selectedHarvest.rooms.forEach((roomEntry, roomIndex) => {
-      const roomName = roomEntry?.roomId?.name || "Unknown";
-      const strains = Array.isArray(roomEntry?.strains)
-        ? roomEntry.strains
-        : [];
+      const room = roomEntry?.roomId;
+      const roomId = room?._id || "";
+      const roomName = room?.name || "Unknown";
+      const strains = Array.isArray(roomEntry?.strains) ? roomEntry.strains : [];
 
       strains.forEach((strainEntry, strainIndex) => {
         rows.push({
           key: `${roomIndex}-${strainIndex}`,
+          roomId,
           roomName,
           strainName: strainEntry?.strainId?.name || "Unknown",
           plantCount: strainEntry?.plantCount || 0,
+          existingDryWeight: strainEntry?.totalDryWeightGrams ?? null,
         });
       });
     });
@@ -92,71 +181,129 @@ function DryWeightForm({ harvests, onComplete }) {
     return rows;
   }, [selectedHarvest]);
 
-  const selectedStrain = useMemo(
-    // Resolve selected key into the full row object used by the right editor.
+  const visibleStrains = useMemo(
     () =>
-      harvestStrains.find((entry) => entry.key === selectedStrainKey) || null,
-    [harvestStrains, selectedStrainKey],
+      harvestStrains.filter(
+        (entry) => String(entry.roomId) === String(selectedDryRoomId),
+      ),
+    [harvestStrains, selectedDryRoomId],
   );
 
-  // Clears strain and weight fields when the user picks a different batch.
-  const handleBatchChange = (e) => {
-    setSelectedBatchId(e.target.value);
+  const selectedStrain = useMemo(
+    () => visibleStrains.find((entry) => entry.key === selectedStrainKey) || null,
+    [visibleStrains, selectedStrainKey],
+  );
+
+  const strainsWithWeights = useMemo(
+    () =>
+      harvestStrains.filter((entry) => dryWeightsByKey[entry.key] !== undefined)
+        .length,
+    [dryWeightsByKey, harvestStrains],
+  );
+
+  const activeDryWeight = useMemo(
+    () => (selectedStrain ? dryWeightsByKey[selectedStrain.key] : undefined),
+    [dryWeightsByKey, selectedStrain],
+  );
+
+  const submitSummary = useMemo(() => {
+    let totalDryGrams = 0;
+
+    harvestStrains.forEach((entry) => {
+      const value =
+        dryWeightsByKey[entry.key] ?? entry.existingDryWeight ?? 0;
+      totalDryGrams += Number(value) || 0;
+    });
+
+    const dryRoom = dryRoomsInHarvest.find(
+      (room) => String(room._id) === String(selectedDryRoomId),
+    );
+
+    return {
+      dryRoomName: dryRoom?.name || "—",
+      strainCount: harvestStrains.length,
+      strainsWithWeights,
+      totalDryGrams,
+    };
+  }, [
+    dryRoomsInHarvest,
+    dryWeightsByKey,
+    harvestStrains,
+    selectedDryRoomId,
+    strainsWithWeights,
+  ]);
+
+  const handleBatchSelect = (batchId) => {
+    setErrorMessage("");
+    setSelectedBatchId(batchId);
+    setSelectedDryRoomId("");
     setSelectedStrainKey(null);
     setDryWeightInput("");
     setDryWeightsByKey({});
+    setBatchPickerExpanded(false);
   };
 
-  // Selects a strain row so the user can enter its dry weight on the right.
-  const handleStrainClick = (strainKey) => {
-    setSelectedStrainKey(strainKey);
+  const handleDryRoomSelect = (roomId) => {
+    setErrorMessage("");
+    setSelectedDryRoomId(roomId);
+    setSelectedStrainKey(null);
     setDryWeightInput("");
   };
 
-  // Saves the typed dry weight value for the currently selected strain.
+  const handleStrainSelect = (strainKey) => {
+    setSelectedStrainKey(strainKey);
+    const saved = dryWeightsByKey[strainKey];
+    setDryWeightInput(saved !== undefined ? String(saved) : "");
+  };
+
   const handleSetDryWeight = () => {
     if (!selectedStrainKey) return;
 
     const parsed = Number(dryWeightInput);
     if (!Number.isFinite(parsed) || parsed < 0) {
-      window.alert("Enter a valid dry weight in grams.");
+      setErrorMessage("Enter a valid dry weight in grams.");
       return;
     }
 
+    setErrorMessage("");
     setDryWeightsByKey((prev) => ({
       ...prev,
       [selectedStrainKey]: parsed,
     }));
   };
 
-  // Sends all dry weights to the server and finalizes the harvest record.
-  const handleSubmit = async () => {
+  const handleSubmitClick = () => {
     if (!selectedHarvest) {
-      window.alert("Please select a harvest.");
+      setErrorMessage("Select a drying batch before saving.");
       return;
     }
+
+    setErrorMessage("");
+    setConfirmOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setErrorMessage("");
 
     try {
       const updatedRooms = (selectedHarvest.rooms || []).map(
         (roomEntry, roomIndex) => ({
           roomId: roomEntry?.roomId?._id,
-          strains: (roomEntry?.strains || []).map(
-            (strainEntry, strainIndex) => {
-              const key = `${roomIndex}-${strainIndex}`;
-              const dryWeightValue =
-                dryWeightsByKey[key] ?? strainEntry?.totalDryWeightGrams ?? 0;
+          strains: (roomEntry?.strains || []).map((strainEntry, strainIndex) => {
+            const key = `${roomIndex}-${strainIndex}`;
+            const dryWeightValue =
+              dryWeightsByKey[key] ?? strainEntry?.totalDryWeightGrams ?? 0;
 
-              return {
-                // Keep original tote wet weights and write the new dry total.
-                strainId: strainEntry?.strainId?._id,
-                plantCount: strainEntry?.plantCount || 0,
-                totes: (strainEntry?.totes || []).map((tote) => ({
-                  wetWeight: tote?.wetWeight || 0,
-                })),
-                totalDryWeightGrams: Number(dryWeightValue) || 0,
-              };
-            },
-          ),
+            return {
+              strainId: strainEntry?.strainId?._id,
+              plantCount: strainEntry?.plantCount || 0,
+              totes: (strainEntry?.totes || []).map((tote) => ({
+                wetWeight: tote?.wetWeight || 0,
+              })),
+              totalDryWeightGrams: Number(dryWeightValue) || 0,
+            };
+          }),
         }),
       );
 
@@ -165,162 +312,470 @@ function DryWeightForm({ harvests, onComplete }) {
         finalizeDryWeights: true,
       });
 
+      setConfirmOpen(false);
+
       if (onComplete) {
         await onComplete();
       }
     } catch (error) {
-      window.alert(`Error: ${error.message}`);
+      setErrorMessage(error.message || "Could not save dry weights.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const activeDryWeight = useMemo(
-    // Read current value for the selected row from keyed state map.
-    () => (selectedStrain ? dryWeightsByKey[selectedStrain.key] : undefined),
-    [dryWeightsByKey, selectedStrain],
-  );
+  if (batchesForSelection.length === 0) {
+    return (
+      <Alert severity="info">
+        No harvests in the drying stage are waiting for dry weight entry.
+      </Alert>
+    );
+  }
 
-  return (
-    <Stack
-      direction={{ xs: "column", md: "row" }}
-      spacing={2}
-      sx={{ height: "100%" }}
+  const sidebarHeader = selectedEntry ? (
+    <Box
+      sx={(theme) => ({
+        p: 1.5,
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        bgcolor: alpha(theme.palette.primary.main, 0.05),
+      })}
     >
-      {/* Left side: batch picker, strain list, and save button */}
-      <Stack spacing={2} sx={{ width: { xs: "100%", md: 420 } }}>
-        {/* Page title */}
-        <Typography variant="h6">Dry Weight Entry</Typography>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}
+      >
+        Drying batch
+      </Typography>
+      <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 0.75 }}>
+        <CalendarTodayIcon fontSize="small" color="primary" sx={{ mt: 0.2 }} />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="body1" sx={{ fontWeight: 800 }} noWrap>
+            {selectedEntry.batchNumber}
+          </Typography>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={buildHarvestListLabel(selectedHarvest, formatDate)}
+            />
+            <Chip size="small" color="secondary" label="Drying" />
+          </Stack>
+        </Box>
+      </Stack>
+    </Box>
+  ) : null;
 
-        {/* Batch dropdown (only batches in drying stage) */}
-        <TextField
-          select
-          label="Batch (Drying Only)"
-          value={selectedBatchId}
-          onChange={handleBatchChange}
-          // disablePortal prevents menu clipping in portal-heavy window layouts.
-          SelectProps={{ MenuProps: SELECT_MENU_PROPS }}
+  const sidebar = (
+    <Box>
+      <Accordion
+        expanded={batchPickerExpanded}
+        onChange={(_, expanded) => setBatchPickerExpanded(expanded)}
+        disableGutters
+        elevation={0}
+        sx={{
+          "&::before": { display: "none" },
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{
+            minHeight: 44,
+            px: 1.5,
+            "& .MuiAccordionSummary-content": { my: 0.75 },
+          }}
         >
-          <MenuItem value="">Select Batch</MenuItem>
-          {batchesForSelection.map(({ batchId, batchNumber, harvest }) => {
-            // Build a verbose dropdown label so users can identify the exact harvest.
-            const date = new Date(harvest?.harvestDate);
-            const dateText = Number.isNaN(date.getTime())
-              ? "N/A"
-              : date.toLocaleDateString();
-            const harvestNumberText = harvest?.harvestNumber || "No Number";
-            const locationText = harvest?.locationId?.nickname || "No Location";
-            const roomNames = (harvest?.rooms || [])
-              .map((roomEntry) => roomEntry?.roomId?.name)
-              .filter(Boolean)
-              .join(", ");
-            const label = `${batchNumber} - ${dateText} - ${harvestNumberText} - ${locationText} - ${roomNames || "No Rooms"}`;
-
-            return (
-              <MenuItem key={harvest._id} value={batchId}>
-                {label}
-              </MenuItem>
-            );
-          })}
-        </TextField>
-
-        {/* Strain buttons showing dry weight status per row */}
-        {selectedHarvest && (
-          <Card variant="outlined">
-            <CardContent>
-              <Typography
-                variant="subtitle2"
-                color="text.secondary"
-                sx={{ mb: 1 }}
-              >
-                {selectedHarvest.harvestNumber || "Harvest"} Strains
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            Change batch
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails sx={{ px: 1.5, pt: 0, pb: 1.5 }}>
+          <TextField
+            size="small"
+            fullWidth
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search drying batches…"
+            sx={{ mb: 1 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <List dense disablePadding>
+            {visibleBatches.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ px: 0.5, py: 1 }}>
+                No batches match your search.
               </Typography>
-              <Stack spacing={1}>
-                {harvestStrains.map((entry) => {
-                  // Each row button opens that strain in the right-side editor.
-                  const isActive = selectedStrainKey === entry.key;
-                  const hasInputDryWeight =
-                    dryWeightsByKey[entry.key] !== undefined;
-                  const dryWeight = hasInputDryWeight
-                    ? `${dryWeightsByKey[entry.key]} g`
-                    : "Not set";
+            ) : (
+              visibleBatches.map(({ batchId, batchNumber, harvest }) => {
+                const isSelected = String(selectedBatchId) === String(batchId);
+                const harvestToday = isDateToday(harvest?.harvestDate);
+
+                return (
+                  <ListItemButton
+                    key={harvest._id}
+                    selected={isSelected}
+                    onClick={() => handleBatchSelect(batchId)}
+                    sx={{ alignItems: "flex-start", py: 1, borderRadius: 1.5, mb: 0.25 }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                          {batchNumber}
+                        </Typography>
+                      }
+                      secondary={
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          flexWrap="wrap"
+                          useFlexGap
+                          sx={{ mt: 0.35 }}
+                        >
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            icon={<CalendarTodayIcon sx={{ "&&": { fontSize: 14 } }} />}
+                            label={`Harvest ${formatDate(harvest?.harvestDate)}`}
+                          />
+                          {harvestToday ? (
+                            <Chip size="small" color="primary" label="Today" />
+                          ) : null}
+                        </Stack>
+                      }
+                      primaryTypographyProps={{ variant: "body2" }}
+                      secondaryTypographyProps={{ component: "div" }}
+                    />
+                  </ListItemButton>
+                );
+              })
+            )}
+          </List>
+        </AccordionDetails>
+      </Accordion>
+
+      {selectedHarvest ? (
+        <Box sx={{ px: 1.5, py: 1.25 }}>
+          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+            <DryCleaningIcon fontSize="small" color="action" />
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+              Dry room
+            </Typography>
+          </Stack>
+          {dryRoomsInHarvest.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
+              No dry rooms are linked to this harvest.
+            </Typography>
+          ) : (
+            <RadioGroup
+              value={selectedDryRoomId}
+              onChange={(event) => handleDryRoomSelect(event.target.value)}
+            >
+              <Stack spacing={0.75}>
+                {dryRoomsInHarvest.map((room) => {
+                  const isSelected = String(selectedDryRoomId) === String(room._id);
 
                   return (
-                    <Button
-                      key={entry.key}
-                      variant={isActive ? "contained" : "outlined"}
-                      color={isActive ? "primary" : "inherit"}
-                      onClick={() => handleStrainClick(entry.key)}
-                      sx={{ justifyContent: "space-between" }}
+                    <Paper
+                      key={room._id}
+                      variant="outlined"
+                      component="label"
+                      sx={(theme) => ({
+                        display: "block",
+                        borderRadius: 1.5,
+                        cursor: "pointer",
+                        borderColor: isSelected
+                          ? theme.palette.primary.main
+                          : alpha(theme.palette.divider, 0.85),
+                        bgcolor: isSelected
+                          ? alpha(theme.palette.primary.main, 0.08)
+                          : alpha(theme.palette.background.paper, 0.6),
+                      })}
                     >
-                      <span>
-                        {entry.strainName} ({entry.roomName}) -{" "}
-                        {entry.plantCount} Plants
-                      </span>
-                      <Chip size="small" color="secondary" label={dryWeight} />
-                    </Button>
+                      <FormControlLabel
+                        value={room._id}
+                        control={<Radio size="small" />}
+                        label={
+                          <Box sx={{ py: 0.25 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {room.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Drying room
+                            </Typography>
+                          </Box>
+                        }
+                        sx={{
+                          m: 0,
+                          width: "100%",
+                          alignItems: "flex-start",
+                          px: 1,
+                          py: 0.75,
+                        }}
+                      />
+                    </Paper>
                   );
                 })}
               </Stack>
-            </CardContent>
-          </Card>
-        )}
+            </RadioGroup>
+          )}
+        </Box>
+      ) : null}
 
-        {selectedBatchId && (
-          // Save button appears once a harvest context exists.
-          <Button variant="contained" size="large" onClick={handleSubmit}>
-            Save Dry Weights
-          </Button>
-        )}
-      </Stack>
+      {selectedHarvest && selectedDryRoomId ? (
+        <>
+          <Divider />
+          <Box sx={{ px: 1.5, py: 1 }}>
+            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }}>
+              <SpaIcon fontSize="small" color="action" />
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                Strains in room
+              </Typography>
+            </Stack>
+            <List dense disablePadding>
+              {visibleStrains.map((entry) => {
+                const isActive = selectedStrainKey === entry.key;
+                const hasInputDryWeight = dryWeightsByKey[entry.key] !== undefined;
+                const dryWeightLabel = hasInputDryWeight
+                  ? `${dryWeightsByKey[entry.key].toLocaleString()} g`
+                  : entry.existingDryWeight != null
+                    ? `${Number(entry.existingDryWeight).toLocaleString()} g saved`
+                    : "Not set";
 
-      {/* Right side: dry weight editor for the selected strain */}
-      <Box sx={{ flex: 1 }}>
-        <Card variant="outlined" sx={{ height: "100%" }}>
-          <CardContent>
-            {selectedStrain ? (
-              // Right-side editor updates whichever row is currently selected.
-              <Stack spacing={2}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  {selectedStrain.strainName} ({selectedStrain.roomName})
-                </Typography>
+                return (
+                  <ListItemButton
+                    key={entry.key}
+                    selected={isActive}
+                    onClick={() => handleStrainSelect(entry.key)}
+                    sx={{ borderRadius: 1.5, mb: 0.25 }}
+                  >
+                    <ListItemText
+                      primary={entry.strainName}
+                      secondary={`${entry.plantCount} plants`}
+                      primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: "caption" }}
+                    />
+                    <Chip
+                      size="small"
+                      color={hasInputDryWeight ? "secondary" : "default"}
+                      variant={hasInputDryWeight ? "filled" : "outlined"}
+                      label={dryWeightLabel}
+                    />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 1, px: 0.5 }}
+            >
+              {strainsWithWeights} of {harvestStrains.length} strains updated this session
+            </Typography>
+          </Box>
+        </>
+      ) : null}
+    </Box>
+  );
 
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    type="number"
-                    fullWidth
-                    label="Total Dry Weight (grams)"
-                    value={dryWeightInput}
-                    onChange={(e) => setDryWeightInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleSetDryWeight();
-                      }
-                    }}
-                    placeholder="e.g. 1420"
-                  />
-                  <Button variant="contained" onClick={handleSetDryWeight}>
-                    Set
-                  </Button>
-                </Stack>
-
-                <Typography variant="body1">
-                  Current Dry Weight:{" "}
-                  <strong>
-                    {activeDryWeight === undefined
-                      ? "Not set"
-                      : `${activeDryWeight} g`}
-                  </strong>
-                </Typography>
-              </Stack>
-            ) : (
-              <Alert severity="info">
-                {selectedHarvest
-                  ? "Click a strain on the left to enter dry weight."
-                  : "Select a batch to get started."}
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+  const detail = (
+    <Paper
+      variant="outlined"
+      sx={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 2,
+        overflow: "hidden",
+        minHeight: { xs: 320, md: 0 },
+      }}
+    >
+      <Box
+        sx={(theme) => ({
+          px: 2,
+          py: 1.25,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: alpha(theme.palette.primary.main, 0.06),
+        })}
+      >
+        <Stack direction="row" spacing={1} alignItems="center">
+          <DryCleaningIcon color="primary" fontSize="small" />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
+              {selectedStrain ? selectedStrain.strainName : "Dry weight entry"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {selectedHarvest
+                ? `${selectedEntry?.batchNumber || "Batch"} · ${submitSummary.dryRoomName}`
+                : "Select a drying batch to begin"}
+            </Typography>
+          </Box>
+        </Stack>
       </Box>
+
+      <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+        {!selectedHarvest ? (
+          <Alert severity="info">Choose a batch in the drying stage to begin.</Alert>
+        ) : !selectedDryRoomId ? (
+          <Alert severity="info">Select the dry room for this batch.</Alert>
+        ) : !selectedStrain ? (
+          <Alert severity="info">
+            Select a strain to enter its total dry weight for this room.
+          </Alert>
+        ) : (
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Box sx={{ flex: 1 }}>
+                <StatCard
+                  compact
+                  label="Plants"
+                  value={selectedStrain.plantCount.toLocaleString()}
+                  icon={<SpaIcon />}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <StatCard compact label="Dry room" value={selectedStrain.roomName} />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <StatCard
+                  compact
+                  label="Current dry weight"
+                  value={
+                    activeDryWeight === undefined
+                      ? "Not set"
+                      : `${activeDryWeight.toLocaleString()} g`
+                  }
+                  icon={<ScaleIcon />}
+                />
+              </Box>
+            </Stack>
+
+            <FormSection
+              title="Set dry weight"
+              subtitle="Enter the total dry weight in grams for this strain after drying."
+            >
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <TextField
+                  type="number"
+                  fullWidth
+                  size="small"
+                  label="Total dry weight (grams)"
+                  value={dryWeightInput}
+                  onChange={(event) => setDryWeightInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleSetDryWeight();
+                    }
+                  }}
+                  placeholder="e.g. 1420"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <ScaleIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Button variant="contained" onClick={handleSetDryWeight} sx={{ minWidth: 96 }}>
+                  Apply
+                </Button>
+              </Stack>
+            </FormSection>
+
+            <Alert severity="info" sx={{ py: 0.75 }}>
+              Saving will finalize dry weights for all strains in this harvest. Strains
+              you have not edited will keep their existing saved values.
+            </Alert>
+          </Stack>
+        )}
+      </Box>
+
+      {selectedBatchId ? (
+        <Box sx={{ px: 2, pb: 2 }}>
+          {errorMessage ? (
+            <Alert severity="error" sx={{ mb: 1.5 }}>
+              {errorMessage}
+            </Alert>
+          ) : null}
+          <FormSubmitBar
+            type="button"
+            disabled={submitting}
+            fullWidth
+            onClick={handleSubmitClick}
+          >
+            {submitting ? "Saving…" : "Save & finalize dry weights"}
+          </FormSubmitBar>
+        </Box>
+      ) : null}
+
+      <Dialog
+        open={confirmOpen}
+        onClose={() => {
+          if (submitting) return;
+          setConfirmOpen(false);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Confirm dry weight finalization</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.25} sx={{ mt: 0.5 }}>
+            <Typography variant="body2">
+              You are about to finalize dry weights for batch{" "}
+              <strong>{selectedEntry?.batchNumber || "N/A"}</strong> (
+              {formatDate(selectedHarvest?.harvestDate)}).
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {submitSummary.strainsWithWeights} of {submitSummary.strainCount} strains
+              updated this session ·{" "}
+              <strong>{submitSummary.totalDryGrams.toLocaleString()} g</strong> total dry
+              weight across all dry rooms
+            </Typography>
+            <Typography variant="body2">
+              This will mark the batch as completed and clear all dry room assignments
+              for this batch. Are you sure?
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Saving…" : "Confirm finalize"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Paper>
+  );
+
+  return (
+    <Stack spacing={2}>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          Dry weight entry
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Record final dry weights and release drying rooms when complete.
+        </Typography>
+      </Box>
+
+      <MasterDetailShell
+        height={560}
+        mobileSidebarHeight={320}
+        sidebarHeader={sidebarHeader}
+        sidebar={sidebar}
+        detail={detail}
+      />
     </Stack>
   );
 }
