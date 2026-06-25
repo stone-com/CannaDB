@@ -3,7 +3,7 @@
  */
 
 // Historical average dry grams per plant from harvest records for one strain.
-export function getHistoricalAvgDryPerPlant({
+function getHistoricalAvgDryPerPlant({
   totalDryWeightGrams = 0,
   totalHarvestPlantCount = 0,
 } = {}) {

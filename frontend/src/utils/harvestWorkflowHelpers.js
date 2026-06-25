@@ -1,6 +1,6 @@
 /** Shared helpers for harvest intake and dry weight workflow forms. */
 
-export function startOfDay(value) {
+function startOfDay(value) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
   return date;
@@ -62,16 +62,4 @@ export function groupHarvestRoomsByDryRoom(activePlants, totes, dryRoomByStrainI
     roomId,
     strains,
   }));
-}
-
-export function buildDefaultDryRoomMap(activePlants, defaultDryRoomId) {
-  if (!defaultDryRoomId) return {};
-
-  return activePlants.reduce((map, plant) => {
-    const strainId = plant?.strainId?._id;
-    if (strainId) {
-      map[strainId] = defaultDryRoomId;
-    }
-    return map;
-  }, {});
 }

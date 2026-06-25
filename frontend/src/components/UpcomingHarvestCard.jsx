@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import CompostIcon from '@mui/icons-material/Compost';
 import YardIcon from '@mui/icons-material/Yard';
+import { alpha } from "@mui/material/styles";
 import { formatDate } from "../utils/formatDate";
 import { getBatchStrainTotals } from "../utils/batchHelpers";
 
@@ -41,11 +42,10 @@ function UpcomingHarvestCard({ batches = [], onStartHarvest }) {
   return (
     <Card
       variant="outlined"
-      sx={{
+      sx={(theme) => ({
         borderColor: "primary.main",
-        background: "secondary.main"
-          
-      }}
+        background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.2)}, ${alpha(theme.palette.background.paper, 0.94)})`,
+      })}
     >
       <CardContent>
         <Stack
