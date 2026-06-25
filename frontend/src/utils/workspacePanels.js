@@ -10,7 +10,7 @@ export const PANEL_KEYS = [
   "dryWeightForm",
 ];
 
-export const PANEL_DEFAULT_LAYOUTS = {
+const PANEL_DEFAULT_LAYOUTS = {
   strains: { x: 480, y: 88, w: 1120, h: 660 },
   harvestReport: { x: 620, y: 220, w: 860, h: 540 },
   roomViewer: { x: 460, y: 180, w: 1000, h: 640 },

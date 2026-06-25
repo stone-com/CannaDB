@@ -59,13 +59,6 @@ export function buildHarvestSearchText(harvest, formatDate) {
     .toLowerCase();
 }
 
-export const HARVEST_SORT_OPTIONS = [
-  { value: "date-desc", label: "Newest" },
-  { value: "date-asc", label: "Oldest" },
-  { value: "location-asc", label: "Location" },
-  { value: "dry-desc", label: "Most dry" },
-];
-
 export function filterHarvests(harvests, query, formatDate) {
   const normalizedQuery = String(query || "").trim().toLowerCase();
   if (!normalizedQuery) return harvests;

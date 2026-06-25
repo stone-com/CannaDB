@@ -834,11 +834,10 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
                 </Grid>
               </Grid>
               <Card
-                sx={{
-                  background:
-                    "linear-gradient(120deg, rgba(0,95,115,0.94), rgba(10,147,150,0.9))",
-                  color: "#fff",
-                }}
+                sx={(theme) => ({
+                  background: `linear-gradient(120deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                  color: theme.palette.primary.contrastText,
+                })}
               >
                 <CardContent>
                   <Stack
@@ -852,7 +851,10 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
                   </Stack>
                   <Typography
                     variant="body1"
-                    sx={{ maxWidth: 780, opacity: 0.95 }}
+                    sx={(theme) => ({
+                      maxWidth: 780,
+                      color: alpha(theme.palette.primary.contrastText, 0.92),
+                    })}
                   >
                     Open any panel from the left rail to run analytics, room
                     analysis, and harvest workflows. Drag, resize, or expand

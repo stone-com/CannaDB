@@ -1,4 +1,5 @@
 import { Button, Card, CardContent, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
 
 // This card summarizes room and plant counts on the dashboard.
@@ -84,11 +85,13 @@ function RoomReportCard({ rooms = [], roomAssignments = [], onClick }) {
   ];
 
   return (
-    <Card variant="outlined"
-      sx={{
+    <Card
+      variant="outlined"
+      sx={(theme) => ({
         borderColor: "primary.main",
-        background: "secondary.main"
-      }}>
+        background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.2)}, ${alpha(theme.palette.background.paper, 0.94)})`,
+      })}
+    >
       <CardContent>
         {/* Summary stats and breakdown by room type */}
         <Stack spacing={1}>

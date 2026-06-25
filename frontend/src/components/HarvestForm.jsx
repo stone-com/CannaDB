@@ -711,7 +711,7 @@ function HarvestForm({ onComplete }) {
                   >
                     <ListItemText
                       primary={plant.strainId?.name || "Unknown"}
-                      secondary={`${plant.count || 0} plants · ${dryRoomName}`}
+                      secondary={`${plant.count || 0} plants`}
                       primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
                       secondaryTypographyProps={{ variant: "caption" }}
                     />
