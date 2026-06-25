@@ -1,28 +1,30 @@
-// RoomViewer — pick a location and room to see live plant counts, strain mix, and batch details.
+/**
+ * RoomViewer — detailed view for one room's batches, strains, and timeline.
+ * Usually opened from RoomViewerPanel with initialRoomId set.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
-  Card,
-  CardContent,
   Chip,
+  Divider,
+  Grid,
   MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import Grid from "@mui/material/Grid";
-import { alpha } from "@mui/material/styles";
-import WarehouseIcon from "@mui/icons-material/Warehouse";
 import GrassIcon from "@mui/icons-material/Grass";
 import LayersIcon from "@mui/icons-material/Layers";
 import ScienceIcon from "@mui/icons-material/Science";
-import { DataGrid } from "@mui/x-data-grid";
-import { BarChart } from "@mui/x-charts";
+import StatCard from "./ui/StatCard";
+import StrainMixChart from "./ui/StrainMixChart";
+import AnalyticsDataGrid from "./ui/AnalyticsDataGrid";
 import { formatDate } from "../utils/formatDate";
+import { stageColor } from "../utils/roomOverviewHelpers";
 
-// Count how many days are between two dates (returns null if either date is invalid).
 function toDaysDelta(fromValue, toValue) {
   const from = new Date(fromValue);
   const to = new Date(toValue);
@@ -35,8 +37,6 @@ function toDaysDelta(fromValue, toValue) {
   return Math.ceil((to.getTime() - from.getTime()) / msPerDay);
 }
 
-// Main component: filters rooms by location and displays stats for the selected room.
-// initialRoomId — skip dropdowns and open that room (used from RoomViewerPanel).
 function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
   const allRooms = useMemo(() => (Array.isArray(rooms) ? rooms : []), [rooms]);
   const assignments = useMemo(
@@ -47,7 +47,6 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [selectedRoomId, setSelectedRoomId] = useState("");
 
-  // Pre-select room when opened from the overview grid.
   useEffect(() => {
     if (!initialRoomId) return;
     const room = allRooms.find((entry) => String(entry._id) === String(initialRoomId));
@@ -58,7 +57,6 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
   }, [allRooms, initialRoomId]);
 
   const sortedLocations = useMemo(() => {
-    // Build unique location list from rooms so location dropdown has no duplicates.
     const locations = allRooms
       .map((room) => room?.locationId)
       .filter((location) => location?._id)
@@ -74,27 +72,18 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
     );
   }, [allRooms]);
 
-  // Rooms in selected location.
   const filteredRooms = useMemo(() => {
     if (!selectedLocationId) return [];
     return allRooms
-      .filter(
-        (room) => String(room.locationId?._id) === String(selectedLocationId),
-      )
+      .filter((room) => String(room.locationId?._id) === String(selectedLocationId))
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   }, [allRooms, selectedLocationId]);
 
-  // Update the selected location and clear the room pick so they stay in sync.
-  const handleLocationChange = (e) => {
-    setSelectedLocationId(e.target.value);
-    setSelectedRoomId("");
-  };
-
-  // Assignments for selected room.
   const selectedRoomAssignments = useMemo(
     () =>
       assignments.filter(
         (assignment) =>
+          assignment?.active !== false &&
           String(assignment?.roomId?._id) === String(selectedRoomId),
       ),
     [assignments, selectedRoomId],
@@ -102,11 +91,12 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
 
   const selectedRoom = useMemo(() => {
     if (!selectedRoomId) return null;
-    return allRooms.find((room) => String(room._id) === String(selectedRoomId)) || null;
+    return (
+      allRooms.find((room) => String(room._id) === String(selectedRoomId)) || null
+    );
   }, [allRooms, selectedRoomId]);
 
   const roomTotalPlants = useMemo(() => {
-    // Sum all assigned plant counts across active assignments in the selected room.
     return selectedRoomAssignments.reduce((sum, assignment) => {
       const assignedPlants = Array.isArray(assignment?.assignedPlants)
         ? assignment.assignedPlants
@@ -122,8 +112,7 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
     }, 0);
   }, [selectedRoomAssignments]);
 
-  // Build chart-ready totals by strain for the selected room.
-  const roomAnalytics = useMemo(() => {
+  const strainBreakdown = useMemo(() => {
     const strainTotals = new Map();
 
     selectedRoomAssignments.forEach((assignment) => {
@@ -140,246 +129,131 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
       });
     });
 
-    const strainSeries = Array.from(strainTotals.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
+    return Array.from(strainTotals.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        share: roomTotalPlants > 0 ? (count / roomTotalPlants) * 100 : 0,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [roomTotalPlants, selectedRoomAssignments]);
 
-    const strainLabels = strainSeries.map((item) => item.label);
-    const strainChartSeries = strainSeries.map((item, seriesIndex) => ({
-      id: `strain-${seriesIndex}`,
-      label: item.label,
-      stack: "total",
-      data: strainLabels.map((_, labelIndex) =>
-        labelIndex === seriesIndex ? item.value : 0,
-      ),
-    }));
-
-    const chartHeight = Math.min(
-      840,
-      Math.max(300, strainSeries.length * 42 + 50),
-    );
-
-    return {
-      strainSeries,
-      strainLabels,
-      strainChartSeries,
-      chartHeight,
-    };
-  }, [selectedRoomAssignments]);
-
-  const summaryCards = [
-    // Small card metadata array keeps JSX cleaner and easier to reorder.
-    {
-      label: "Room",
-      value: selectedRoom
-        ? `${selectedRoom.name}${selectedRoom.type ? ` (${selectedRoom.type})` : ""}`
-        : "N/A",
-      icon: <WarehouseIcon fontSize="small" />,
-      tone: "primary",
-    },
-    {
-      label: "Total Plants",
-      value: roomTotalPlants.toLocaleString(),
-      icon: <GrassIcon fontSize="small" />,
-      tone: "info",
-    },
-    {
-      label: "Active Batches",
-      value: selectedRoomAssignments.length.toLocaleString(),
-      icon: <LayersIcon fontSize="small" />,
-      tone: "warning",
-    },
-    {
-      label: "Unique Strains",
-      value: roomAnalytics.strainSeries.length.toLocaleString(),
-      icon: <ScienceIcon fontSize="small" />,
-      tone: "secondary",
-    },
-  ];
+  const handleLocationChange = (event) => {
+    setSelectedLocationId(event.target.value);
+    setSelectedRoomId("");
+  };
 
   return (
-    <Stack spacing={2.25}>
-      {/* Filter header — hidden when a room is pre-selected from the overview */}
-      {!initialRoomId && (
-        <Paper
-          elevation={0}
-          sx={(theme) => ({
-            p: { xs: 2, md: 2.5 },
-            borderRadius: 2.5,
-            border: "1px solid",
-            borderColor: "divider",
-            background:
-              theme.palette.mode === "dark"
-                ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.background.paper, 0.92)})`
-                : `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.96)}, ${alpha(theme.palette.primary.main, 0.06)})`,
-            backdropFilter: "blur(8px)",
-          })}
-        >
-          <Stack spacing={1.25}>
-            <Stack spacing={0.5}>
-              <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                Room Viewer
-              </Typography>
-              <Typography color="text.secondary" variant="body2">
-                Active room composition, strain mix, and batch-level assignments.
-              </Typography>
-            </Stack>
-
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
-              <TextField
-                select
-                label="Select Location"
-                value={selectedLocationId}
-                onChange={handleLocationChange}
-                fullWidth
-              >
-                <MenuItem value="">Choose a location</MenuItem>
-                {sortedLocations.map((location) => (
-                  <MenuItem key={location._id} value={location._id}>
-                    {location.nickname || "Unnamed Location"}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <TextField
-                select
-                label="Select Room"
-                value={selectedRoomId}
-                disabled={!selectedLocationId}
-                onChange={(e) => setSelectedRoomId(e.target.value)}
-                fullWidth
-              >
-                <MenuItem value="">Choose a room</MenuItem>
-                {filteredRooms.map((room) => (
-                  <MenuItem key={room._id} value={room._id}>
-                    {room.name}
-                    {room.type ? ` (${room.type})` : ""}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Stack>
+    <Stack spacing={2}>
+      {/* Manual filters — only when not opened from overview */}
+      {!initialRoomId ? (
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Stack spacing={1.5}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Select a room
+            </Typography>
+            <Grid container spacing={1.25}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  select
+                  label="Location"
+                  value={selectedLocationId}
+                  onChange={handleLocationChange}
+                  fullWidth
+                >
+                  <MenuItem value="">Choose a location</MenuItem>
+                  {sortedLocations.map((location) => (
+                    <MenuItem key={location._id} value={location._id}>
+                      {location.nickname || "Unnamed Location"}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  select
+                  label="Room"
+                  value={selectedRoomId}
+                  disabled={!selectedLocationId}
+                  onChange={(event) => setSelectedRoomId(event.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="">Choose a room</MenuItem>
+                  {filteredRooms.map((room) => (
+                    <MenuItem key={room._id} value={room._id}>
+                      {room.name}
+                      {room.type ? ` (${room.type})` : ""}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </Grid>
           </Stack>
         </Paper>
-      )}
+      ) : null}
 
-      {initialRoomId && selectedRoom && (
-        // Compact title bar when opened from overview — replaces the filter dropdowns above.
-        <Stack spacing={0.5}>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
-            {selectedRoom.name}
-            {selectedRoom.type ? ` (${selectedRoom.type})` : ""}
-          </Typography>
-          <Typography color="text.secondary" variant="body2">
-            {selectedRoom.locationId?.nickname || "Unknown location"} — batch
-            details and strain breakdown
-          </Typography>
-        </Stack>
-      )}
-
-      {/* Empty-state alerts when no room is selected or the room has no batches. */}
-      {!selectedRoom && (
-        <Alert severity="info">
-          Choose a room above to view its current contents.
+      {!selectedRoom ? (
+        <Alert severity="info" sx={{ borderRadius: 2 }}>
+          Choose a room to view its current contents.
         </Alert>
-      )}
+      ) : null}
 
-      {selectedRoom && selectedRoomAssignments.length === 0 && (
-        <Alert severity="warning">
+      {selectedRoom && selectedRoomAssignments.length === 0 ? (
+        <Alert severity="warning" sx={{ borderRadius: 2 }}>
           <strong>{selectedRoom.name}</strong> has no active batch assigned.
         </Alert>
-      )}
+      ) : null}
 
-      {selectedRoom && selectedRoomAssignments.length > 0 && (
+      {selectedRoom && selectedRoomAssignments.length > 0 ? (
         <Stack spacing={2}>
-          {/* Responsive KPI cards for quick room-level stats. */}
           <Grid container spacing={1.5}>
-            {summaryCards.map((card) => (
-              // KPI cards are rendered from a shared metadata array.
-              <Grid key={card.label} size={{ xs: 12, sm: 6, lg: 3 }}>
-                <Card
-                  elevation={0}
-                  sx={(theme) => ({
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    background:
-                      card.tone === "primary"
-                        ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.16)}, ${alpha(theme.palette.primary.main, 0.04)})`
-                        : card.tone === "info"
-                          ? `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.16)}, ${alpha(theme.palette.info.main, 0.04)})`
-                          : card.tone === "warning"
-                            ? `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.18)}, ${alpha(theme.palette.warning.main, 0.04)})`
-                            : `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.16)}, ${alpha(theme.palette.secondary.main, 0.04)})`,
-                    minHeight: 106,
-                  })}
-                >
-                  <CardContent>
-                    <Stack spacing={0.5}>
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box
-                          sx={{
-                            color: "text.secondary",
-                            display: "inline-flex",
-                          }}
-                        >
-                          {card.icon}
-                        </Box>
-                        <Typography color="text.secondary" variant="body2">
-                          {card.label}
-                        </Typography>
-                      </Stack>
-                      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                        {card.value}
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <StatCard
+                label="Total plants"
+                value={roomTotalPlants.toLocaleString()}
+                icon={<GrassIcon fontSize="small" />}
+              />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <StatCard
+                label="Active batches"
+                value={selectedRoomAssignments.length}
+                icon={<LayersIcon fontSize="small" />}
+              />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <StatCard
+                label="Unique strains"
+                value={strainBreakdown.length}
+                icon={<ScienceIcon fontSize="small" />}
+              />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <StatCard
+                label="Room type"
+                value={selectedRoom.type || "—"}
+              />
+            </Grid>
           </Grid>
 
-          <Card
-            elevation={0}
-            sx={(theme) => ({
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: 2,
-              backgroundColor: alpha(theme.palette.background.paper, 0.95),
-            })}
-          >
-            <CardContent>
-              <Stack spacing={1.25}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  Plants by Strain
-                </Typography>
-                {roomAnalytics.strainSeries.length === 0 ? (
-                  <Alert severity="info">No strain plant data available.</Alert>
-                ) : (
-                  <Box
-                    sx={{ width: "100%", height: roomAnalytics.chartHeight }}
-                  >
-                    {/* MUI X BarChart renders strain composition for the selected room. */}
-                    <BarChart
-                      yAxis={[
-                        {
-                          scaleType: "band",
-                          data: roomAnalytics.strainLabels,
-                        },
-                      ]}
-                      xAxis={[{ label: "Plant Count" }]}
-                      series={roomAnalytics.strainChartSeries}
-                      slotProps={{ tooltip: { trigger: "item" } }}
-                      hideLegend
-                      layout="horizontal"
-                      margin={{ left: 120, right: 20, top: 16, bottom: 30 }}
-                    />
-                  </Box>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+              Strain composition
+            </Typography>
 
-          {/* One card per active batch assignment in this room. */}
+            {strainBreakdown.length === 0 ? (
+              <Alert severity="info">No strain data available.</Alert>
+            ) : (
+              <StrainMixChart strains={strainBreakdown} />
+            )}
+          </Paper>
+
+          <Divider />
+
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Batch assignments
+          </Typography>
+
           {selectedRoomAssignments.map((assignment) => {
             const batch = assignment.batchId;
             const assignedPlants = Array.isArray(assignment?.assignedPlants)
@@ -401,194 +275,141 @@ function RoomViewer({ rooms, roomAssignments, initialRoomId = null }) {
             const isMomBatch = String(batch?.batchType || "")
               .toLowerCase()
               .includes("mom");
-            const showHarvestCard = !(isMomRoom || isMomBatch);
-            const metadataCards = [
-              {
-                label: "Clone Date",
-                value: formatDate(batch?.cloneDate),
-                detail: "Batch origin date",
-              },
-              ...(showHarvestCard
-                ? [
-                    {
-                      label: "Harvest Date",
-                      value: formatDate(batch?.harvestDate),
-                      detail:
-                        daysUntilHarvest === null
-                          ? "No harvest date set"
-                          : daysUntilHarvest < 0
-                            ? `${Math.abs(daysUntilHarvest)} days overdue`
-                            : daysUntilHarvest === 0
-                              ? "Harvest is today"
-                              : `${daysUntilHarvest} days until harvest`,
-                    },
-                  ]
-                : []),
-              {
-                label: "Time in Room",
-                value:
-                  daysInRoom === null
-                    ? "N/A"
-                    : `${daysInRoom} day${daysInRoom === 1 ? "" : "s"}`,
-                detail: batch?.lifecycleStage
-                  ? `Current stage: ${batch.lifecycleStage}`
-                  : "Current assignment duration",
-              },
-            ];
+            const showHarvestInfo = !(isMomRoom || isMomBatch);
 
             return (
-              // Batch detail card: header chips, date tiles, and strain table.
-              <Card
-                key={assignment._id}
-                elevation={0}
-                sx={(theme) => ({
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 2,
-                  backgroundColor: alpha(theme.palette.background.paper, 0.95),
-                })}
-              >
-                <CardContent>
-                  <Stack spacing={1.5}>
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1}
-                      justifyContent="space-between"
-                      alignItems={{ xs: "flex-start", sm: "center" }}
-                    >
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        Batch {batch?.batchNumber || "N/A"}
+              <Paper key={assignment._id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                <Stack spacing={1.5}>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    spacing={1}
+                  >
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 800 }}>
+                        Batch {batch?.batchNumber || "—"}
                       </Typography>
-                      <Stack direction="row" spacing={1}>
+                      <Typography variant="caption" color="text.secondary">
+                        {batchTotalPlants} plants in this room
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap">
+                      <Chip
+                        size="small"
+                        label={batch?.batchType || "production"}
+                        variant="outlined"
+                      />
+                      {batch?.lifecycleStage ? (
                         <Chip
                           size="small"
-                          label={batch?.batchType || "production"}
-                          variant="outlined"
+                          label={batch.lifecycleStage}
+                          color={stageColor(batch.lifecycleStage)}
                         />
-                        <Chip
-                          size="small"
-                          label={`Plants: ${batchTotalPlants}`}
-                          color="success"
-                          variant="outlined"
-                        />
-                      </Stack>
+                      ) : null}
                     </Stack>
-
-                    <Grid container spacing={1.25}>
-                      {metadataCards.map((meta) => (
-                        // Render one metadata tile for each batch detail field.
-                        <Grid
-                          key={`${assignment._id}-${meta.label}`}
-                          size={{
-                            xs: 12,
-                            md: metadataCards.length === 2 ? 6 : 4,
-                          }}
-                        >
-                          <Stack
-                            spacing={0.25}
-                            sx={{
-                              p: 1,
-                              borderRadius: 1.25,
-                              border: "1px solid",
-                              borderColor: "divider",
-                              backgroundColor: "background.paper",
-                            }}
-                          >
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {meta.label}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 700 }}
-                            >
-                              {meta.value}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {meta.detail}
-                            </Typography>
-                          </Stack>
-                        </Grid>
-                      ))}
-                    </Grid>
-
-                    {assignedPlants.length === 0 ? (
-                      <Alert severity="info">
-                        No plants recorded for this batch in the selected room.
-                      </Alert>
-                    ) : (
-                      <Box sx={{ height: 280 }}>
-                        <DataGrid
-                          // DataGrid is used for dense tabular strain data with consistent styling.
-                          rows={assignedPlants.map((row, i) => ({
-                            id: `${assignment._id}-${i}`,
-                            strainName: row.strainId?.name || "Unknown Strain",
-                            type: row.strainId?.type || "N/A",
-                            count: row.count,
-                            share:
-                              roomTotalPlants > 0
-                                ? `${((Number(row.count) / roomTotalPlants) * 100).toFixed(1)}%`
-                                : "N/A",
-                          }))}
-                          columns={[
-                            {
-                              field: "strainName",
-                              headerName: "Strain",
-                              flex: 1.2,
-                              minWidth: 150,
-                            },
-                            {
-                              field: "type",
-                              headerName: "Type",
-                              flex: 0.8,
-                              minWidth: 120,
-                            },
-                            {
-                              field: "count",
-                              headerName: "Plant Count",
-                              type: "number",
-                              flex: 0.7,
-                              minWidth: 120,
-                            },
-                            {
-                              field: "share",
-                              headerName: "% of Room",
-                              flex: 0.8,
-                              minWidth: 120,
-                            },
-                          ]}
-                          hideFooter
-                          disableRowSelectionOnClick
-                          sx={(theme) => ({
-                            borderRadius: 1.5,
-                            borderColor: "divider",
-                            backgroundColor: alpha(
-                              theme.palette.background.paper,
-                              0.86,
-                            ),
-                            "& .MuiDataGrid-columnHeaders": {
-                              backgroundColor: alpha(
-                                theme.palette.primary.main,
-                                0.14,
-                              ),
-                              fontWeight: 700,
-                            },
-                          })}
-                        />
-                      </Box>
-                    )}
                   </Stack>
-                </CardContent>
-              </Card>
+
+                  <Grid container spacing={1}>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Clone date
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {formatDate(batch?.cloneDate) || "—"}
+                      </Typography>
+                    </Grid>
+                    {showHarvestInfo ? (
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Harvest date
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {formatDate(batch?.harvestDate) || "—"}
+                        </Typography>
+                        {daysUntilHarvest !== null ? (
+                          <Typography variant="caption" color="text.secondary">
+                            {daysUntilHarvest < 0
+                              ? `${Math.abs(daysUntilHarvest)} days overdue`
+                              : daysUntilHarvest === 0
+                                ? "Harvest is today"
+                                : `${daysUntilHarvest} days remaining`}
+                          </Typography>
+                        ) : null}
+                      </Grid>
+                    ) : null}
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Time in room
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {daysInRoom === null
+                          ? "—"
+                          : `${daysInRoom} day${daysInRoom === 1 ? "" : "s"}`}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+
+                  {assignedPlants.length === 0 ? (
+                    <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                      No plants recorded for this batch in this room.
+                    </Alert>
+                  ) : (
+                    <AnalyticsDataGrid
+                      height={Math.min(320, Math.max(180, assignedPlants.length * 52 + 56))}
+                      hideFooter={assignedPlants.length <= 6}
+                      initialPageSize={10}
+                      rows={assignedPlants.map((row, index) => {
+                        const count = Number(row.count) || 0;
+                        const share =
+                          roomTotalPlants > 0
+                            ? (count / roomTotalPlants) * 100
+                            : 0;
+
+                        return {
+                          id: `${assignment._id}-${index}`,
+                          strainName: row.strainId?.name || "Unknown Strain",
+                          type: row.strainId?.type || "—",
+                          count,
+                          share,
+                        };
+                      })}
+                      columns={[
+                        {
+                          field: "strainName",
+                          headerName: "Strain",
+                          flex: 1.3,
+                          minWidth: 150,
+                        },
+                        {
+                          field: "type",
+                          headerName: "Type",
+                          flex: 0.8,
+                          minWidth: 100,
+                        },
+                        {
+                          field: "count",
+                          headerName: "Plants",
+                          type: "number",
+                          flex: 0.7,
+                          minWidth: 90,
+                        },
+                        {
+                          field: "share",
+                          headerName: "% of room",
+                          flex: 0.8,
+                          minWidth: 100,
+                          valueFormatter: (value) => `${Number(value).toFixed(1)}%`,
+                        },
+                      ]}
+                    />
+                  )}
+                </Stack>
+              </Paper>
             );
           })}
         </Stack>
-      )}
+      ) : null}
     </Stack>
   );
 }

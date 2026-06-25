@@ -13,6 +13,8 @@ import {
   Typography,
 } from "@mui/material";
 import { apiGet, apiPost } from "../utils/api";
+import ListRow from "./ui/ListRow";
+import RemoveButton from "./ui/RemoveButton";
 
 const SELECT_MENU_PROPS = {
   disablePortal: true,
@@ -382,28 +384,26 @@ function HarvestForm({ onComplete }) {
                 <Divider />
 
                 {activeTotes.length > 0 ? (
-                  // Tote list displays each entry and allows individual removal.
                   <Stack spacing={1}>
                     {activeTotes.map((weight, i) => (
-                      <Stack
+                      <ListRow
                         key={i}
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
+                        label={
+                          <Typography variant="body2">
+                            Tote {i + 1}:{" "}
+                            <strong>{weight.toLocaleString()} g</strong>
+                          </Typography>
+                        }
                       >
-                        <Typography variant="body2">
-                          Tote {i + 1}: {weight.toLocaleString()} g
-                        </Typography>
-                        <Button
-                          variant="text"
-                          color="error"
-                          onClick={() => handleRemoveTote(selectedStrainId, i)}
-                        >
-                          Remove
-                        </Button>
-                      </Stack>
+                        <RemoveButton
+                          label="Remove tote"
+                          onClick={() =>
+                            handleRemoveTote(selectedStrainId, i)
+                          }
+                        />
+                      </ListRow>
                     ))}
-                    <Typography variant="body1">
+                    <Typography variant="body1" sx={{ pt: 0.5 }}>
                       Total:{" "}
                       <strong>{activeToteTotal.toLocaleString()} g</strong>
                     </Typography>
