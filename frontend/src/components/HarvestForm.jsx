@@ -47,6 +47,11 @@ import {
   groupHarvestRoomsByDryRoom,
   isDateToday,
 } from "../utils/harvestWorkflowHelpers";
+import {
+  clearHarvestFormDraft,
+  persistHarvestFormDraft,
+  readHarvestFormDraft,
+} from "../utils/harvestFormDraft";
 import FormSection from "./ui/FormSection";
 import FormSubmitBar from "./ui/FormSubmitBar";
 import ListRow from "./ui/ListRow";
@@ -55,6 +60,8 @@ import RemoveButton from "./ui/RemoveButton";
 import StatCard from "./ui/StatCard";
 
 function HarvestForm({ onComplete }) {
+  const savedDraft = useMemo(() => readHarvestFormDraft(), []);
+
   const [batches, setBatches] = useState([]);
   const [allRooms, setAllRooms] = useState([]);
   const [roomAssignments, setRoomAssignments] = useState([]);
@@ -63,14 +70,22 @@ function HarvestForm({ onComplete }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [batchPickerExpanded, setBatchPickerExpanded] = useState(false);
-  const [selectedBatchId, setSelectedBatchId] = useState("");
-  const [selectedRoomId, setSelectedRoomId] = useState("");
-  const [selectedStrainId, setSelectedStrainId] = useState(null);
-  const [dryRoomByStrainId, setDryRoomByStrainId] = useState({});
-  const [totes, setTotes] = useState({});
-  const [weightInput, setWeightInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState(savedDraft?.searchQuery ?? "");
+  const [batchPickerExpanded, setBatchPickerExpanded] = useState(
+    savedDraft?.batchPickerExpanded ?? false,
+  );
+  const [selectedBatchId, setSelectedBatchId] = useState(
+    savedDraft?.selectedBatchId ?? "",
+  );
+  const [selectedRoomId, setSelectedRoomId] = useState(savedDraft?.selectedRoomId ?? "");
+  const [selectedStrainId, setSelectedStrainId] = useState(
+    savedDraft?.selectedStrainId ?? null,
+  );
+  const [dryRoomByStrainId, setDryRoomByStrainId] = useState(
+    savedDraft?.dryRoomByStrainId ?? {},
+  );
+  const [totes, setTotes] = useState(savedDraft?.totes ?? {});
+  const [weightInput, setWeightInput] = useState(savedDraft?.weightInput ?? "");
 
   useEffect(() => {
     const loadData = async () => {
@@ -94,6 +109,28 @@ function HarvestForm({ onComplete }) {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    persistHarvestFormDraft({
+      searchQuery,
+      batchPickerExpanded,
+      selectedBatchId,
+      selectedRoomId,
+      selectedStrainId,
+      dryRoomByStrainId,
+      totes,
+      weightInput,
+    });
+  }, [
+    batchPickerExpanded,
+    dryRoomByStrainId,
+    searchQuery,
+    selectedBatchId,
+    selectedRoomId,
+    selectedStrainId,
+    totes,
+    weightInput,
+  ]);
 
   const unharvestedBatches = useMemo(
     () =>
@@ -126,6 +163,24 @@ function HarvestForm({ onComplete }) {
     if (!defaultBatch?._id) return;
 
     setSelectedBatchId(defaultBatch._id);
+    setSelectedRoomId("");
+    setSelectedStrainId(null);
+    setDryRoomByStrainId({});
+    setTotes({});
+    setWeightInput("");
+  }, [loadingData, selectedBatchId, unharvestedBatches]);
+
+  useEffect(() => {
+    if (loadingData || !selectedBatchId) return;
+
+    const batchStillAvailable = unharvestedBatches.some(
+      (batch) => String(batch._id) === String(selectedBatchId),
+    );
+
+    if (batchStillAvailable) return;
+
+    clearHarvestFormDraft();
+    setSelectedBatchId("");
     setSelectedRoomId("");
     setSelectedStrainId(null);
     setDryRoomByStrainId({});
@@ -188,17 +243,21 @@ function HarvestForm({ onComplete }) {
   useEffect(() => {
     if (!selectedBatchId || flowerRooms.length === 0) return;
 
-    const roomStillValid = flowerRooms.some(
-      (room) => String(room._id) === String(selectedRoomId),
-    );
+    const roomStillValid =
+      selectedRoomId &&
+      flowerRooms.some((room) => String(room._id) === String(selectedRoomId));
 
-    if (selectedRoomId && roomStillValid) return;
+    if (roomStillValid) return;
 
-    setSelectedRoomId(flowerRooms[0]._id);
-    setSelectedStrainId(null);
-    setDryRoomByStrainId({});
-    setTotes({});
-    setWeightInput("");
+    const nextRoomId = flowerRooms[0]._id;
+    setSelectedRoomId(nextRoomId);
+
+    if (selectedRoomId && String(selectedRoomId) !== String(nextRoomId)) {
+      setSelectedStrainId(null);
+      setDryRoomByStrainId({});
+      setTotes({});
+      setWeightInput("");
+    }
   }, [flowerRooms, selectedBatchId, selectedRoomId]);
 
   const selectedRoomAssignment = useMemo(
@@ -321,6 +380,8 @@ function HarvestForm({ onComplete }) {
   ]);
 
   const resetSelection = () => {
+    clearHarvestFormDraft();
+
     const defaultBatch = getDefaultByClosestDate(
       unharvestedBatches,
       (batch) => batch.harvestDate,
@@ -966,18 +1027,23 @@ function HarvestForm({ onComplete }) {
                 wet weight entries.
               </Alert>
             ) : null}
-            <Typography variant="body2">
+            <Alert severity="info" sx={{ py: 0.5 }}>
               This will empty the flower room, assign strains to the selected dry
-              rooms, and move the batch into the drying stage. Are you sure?
-            </Typography>
+              rooms, and move the batch into the drying stage.
+            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting…" : "Confirm submit"}
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? "Submitting…" : "Confirm & submit harvest"}
           </Button>
         </DialogActions>
       </Dialog>
