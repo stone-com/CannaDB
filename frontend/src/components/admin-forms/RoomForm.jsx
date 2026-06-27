@@ -81,7 +81,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   const [wholeRoomId, setWholeRoomId] = useState("");
   const [wholeMoveCounts, setWholeMoveCounts] = useState({});
   const [splitDestinations, setSplitDestinations] = useState([]);
-  const [shouldAdvanceStage, setShouldAdvanceStage] = useState(false);
+  const [shouldAdvanceStage, setShouldAdvanceStage] = useState(true);
   const [destroyUnallocatedPlants, setDestroyUnallocatedPlants] =
     useState(false);
 
@@ -249,7 +249,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
   const handleBatchSelection = (batchId) => {    setAssignmentData({ roomId: "", batchId });
     setWholeRoomId("");
     setAssignmentMode("whole");
-    setShouldAdvanceStage(false);
+    setShouldAdvanceStage(true);
     setDestroyUnallocatedPlants(false);
     setWholeMoveCounts({});
     setSplitDestinations(
@@ -558,7 +558,7 @@ function RoomForm({ section }) {  // Source datasets used for both room manageme
       setWholeRoomId("");
       setWholeMoveCounts({});
       setSplitDestinations([]);
-      setShouldAdvanceStage(false);
+      setShouldAdvanceStage(true);
       setDestroyUnallocatedPlants(false);
       fetchBatches();
     } catch (error) {
