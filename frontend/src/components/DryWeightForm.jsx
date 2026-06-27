@@ -46,20 +46,37 @@ import {
   getDefaultByClosestDate,
   isDateToday,
 } from "../utils/harvestWorkflowHelpers";
+import {
+  clearDryWeightFormDraft,
+  persistDryWeightFormDraft,
+  readDryWeightFormDraft,
+} from "../utils/dryWeightFormDraft";
 import FormSection from "./ui/FormSection";
 import FormSubmitBar from "./ui/FormSubmitBar";
 import MasterDetailShell from "./ui/MasterDetailShell";
 import StatCard from "./ui/StatCard";
 
 function DryWeightForm({ harvests, onComplete }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [batchPickerExpanded, setBatchPickerExpanded] = useState(false);
+  const savedDraft = useMemo(() => readDryWeightFormDraft(), []);
+
+  const [searchQuery, setSearchQuery] = useState(savedDraft?.searchQuery ?? "");
+  const [batchPickerExpanded, setBatchPickerExpanded] = useState(
+    savedDraft?.batchPickerExpanded ?? false,
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedBatchId, setSelectedBatchId] = useState("");
-  const [selectedDryRoomId, setSelectedDryRoomId] = useState("");
-  const [selectedStrainKey, setSelectedStrainKey] = useState(null);
-  const [dryWeightInput, setDryWeightInput] = useState("");
-  const [dryWeightsByKey, setDryWeightsByKey] = useState({});
+  const [selectedBatchId, setSelectedBatchId] = useState(
+    savedDraft?.selectedBatchId ?? "",
+  );
+  const [selectedDryRoomId, setSelectedDryRoomId] = useState(
+    savedDraft?.selectedDryRoomId ?? "",
+  );
+  const [selectedStrainKey, setSelectedStrainKey] = useState(
+    savedDraft?.selectedStrainKey ?? null,
+  );
+  const [dryWeightInput, setDryWeightInput] = useState(savedDraft?.dryWeightInput ?? "");
+  const [dryWeightsByKey, setDryWeightsByKey] = useState(
+    savedDraft?.dryWeightsByKey ?? {},
+  );
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -101,6 +118,26 @@ function DryWeightForm({ harvests, onComplete }) {
   }, [batchesForSelection, searchQuery]);
 
   useEffect(() => {
+    persistDryWeightFormDraft({
+      searchQuery,
+      batchPickerExpanded,
+      selectedBatchId,
+      selectedDryRoomId,
+      selectedStrainKey,
+      dryWeightInput,
+      dryWeightsByKey,
+    });
+  }, [
+    batchPickerExpanded,
+    dryWeightInput,
+    dryWeightsByKey,
+    searchQuery,
+    selectedBatchId,
+    selectedDryRoomId,
+    selectedStrainKey,
+  ]);
+
+  useEffect(() => {
     if (batchesForSelection.length === 0 || selectedBatchId) return;
 
     const defaultEntry = getDefaultByClosestDate(
@@ -111,6 +148,23 @@ function DryWeightForm({ harvests, onComplete }) {
     if (!defaultEntry?.batchId) return;
 
     setSelectedBatchId(defaultEntry.batchId);
+    setSelectedDryRoomId("");
+    setSelectedStrainKey(null);
+    setDryWeightInput("");
+    setDryWeightsByKey({});
+  }, [batchesForSelection, selectedBatchId]);
+
+  useEffect(() => {
+    if (!selectedBatchId) return;
+
+    const batchStillAvailable = batchesForSelection.some(
+      (entry) => String(entry.batchId) === String(selectedBatchId),
+    );
+
+    if (batchStillAvailable) return;
+
+    clearDryWeightFormDraft();
+    setSelectedBatchId("");
     setSelectedDryRoomId("");
     setSelectedStrainKey(null);
     setDryWeightInput("");
@@ -333,6 +387,7 @@ function DryWeightForm({ harvests, onComplete }) {
       });
 
       setConfirmOpen(false);
+      clearDryWeightFormDraft();
 
       if (onComplete) {
         await onComplete();
