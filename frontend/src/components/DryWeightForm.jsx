@@ -208,11 +208,29 @@ function DryWeightForm({ harvests, onComplete }) {
 
   const submitSummary = useMemo(() => {
     let totalDryGrams = 0;
+    let totalPlants = 0;
+    const dryRoomStats = new Map();
 
     harvestStrains.forEach((entry) => {
-      const value =
+      const dryWeightValue =
         dryWeightsByKey[entry.key] ?? entry.existingDryWeight ?? 0;
-      totalDryGrams += Number(value) || 0;
+      const dryWeight = Number(dryWeightValue) || 0;
+
+      totalDryGrams += dryWeight;
+      totalPlants += entry.plantCount || 0;
+
+      const roomKey = String(entry.roomId);
+      if (!dryRoomStats.has(roomKey)) {
+        dryRoomStats.set(roomKey, {
+          roomName: entry.roomName,
+          strainCount: 0,
+          totalDryGrams: 0,
+        });
+      }
+
+      const roomStat = dryRoomStats.get(roomKey);
+      roomStat.strainCount += 1;
+      roomStat.totalDryGrams += dryWeight;
     });
 
     const dryRoom = dryRoomsInHarvest.find(
@@ -224,6 +242,8 @@ function DryWeightForm({ harvests, onComplete }) {
       strainCount: harvestStrains.length,
       strainsWithWeights,
       totalDryGrams,
+      totalPlants,
+      dryRoomSummary: Array.from(dryRoomStats.values()),
     };
   }, [
     dryRoomsInHarvest,
@@ -726,7 +746,7 @@ function DryWeightForm({ harvests, onComplete }) {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Confirm dry weight finalization</DialogTitle>
+        <DialogTitle>Confirm dry room finalization</DialogTitle>
         <DialogContent>
           <Stack spacing={1.25} sx={{ mt: 0.5 }}>
             <Typography variant="body2">
@@ -737,21 +757,47 @@ function DryWeightForm({ harvests, onComplete }) {
             <Typography variant="body2" color="text.secondary">
               {submitSummary.strainsWithWeights} of {submitSummary.strainCount} strains
               updated this session ·{" "}
-              <strong>{submitSummary.totalDryGrams.toLocaleString()} g</strong> total dry
-              weight across all dry rooms
+              <strong>{submitSummary.totalDryGrams.toLocaleString()} g</strong> total
+              dry weight · <strong>{submitSummary.totalPlants.toLocaleString()}</strong>{" "}
+              plants
             </Typography>
-            <Typography variant="body2">
+            {submitSummary.dryRoomSummary.length > 0 ? (
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Dry room assignments
+                </Typography>
+                {submitSummary.dryRoomSummary.map((entry) => (
+                  <Typography key={entry.roomName} variant="body2">
+                    <strong>{entry.roomName}</strong> — {entry.strainCount} strain
+                    {entry.strainCount === 1 ? "" : "s"} ·{" "}
+                    {entry.totalDryGrams.toLocaleString()} g
+                  </Typography>
+                ))}
+              </Stack>
+            ) : null}
+            {submitSummary.strainsWithWeights < submitSummary.strainCount ? (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                Some strains were not edited this session. They will keep their existing
+                saved dry weights.
+              </Alert>
+            ) : null}
+            <Alert severity="info" sx={{ py: 0.5 }}>
               This will mark the batch as completed and clear all dry room assignments
-              for this batch. Are you sure?
-            </Typography>
+              for this batch.
+            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Saving…" : "Confirm finalize"}
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? "Saving…" : "Confirm & finalize dry weights"}
           </Button>
         </DialogActions>
       </Dialog>
