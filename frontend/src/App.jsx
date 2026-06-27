@@ -833,35 +833,7 @@ function App({ darkMode, onToggleDarkMode, onLogout }) {
                   </Card>
                 </Grid>
               </Grid>
-              <Card
-                sx={(theme) => ({
-                  background: `linear-gradient(120deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                  color: theme.palette.primary.contrastText,
-                })}
-              >
-                <CardContent>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{ mb: 1 }}
-                  >
-                    <InsightsIcon />
-                    <Typography variant="h5">Operations Workspace</Typography>
-                  </Stack>
-                  <Typography
-                    variant="body1"
-                    sx={(theme) => ({
-                      maxWidth: 780,
-                      color: alpha(theme.palette.primary.contrastText, 0.92),
-                    })}
-                  >
-                    Open any panel from the left rail to run analytics, room
-                    analysis, and harvest workflows. Drag, resize, or expand
-                    panels to full screen — your layout is remembered.
-                  </Typography>
-                </CardContent>
-              </Card>
+             
 
               <UpcomingHarvestCard
                 batches={batches}
