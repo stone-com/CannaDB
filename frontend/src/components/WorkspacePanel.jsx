@@ -19,7 +19,13 @@ import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 
-let globalZIndex = 1300;
+let globalZIndex = 1200;
+const MAX_PANEL_Z_INDEX = 1990;
+
+function nextPanelZIndex() {
+  globalZIndex = Math.min(globalZIndex + 1, MAX_PANEL_Z_INDEX);
+  return globalZIndex;
+}
 
 const APP_BAR_HEIGHT = 64;
 const TASKBAR_HEIGHT = 64;
@@ -38,7 +44,7 @@ export default function WorkspacePanel({
   isFullscreen = false,
   children,
 }) {
-  const [zIndex, setZIndex] = useState(() => ++globalZIndex);
+  const [zIndex, setZIndex] = useState(() => nextPanelZIndex());
   const interaction = useRef(null);
   const sizeRef = useRef({ w: layout.w, h: layout.h });
   const layoutRef = useRef(layout);
@@ -47,7 +53,7 @@ export default function WorkspacePanel({
   layoutRef.current = layout;
 
   const bringToFront = () => {
-    setZIndex(++globalZIndex);
+    setZIndex(nextPanelZIndex());
   };
 
   const commitLayout = (nextLayout) => {

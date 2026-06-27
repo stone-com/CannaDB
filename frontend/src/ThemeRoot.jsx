@@ -101,6 +101,11 @@ export default function ThemeRoot() {
     const colors = darkMode ? DARK : LIGHT;
     const baseTheme = createTheme({
       palette: buildPaletteTokens(colors, darkMode ? "dark" : "light"),
+      zIndex: {
+        modal: 2000,
+        snackbar: 2100,
+        tooltip: 2200,
+      },
       shape: {
         borderRadius: 12,
       },

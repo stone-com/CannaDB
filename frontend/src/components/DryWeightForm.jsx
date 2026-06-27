@@ -46,20 +46,37 @@ import {
   getDefaultByClosestDate,
   isDateToday,
 } from "../utils/harvestWorkflowHelpers";
+import {
+  clearDryWeightFormDraft,
+  persistDryWeightFormDraft,
+  readDryWeightFormDraft,
+} from "../utils/dryWeightFormDraft";
 import FormSection from "./ui/FormSection";
 import FormSubmitBar from "./ui/FormSubmitBar";
 import MasterDetailShell from "./ui/MasterDetailShell";
 import StatCard from "./ui/StatCard";
 
 function DryWeightForm({ harvests, onComplete }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [batchPickerExpanded, setBatchPickerExpanded] = useState(false);
+  const savedDraft = useMemo(() => readDryWeightFormDraft(), []);
+
+  const [searchQuery, setSearchQuery] = useState(savedDraft?.searchQuery ?? "");
+  const [batchPickerExpanded, setBatchPickerExpanded] = useState(
+    savedDraft?.batchPickerExpanded ?? false,
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedBatchId, setSelectedBatchId] = useState("");
-  const [selectedDryRoomId, setSelectedDryRoomId] = useState("");
-  const [selectedStrainKey, setSelectedStrainKey] = useState(null);
-  const [dryWeightInput, setDryWeightInput] = useState("");
-  const [dryWeightsByKey, setDryWeightsByKey] = useState({});
+  const [selectedBatchId, setSelectedBatchId] = useState(
+    savedDraft?.selectedBatchId ?? "",
+  );
+  const [selectedDryRoomId, setSelectedDryRoomId] = useState(
+    savedDraft?.selectedDryRoomId ?? "",
+  );
+  const [selectedStrainKey, setSelectedStrainKey] = useState(
+    savedDraft?.selectedStrainKey ?? null,
+  );
+  const [dryWeightInput, setDryWeightInput] = useState(savedDraft?.dryWeightInput ?? "");
+  const [dryWeightsByKey, setDryWeightsByKey] = useState(
+    savedDraft?.dryWeightsByKey ?? {},
+  );
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -101,6 +118,26 @@ function DryWeightForm({ harvests, onComplete }) {
   }, [batchesForSelection, searchQuery]);
 
   useEffect(() => {
+    persistDryWeightFormDraft({
+      searchQuery,
+      batchPickerExpanded,
+      selectedBatchId,
+      selectedDryRoomId,
+      selectedStrainKey,
+      dryWeightInput,
+      dryWeightsByKey,
+    });
+  }, [
+    batchPickerExpanded,
+    dryWeightInput,
+    dryWeightsByKey,
+    searchQuery,
+    selectedBatchId,
+    selectedDryRoomId,
+    selectedStrainKey,
+  ]);
+
+  useEffect(() => {
     if (batchesForSelection.length === 0 || selectedBatchId) return;
 
     const defaultEntry = getDefaultByClosestDate(
@@ -111,6 +148,23 @@ function DryWeightForm({ harvests, onComplete }) {
     if (!defaultEntry?.batchId) return;
 
     setSelectedBatchId(defaultEntry.batchId);
+    setSelectedDryRoomId("");
+    setSelectedStrainKey(null);
+    setDryWeightInput("");
+    setDryWeightsByKey({});
+  }, [batchesForSelection, selectedBatchId]);
+
+  useEffect(() => {
+    if (!selectedBatchId) return;
+
+    const batchStillAvailable = batchesForSelection.some(
+      (entry) => String(entry.batchId) === String(selectedBatchId),
+    );
+
+    if (batchStillAvailable) return;
+
+    clearDryWeightFormDraft();
+    setSelectedBatchId("");
     setSelectedDryRoomId("");
     setSelectedStrainKey(null);
     setDryWeightInput("");
@@ -208,11 +262,29 @@ function DryWeightForm({ harvests, onComplete }) {
 
   const submitSummary = useMemo(() => {
     let totalDryGrams = 0;
+    let totalPlants = 0;
+    const dryRoomStats = new Map();
 
     harvestStrains.forEach((entry) => {
-      const value =
+      const dryWeightValue =
         dryWeightsByKey[entry.key] ?? entry.existingDryWeight ?? 0;
-      totalDryGrams += Number(value) || 0;
+      const dryWeight = Number(dryWeightValue) || 0;
+
+      totalDryGrams += dryWeight;
+      totalPlants += entry.plantCount || 0;
+
+      const roomKey = String(entry.roomId);
+      if (!dryRoomStats.has(roomKey)) {
+        dryRoomStats.set(roomKey, {
+          roomName: entry.roomName,
+          strainCount: 0,
+          totalDryGrams: 0,
+        });
+      }
+
+      const roomStat = dryRoomStats.get(roomKey);
+      roomStat.strainCount += 1;
+      roomStat.totalDryGrams += dryWeight;
     });
 
     const dryRoom = dryRoomsInHarvest.find(
@@ -224,6 +296,8 @@ function DryWeightForm({ harvests, onComplete }) {
       strainCount: harvestStrains.length,
       strainsWithWeights,
       totalDryGrams,
+      totalPlants,
+      dryRoomSummary: Array.from(dryRoomStats.values()),
     };
   }, [
     dryRoomsInHarvest,
@@ -313,6 +387,7 @@ function DryWeightForm({ harvests, onComplete }) {
       });
 
       setConfirmOpen(false);
+      clearDryWeightFormDraft();
 
       if (onComplete) {
         await onComplete();
@@ -726,7 +801,7 @@ function DryWeightForm({ harvests, onComplete }) {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Confirm dry weight finalization</DialogTitle>
+        <DialogTitle>Confirm dry room finalization</DialogTitle>
         <DialogContent>
           <Stack spacing={1.25} sx={{ mt: 0.5 }}>
             <Typography variant="body2">
@@ -737,21 +812,47 @@ function DryWeightForm({ harvests, onComplete }) {
             <Typography variant="body2" color="text.secondary">
               {submitSummary.strainsWithWeights} of {submitSummary.strainCount} strains
               updated this session ·{" "}
-              <strong>{submitSummary.totalDryGrams.toLocaleString()} g</strong> total dry
-              weight across all dry rooms
+              <strong>{submitSummary.totalDryGrams.toLocaleString()} g</strong> total
+              dry weight · <strong>{submitSummary.totalPlants.toLocaleString()}</strong>{" "}
+              plants
             </Typography>
-            <Typography variant="body2">
+            {submitSummary.dryRoomSummary.length > 0 ? (
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Dry room assignments
+                </Typography>
+                {submitSummary.dryRoomSummary.map((entry) => (
+                  <Typography key={entry.roomName} variant="body2">
+                    <strong>{entry.roomName}</strong> — {entry.strainCount} strain
+                    {entry.strainCount === 1 ? "" : "s"} ·{" "}
+                    {entry.totalDryGrams.toLocaleString()} g
+                  </Typography>
+                ))}
+              </Stack>
+            ) : null}
+            {submitSummary.strainsWithWeights < submitSummary.strainCount ? (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                Some strains were not edited this session. They will keep their existing
+                saved dry weights.
+              </Alert>
+            ) : null}
+            <Alert severity="info" sx={{ py: 0.5 }}>
               This will mark the batch as completed and clear all dry room assignments
-              for this batch. Are you sure?
-            </Typography>
+              for this batch.
+            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setConfirmOpen(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Saving…" : "Confirm finalize"}
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? "Saving…" : "Confirm & finalize dry weights"}
           </Button>
         </DialogActions>
       </Dialog>

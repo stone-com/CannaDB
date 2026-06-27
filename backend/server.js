@@ -59,6 +59,10 @@ app.use("/api/rooms", require("./routes/rooms"));
 app.use("/api/harvests", require("./routes/harvests"));
 app.use("/api/audit-logs", require("./routes/auditLogs"));
 
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
