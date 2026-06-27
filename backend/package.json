@@ -6,6 +6,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "migrate:tenant": "node scripts/migrate-tenant-backfill.js",
+    "seed:green-valley": "node scripts/seed-green-valley-dummy-data.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
