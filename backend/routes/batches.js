@@ -16,6 +16,42 @@ const { recordAudit } = require("../utils/recordAudit");
 
 const BATCH_POPULATE = "plants.strainId";
 
+const LIFECYCLE_STAGES = [
+  "Clone",
+  "Veg",
+  "Flower",
+  "Mom",
+  "HarvestReady",
+  "Drying",
+  "Completed",
+];
+
+function normalizePlantsInput(plants) {
+  if (!Array.isArray(plants)) return null;
+
+  const totals = new Map();
+  plants.forEach((entry) => {
+    const strainId = String(entry?.strainId || "").trim();
+    const count = Number(entry?.count);
+    if (!strainId || !Number.isFinite(count) || count < 0) return;
+    totals.set(strainId, (totals.get(strainId) || 0) + count);
+  });
+
+  return Array.from(totals.entries()).map(([strainId, count]) => ({
+    strainId,
+    count,
+  }));
+}
+
+function parseOptionalDate(value, fieldName) {
+  if (value === null || value === "") return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+  return parsed;
+}
+
 // Shared populate config for room assignment responses.
 // This keeps room details, batch summary info, and strain details in one payload.
 const ROOM_ASSIGNMENT_POPULATE = [
@@ -1103,6 +1139,164 @@ router.post("/:id/destroy-plants", async (req, res) => {
       },
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/batches/:id — admin manual batch edit (dates, stage, plants, demo overrides).
+router.patch("/:id", async (req, res) => {
+  try {
+    const {
+      batchNumber,
+      cloneDate,
+      harvestDate,
+      location,
+      batchType,
+      lifecycleStage,
+      stageStartedAt,
+      plants,
+      syncAssignments,
+      clearHarvestId,
+    } = req.body;
+
+    const batch = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: req.params.id,
+    });
+
+    if (!batch) {
+      return res.status(404).json({ error: "Batch not found" });
+    }
+
+    if (batchNumber !== undefined) {
+      const trimmed = String(batchNumber || "").trim();
+      if (!trimmed) {
+        return res.status(400).json({ error: "batchNumber cannot be empty" });
+      }
+      batch.batchNumber = trimmed;
+    }
+
+    if (cloneDate !== undefined) {
+      batch.cloneDate = parseOptionalDate(cloneDate, "cloneDate");
+    }
+
+    if (harvestDate !== undefined) {
+      batch.harvestDate = parseOptionalDate(harvestDate, "harvestDate");
+    }
+
+    if (location !== undefined) {
+      batch.location = location || null;
+    }
+
+    if (batchType !== undefined) {
+      if (!["production", "mom"].includes(batchType)) {
+        return res.status(400).json({ error: "Invalid batchType" });
+      }
+      batch.batchType = batchType;
+    }
+
+    if (lifecycleStage !== undefined) {
+      if (!LIFECYCLE_STAGES.includes(lifecycleStage)) {
+        return res.status(400).json({ error: "Invalid lifecycleStage" });
+      }
+
+      if (batch.lifecycleStage !== lifecycleStage) {
+        batch.lifecycleStage = lifecycleStage;
+        if (stageStartedAt !== undefined) {
+          batch.stageStartedAt = parseOptionalDate(stageStartedAt, "stageStartedAt");
+        } else {
+          batch.stageStartedAt = new Date();
+        }
+      }
+    }
+
+    if (stageStartedAt !== undefined && lifecycleStage === undefined) {
+      batch.stageStartedAt = parseOptionalDate(stageStartedAt, "stageStartedAt");
+    }
+
+    if (clearHarvestId === true) {
+      batch.harvestId = null;
+    }
+
+    if (
+      batch.harvestDate &&
+      batch.cloneDate &&
+      batch.harvestDate < batch.cloneDate
+    ) {
+      return res.status(400).json({
+        error: "Harvest date cannot be before clone date",
+      });
+    }
+
+    let normalizedPlants = null;
+    if (plants !== undefined) {
+      normalizedPlants = normalizePlantsInput(plants);
+      batch.plants = normalizedPlants;
+    }
+
+    await runWithOptionalTransaction(mongoose, async (session) => {
+      await batch.save(session ? { session } : undefined);
+
+      if (syncAssignments === true && normalizedPlants) {
+        const now = new Date();
+        const activeAssignmentsQuery = RoomAssignment.find({
+          tenantId: req.tenantId,
+          batchId: batch._id,
+          active: true,
+        }).sort({ createdAt: 1 });
+
+        if (session) activeAssignmentsQuery.session(session);
+        const activeAssignments = await activeAssignmentsQuery;
+
+        if (activeAssignments.length > 0) {
+          const [primaryAssignment, ...otherAssignments] = activeAssignments;
+
+          primaryAssignment.assignedPlants = normalizedPlants.map((plant) => ({
+            strainId: plant.strainId,
+            count: plant.count,
+          }));
+          await primaryAssignment.save(session ? { session } : undefined);
+
+          for (const assignment of otherAssignments) {
+            assignment.active = false;
+            assignment.endedAt = now;
+            assignment.notes =
+              assignment.notes ||
+              "Closed during admin batch edit (plants synced to primary room)";
+            await assignment.save(session ? { session } : undefined);
+          }
+        }
+      }
+    });
+
+    const batchDoc = await Batch.findOne({
+      tenantId: req.tenantId,
+      _id: batch._id,
+    }).populate(BATCH_POPULATE);
+
+    const [updatedBatch] = await attachDerivedRoomsToBatches(
+      [batchDoc],
+      req.tenantId,
+    );
+
+    await recordAudit(req, {
+      action: "update",
+      resourceType: "batch",
+      resourceId: batch._id,
+      batchId: batch._id,
+      summary: `Manually edited batch ${updatedBatch?.batchNumber || batch.batchNumber}`,
+    });
+
+    res.json(updatedBatch);
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: "Batch number must be unique" });
+    }
+
+    if (String(error.message || "").startsWith("Invalid ")) {
+      return res.status(400).json({ error: error.message });
+    }
+
     res.status(500).json({ error: error.message });
   }
 });

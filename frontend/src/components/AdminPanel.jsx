@@ -20,10 +20,12 @@ import AltRouteIcon from "@mui/icons-material/AltRoute";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import EditNoteIcon from "@mui/icons-material/EditNote";
 import CompanyLocationSetupForm from "./admin-forms/CompanyLocationSetupForm";
 import RoomForm from "./admin-forms/RoomForm";
 import StrainForm from "./admin-forms/StrainForm";
 import CreateMomsForm from "./admin-forms/CreateMomsForm";
+import EditBatchForm from "./admin-forms/EditBatchForm";
 import BatchForm from "./BatchForm";
 import DestroyPlantsForm from "./admin-forms/DestroyPlantsForm";
 
@@ -58,6 +60,14 @@ const ADMIN_WORKFLOWS = [
       "Create a new batch with clone/harvest dates and initial plant counts.",
     category: "Batch Operations",
     icon: Inventory2Icon,
+  },
+  {
+    key: "editBatch",
+    title: "Edit Batch",
+    description:
+      "Manually adjust batch dates, lifecycle stage, plant totals, and demo overrides.",
+    category: "Batch Operations",
+    icon: EditNoteIcon,
   },
   {
     key: "assign",
@@ -212,6 +222,7 @@ export default function AdminPanel() {
     if (activeWorkflow.key === "orgSetup") return <CompanyLocationSetupForm />;
     if (activeWorkflow.key === "room") return <RoomForm section="add" />;
     if (activeWorkflow.key === "batch") return <BatchForm />;
+    if (activeWorkflow.key === "editBatch") return <EditBatchForm />;
     if (activeWorkflow.key === "assign") return <RoomForm section="assign" />;
     if (activeWorkflow.key === "destroyPlants") return <DestroyPlantsForm />;
     if (activeWorkflow.key === "createMoms") return <CreateMomsForm />;
