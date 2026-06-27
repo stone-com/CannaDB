@@ -6,6 +6,7 @@ const Room = require("../models/Room");
 const RoomAssignment = require("../models/RoomAssignment");
 const {
   aggregateBatchPlantsMap,
+  aggregateAssignmentTotalsMap,
   mapTotalsToPlants,
   roomEntriesFromAssignments,
   subtractPlantsFromRooms,
@@ -745,10 +746,14 @@ router.post("/:id/create-moms", async (req, res) => {
       });
     }
 
-    // Figure out how many plants are currently available to cut from the source batch.
-    const availableTotals = await getCurrentBatchTotals(
-      sourceBatch._id,
-      req.tenantId,
+    // Validate against active room assignments, which is what mom cuts deduct from.
+    const activeAssignmentsForTotals = await RoomAssignment.find({
+      tenantId: req.tenantId,
+      batchId: sourceBatch._id,
+      active: true,
+    });
+    const availableTotals = aggregateAssignmentTotalsMap(
+      activeAssignmentsForTotals,
     );
     const requestedCuts = new Map();
 
@@ -950,7 +955,8 @@ router.post("/:id/create-moms", async (req, res) => {
     }
 
     if (
-      String(error?.message || "").includes("no active room assignments")
+      String(error?.message || "").includes("no active room assignments") ||
+      String(error?.message || "").includes("Unable to fulfill mom cut")
     ) {
       return res.status(400).json({ error: error.message });
     }

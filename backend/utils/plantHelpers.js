@@ -138,12 +138,33 @@ function aggregateBatchPlantsMap(plants) {
 
 // Removes plant counts from a batch plants list.
 function subtractPlantsFromBatchPlants(plants, requestedCuts) {
-  const updatedRooms = subtractPlantsFromRooms(
-    [{ roomId: null, plants: normalizePlantEntries(plants) }],
-    requestedCuts,
+  const remainingCuts = new Map(
+    Array.from(requestedCuts.entries()).map(([strainId, count]) => [
+      strainId,
+      count,
+    ]),
   );
 
-  return updatedRooms[0]?.plants || [];
+  const updatedPlants = normalizePlantEntries(plants)
+    .map((plant) => {
+      const remaining = remainingCuts.get(plant.strainId) || 0;
+      if (remaining <= 0) return plant;
+
+      const deduct = Math.min(plant.count, remaining);
+      remainingCuts.set(plant.strainId, remaining - deduct);
+      return { ...plant, count: plant.count - deduct };
+    })
+    .filter((plant) => plant.count > 0);
+
+  const hasUnfulfilledCuts = Array.from(remainingCuts.values()).some(
+    (count) => count > 0,
+  );
+
+  if (hasUnfulfilledCuts) {
+    throw new Error("Unable to fulfill mom cut counts from source batch plants");
+  }
+
+  return updatedPlants;
 }
 
 module.exports = {

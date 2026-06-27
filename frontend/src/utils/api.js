@@ -40,7 +40,28 @@ function authHeaders() {
 
 // Parses JSON and throws a readable error if the server returned an error status.
 async function handleResponse(response) {
-  const data = await response.json();
+  const contentType = response.headers.get("content-type") || "";
+  const bodyText = await response.text();
+
+  if (!contentType.includes("application/json")) {
+    if (bodyText.trimStart().startsWith("<!DOCTYPE") || bodyText.trimStart().startsWith("<html")) {
+      throw new Error(
+        response.status === 404
+          ? "API route not found. The backend may need to be restarted or redeployed."
+          : "Server returned an unexpected HTML response instead of JSON.",
+      );
+    }
+
+    throw new Error(bodyText || "Request failed");
+  }
+
+  let data;
+  try {
+    data = bodyText ? JSON.parse(bodyText) : {};
+  } catch {
+    throw new Error("Server returned invalid JSON.");
+  }
+
   if (!response.ok) {
     throw new Error(data.error || "Request failed");
   }

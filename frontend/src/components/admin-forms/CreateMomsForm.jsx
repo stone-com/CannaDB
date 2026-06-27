@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { apiGet, apiPost } from "../../utils/api";
-import { getBatchStrainTotals } from "../../utils/batchHelpers";
+import { getAvailableMomCutTotals } from "../../utils/batchHelpers";
 
 // This form converts plants from a Veg production batch into a new mom batch.
 // Users pick a source batch, choose a mom room, set counts per strain, then submit.
@@ -69,7 +69,7 @@ function CreateMomsForm() {
   );
 
   const availablePlantsByStrain = useMemo(
-    () => getBatchStrainTotals(selectedBatch),
+    () => getAvailableMomCutTotals(selectedBatch),
     [selectedBatch],
   );
 
@@ -102,7 +102,7 @@ function CreateMomsForm() {
     setSelectedMomRoomId(defaultMomRoom?._id || "");
 
     const initialCuts = {};
-    getBatchStrainTotals(chosenBatch).forEach((row) => {
+    getAvailableMomCutTotals(chosenBatch).forEach((row) => {
       initialCuts[row.strainId] = "0";
     });
     setMomCuts(initialCuts);
